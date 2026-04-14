@@ -1,0 +1,32 @@
+appId: com.eastechs.trident
+productName: Trident
+copyright: Copyright © 2026 Eastechs
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - dist/**/*
+  - node_modules/**/*
+  - "!node_modules/**/*.{md,map,ts}"
+
+mac:
+  category: public.app-category.productivity
+  icon: resources/images/app-icon.png
+  target:
+    - target: dmg
+      arch: [universal]
+
+win:
+  icon: resources/images/app-icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+
+linux:
+  icon: resources/images/app-icon.png
+  target:
+    - target: AppImage
+      arch: [x64]
+  category: Office
