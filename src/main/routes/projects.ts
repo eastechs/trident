@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, and } from 'drizzle-orm';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { shell } from 'electron';
 import { getDb } from '../database.js';
-import { projects, documents, images, conversations } from '../db/schema.js';
+import { projects, documents, images, conversations, messages } from '../db/schema.js';
 import { getConfiguredProviders, getSetting } from '../settings.js';
 
 const router = Router();
@@ -21,6 +21,21 @@ function resolveProvider(modelId: string): string {
   if (modelId.startsWith('claude-')) return 'anthropic';
   if (modelId.startsWith('gemini-')) return 'gemini';
   return 'openai';
+}
+
+type ProjectRow = typeof projects.$inferSelect;
+
+function serializeProject(p: ProjectRow): Record<string, unknown> {
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    path: p.path,
+    filesystem_root: p.filesystemRoot,
+    initial_prompt: p.initialPrompt,
+    created_at: p.createdAt,
+    updated_at: p.updatedAt,
+  };
 }
 
 // ─── List all projects ─────────────────────────────────────
@@ -100,11 +115,33 @@ router.get('/:id', async (req, res) => {
     .where(eq(conversations.projectId, project.id))
     .orderBy(desc(conversations.updatedAt));
 
+  const convoPayload = await Promise.all(projectConversations.map(async (c) => {
+    const [count] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(messages)
+      .where(eq(messages.conversationId, c.id));
+    return {
+      id: c.id,
+      project_id: c.projectId,
+      title: c.title,
+      side: c.side,
+      model: c.model,
+      created_at: c.createdAt,
+      updated_at: c.updatedAt,
+      message_count: count?.count ?? 0,
+    };
+  }));
+
   res.json({
     project: {
-      ...project,
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      path: project.path,
       filesystem_root: project.filesystemRoot,
       initial_prompt: project.initialPrompt,
+      created_at: project.createdAt,
+      updated_at: project.updatedAt,
     },
     documents: projectDocs.map((d) => ({
       id: d.id,
@@ -113,8 +150,12 @@ router.get('/:id', async (req, res) => {
       last_edited_by: d.lastEditedBy,
       directory: d.directory,
     })),
-    images: projectImages.map((i) => ({ id: i.id, name: i.name, created_by: i.createdBy })),
-    conversations: projectConversations,
+    images: projectImages.map((i) => ({
+      id: i.id,
+      name: i.name,
+      created_by: i.createdBy,
+    })),
+    conversations: convoPayload,
     configuredProviders: getConfiguredProviders(),
     shouldShowTour: !getSetting('projectTourCompleted'),
   });
@@ -160,7 +201,7 @@ router.post('/', async (req, res) => {
     }, null, 2),
   );
 
-  res.json(project);
+  res.json(serializeProject(project));
 });
 
 // ─── Update ────────────────────────────────────────────────
@@ -198,7 +239,7 @@ router.patch('/:id', async (req, res) => {
     }, null, 2),
   );
 
-  res.json(updated);
+  res.json(serializeProject(updated));
 });
 
 // ─── Duplicate ─────────────────────────────────────────────
@@ -269,7 +310,7 @@ router.post('/:id/duplicate', async (req, res) => {
     }, null, 2),
   );
 
-  res.json(newProject);
+  res.json(serializeProject(newProject));
 });
 
 // ─── Destroy ───────────────────────────────────────────────

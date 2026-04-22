@@ -31,15 +31,19 @@ export function buildMenu(mainWindow: BrowserWindow): Menu {
           accelerator: 'CmdOrCtrl+N',
           click: () => mainWindow.webContents.send('menu-action', 'new-document'),
         },
+        { type: 'separator' },
         {
           label: 'Save',
           accelerator: 'CmdOrCtrl+S',
           click: () => mainWindow.webContents.send('menu-action', 'save'),
         },
+        {
+          label: 'Save as',
+          click: () => mainWindow.webContents.send('menu-action', 'save-as'),
+        },
         { type: 'separator' },
         {
           label: 'Export',
-          accelerator: 'CmdOrCtrl+E',
           click: () => mainWindow.webContents.send('menu-action', 'export'),
         },
         {
@@ -48,7 +52,15 @@ export function buildMenu(mainWindow: BrowserWindow): Menu {
           click: () => mainWindow.webContents.send('menu-action', 'print'),
         },
         { type: 'separator' },
-        isMac ? { role: 'close' } : { role: 'quit' },
+        {
+          label: 'Close',
+          accelerator: 'CmdOrCtrl+W',
+          click: () => mainWindow.webContents.send('menu-action', 'close'),
+        },
+        {
+          label: 'Delete',
+          click: () => mainWindow.webContents.send('menu-action', 'delete'),
+        },
       ],
     },
     { role: 'editMenu' },

@@ -15,12 +15,26 @@ const router = Router({ mergeParams: true });
 router.get('/', async (req, res) => {
   const db = getDb();
   const projectImages = await db
-    .select({ id: images.id, name: images.name, createdBy: images.createdBy })
+    .select({
+      id: images.id,
+      name: images.name,
+      mimeType: images.mimeType,
+      createdBy: images.createdBy,
+      metadata: images.metadata,
+      createdAt: images.createdAt,
+    })
     .from(images)
     .where(eq(images.projectId, req.params.projectId))
     .orderBy(desc(images.createdAt));
 
-  res.json(projectImages.map((i) => ({ id: i.id, name: i.name, created_by: i.createdBy })));
+  res.json(projectImages.map((i) => ({
+    id: i.id,
+    name: i.name,
+    mime_type: i.mimeType,
+    created_by: i.createdBy,
+    metadata: i.metadata,
+    created_at: i.createdAt,
+  })));
 });
 
 // ─── Show (serve image file) ───────────────────────────────

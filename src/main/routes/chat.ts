@@ -57,7 +57,7 @@ router.post('/', async (req, res) => {
 
   // Resolve model and create tools
   const model = resolveModel(model_id);
-  const tools = createTools(projectId, project.path, model_id, project.filesystemRoot);
+  const tools = createTools(projectId, project.path, model_id);
   const systemPrompt = loadInstructions() + systemSuffix;
 
   try {
@@ -122,7 +122,14 @@ router.post('/', async (req, res) => {
               .where(eq(conversations.id, conversation_id));
           }
 
-          showNotification('Trident', 'Agent response complete');
+          // Show notification with model ID as title and first 3 lines of response as body
+          const lastAssistant = [...allMessages].reverse().find((m) => m.role === 'assistant');
+          const assistantText = lastAssistant?.parts
+            ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+            .map((p) => p.text)
+            .join('\n') ?? '';
+          const preview = assistantText.split('\n').slice(0, 3).join('\n');
+          showNotification(model_id, preview || 'Agent response complete');
         } catch (err) {
           console.error('Error persisting messages:', err);
         }
@@ -172,12 +179,29 @@ router.get('/messages', async (req, res) => {
   );
 });
 
-// ─── Clear all conversations for project ───────────────────
+// ─── Clear messages in all project conversations ─────────
+// Matches Laravel: deletes messages but keeps the conversation records.
 
 router.delete('/', async (req, res) => {
   const db = getDb();
-  await db.delete(conversations).where(eq(conversations.projectId, req.params.projectId));
-  res.json({ success: true });
+  const { projects } = await import('../db/schema.js');
+
+  const convIds = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(eq(conversations.projectId, req.params.projectId));
+
+  for (const { id } of convIds) {
+    await db.delete(messages).where(eq(messages.conversationId, id));
+  }
+
+  // Touch project updated_at (like Laravel's $project->touch())
+  await db
+    .update(projects)
+    .set({ updatedAt: new Date() })
+    .where(eq(projects.id, req.params.projectId));
+
+  res.status(204).end();
 });
 
 // ─── Title generation helper ───────────────────────────────

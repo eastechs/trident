@@ -266,61 +266,53 @@ export default function Project() {
     const leftPanelRef = usePanelRef();
     const rightPanelRef = usePanelRef();
 
-    const [tabs, setTabs] = useState<Tab[]>(() => {
-        if (!project) return [];
+    const [tabs, setTabs] = useState<Tab[]>([]);
+    const [activeTabId, setActiveTabId] = useState<string>('');
+    const tabsRestored = useRef(false);
+
+    // Restore tabs + activeTabId from localStorage after project data loads
+    useEffect(() => {
+        if (!project || tabsRestored.current) return;
+        tabsRestored.current = true;
+
         const saved = localStorage.getItem(`trident:project:${project.id}:tabs`);
+        const docMap = new Map(documents.map(d => [d.id, d]));
+        const imgMap = new Map((images ?? []).map(img => [img.id, img]));
+
+        let restoredTabs: Tab[] = [];
+        let restoredActiveId = '';
 
         if (saved) {
             try {
-                const { openTabs: savedTabs, openTabIds } = JSON.parse(saved);
-                const docMap = new Map(documents.map(d => [d.id, d]));
-                const imgMap = new Map((images ?? []).map(img => [img.id, img]));
-
-                // Support new format (openTabs with type) and legacy (openTabIds)
+                const { openTabs: savedTabs, openTabIds, activeTabId: savedActiveId } = JSON.parse(saved);
                 const tabEntries: Array<{ id: string; type?: string }> = savedTabs
                     ?? openTabIds?.map((id: string) => ({ id, type: 'document' }))
                     ?? [];
 
-                return tabEntries
+                restoredTabs = tabEntries
                     .filter((t) => t.type === 'image' ? imgMap.has(t.id) : docMap.has(t.id))
                     .map((t) => t.type === 'image'
                         ? { id: t.id, title: imgMap.get(t.id)!.name, type: 'image' as const }
                         : { id: t.id, title: docMap.get(t.id)!.name, type: 'document' as const }
                     );
-            } catch { /* fall through */ }
-        }
 
-        return documents.map((doc) => ({ id: doc.id, title: doc.name, type: 'document' as const }));
-    });
-    const [activeTabId, setActiveTabId] = useState(() => {
-        const saved = localStorage.getItem(`trident:project:${project.id}:tabs`);
-
-        if (saved) {
-            try {
-                const { openTabs: savedTabs, openTabIds, activeTabId: savedActiveId } = JSON.parse(saved);
-                const docMap = new Map(documents.map(d => [d.id, d]));
-                const imgMap = new Map((images ?? []).map(img => [img.id, img]));
-
-                const tabEntries: Array<{ id: string; type?: string }> = savedTabs
-                    ?? openTabIds?.map((id: string) => ({ id, type: 'document' }))
-                    ?? [];
-
-                const validIds = tabEntries
-                    .filter((t) => t.type === 'image' ? imgMap.has(t.id) : docMap.has(t.id))
-                    .map((t) => t.id);
-
+                const validIds = restoredTabs.map((t) => t.id);
                 if (validIds.includes(savedActiveId)) {
-                    return savedActiveId;
-                }
-
-                if (validIds.length > 0) {
-                    return validIds[0];
+                    restoredActiveId = savedActiveId;
+                } else if (validIds.length > 0) {
+                    restoredActiveId = validIds[0];
                 }
             } catch { /* fall through */ }
         }
 
-        return documents[0]?.id ?? '';
-    });
+        if (restoredTabs.length === 0) {
+            restoredTabs = documents.map((doc) => ({ id: doc.id, title: doc.name, type: 'document' as const }));
+            restoredActiveId = documents[0]?.id ?? '';
+        }
+
+        setTabs(restoredTabs);
+        setActiveTabId(restoredActiveId);
+    }, [project, documents, images]);
     const [isCreating, setIsCreating] = useState(false);
     const [deletingTabId, setDeletingTabId] = useState<string | null>(null);
     const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
@@ -357,8 +349,10 @@ export default function Project() {
         setData: (key: string, value: string) => setUpdateFormData((prev) => ({ ...prev, [key]: value })),
         errors: updateFormErrors,
         processing: updateFormProcessing,
+        clearErrors: () => setUpdateFormErrors({}),
         patch: (url: string, opts?: { onSuccess?: () => void }) => {
             setUpdateFormProcessing(true);
+            setUpdateFormErrors({});
             api_patch(url, updateFormData)
                 .then(() => opts?.onSuccess?.())
                 .catch(console.error)
@@ -369,6 +363,15 @@ export default function Project() {
     useEffect(() => {
         setLocalDocuments(documents);
     }, [documents]);
+
+    useEffect(() => {
+        if (!project) return;
+        setUpdateFormData({
+            name: project.name,
+            description: project.description ?? '',
+            filesystem_root: project.filesystem_root ?? '',
+        });
+    }, [project]);
 
     useEffect(() => {
         setLocalImages(images ?? []);
@@ -392,10 +395,10 @@ export default function Project() {
 
     async function handleSelectUpdateDirectory() {
         try {
-            const { data } = await api_post('/api/select-directory');
+            const result = await api_post<{ path: string | null }>('/api/select-directory');
 
-            if (data.path) {
-                updateForm.setData('filesystem_root', data.path);
+            if (result.path) {
+                updateForm.setData('filesystem_root', result.path);
             }
         } catch (error) {
             console.error('Failed to select directory:', error);
@@ -418,9 +421,15 @@ export default function Project() {
     }, [conversations]);
 
     // Auto-send initial prompt to both chats on first load (no conversations yet)
-    const initialPromptRef = useRef(
-        conversations.length === 0 && project.initial_prompt ? project.initial_prompt : undefined,
-    );
+    const initialPromptRef = useRef<string | undefined>(undefined);
+    const initialPromptSetRef = useRef(false);
+    useEffect(() => {
+        if (!project || initialPromptSetRef.current) return;
+        if (conversations.length === 0 && project.initial_prompt) {
+            initialPromptRef.current = project.initial_prompt;
+        }
+        initialPromptSetRef.current = true;
+    }, [project, conversations]);
 
     // Track active conversation IDs for dual-open prevention (updated via callback from ChatPanel)
     const [leftActiveId, setLeftActiveId] = useState<string | null>(null);
@@ -686,8 +695,8 @@ return prev;
 
         const tab = tabs.find(t => t.id === tabId);
         const endpoint = tab?.type === 'image'
-            ? `/projects/${project.id}/images/${tabId}`
-            : `/projects/${project.id}/documents/${tabId}`;
+            ? `/api/projects/${project.id}/images/${tabId}`
+            : `/api/projects/${project.id}/documents/${tabId}`;
 
         api_patch(endpoint, { name: renameValue.trim() })
             .then((data) => {
@@ -719,8 +728,8 @@ return prev;
 
         const isImage = localImages.some(img => img.id === itemId);
         const endpoint = isImage
-            ? `/projects/${project.id}/images/${itemId}`
-            : `/projects/${project.id}/documents/${itemId}`;
+            ? `/api/projects/${project.id}/images/${itemId}`
+            : `/api/projects/${project.id}/documents/${itemId}`;
 
         api_patch(endpoint, { name: fileListRenameValue.trim() })
             .then((data) => {
@@ -752,8 +761,8 @@ return prev;
         setDeletingTabId(null);
 
         const endpoint = tab?.type === 'image'
-            ? `/projects/${project.id}/images/${tabId}`
-            : `/projects/${project.id}/documents/${tabId}`;
+            ? `/api/projects/${project.id}/images/${tabId}`
+            : `/api/projects/${project.id}/documents/${tabId}`;
 
         api_delete(endpoint)
             .then(() => {

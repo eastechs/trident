@@ -336,7 +336,8 @@ export default function Main() {
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        api_post(`/api/projects/${project.id}/duplicate`).then(() => window.location.reload());
+                                                        api_post<{ id: string }>(`/api/projects/${project.id}/duplicate`)
+                                                            .then((newProject) => navigate(`/projects/${newProject.id}`));
                                                     }}
                                                     className="block w-full px-3 py-1 text-left text-sm/6 text-neutral-700 data-focus:bg-neutral-50 data-focus:outline-hidden dark:text-neutral-200 dark:data-focus:bg-white/5"
                                                 >

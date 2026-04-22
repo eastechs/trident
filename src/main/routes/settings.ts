@@ -121,25 +121,39 @@ function getInstructionsPath(agent: string): string {
   return path.join(INSTRUCTIONS_DIR, `${agent}.md`);
 }
 
-router.get('/agent-instructions/:agent', (req, res) => {
+router.get('/agent-instructions/:agent', async (req, res) => {
+  const { loadInstructions } = await import('../ai/instructions.js');
   const filePath = getInstructionsPath(req.params.agent);
-  try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    res.json({ instructions: content });
-  } catch {
-    res.json({ instructions: null });
-  }
+  const isCustom = fs.existsSync(filePath);
+  res.json({
+    instructions: loadInstructions(req.params.agent),
+    isCustom,
+  });
 });
 
+const VALID_AGENT_KEYS = new Set(['collaborator']);
+
 router.put('/agent-instructions/:agent', (req, res) => {
+  if (!VALID_AGENT_KEYS.has(req.params.agent)) {
+    res.status(422).json({ errors: { agent_key: ['Invalid agent key.'] } });
+    return;
+  }
+  const { instructions } = req.body as { instructions?: string };
+  if (!instructions || typeof instructions !== 'string') {
+    res.status(422).json({ errors: { instructions: ['Instructions are required.'] } });
+    return;
+  }
   const filePath = getInstructionsPath(req.params.agent);
-  const { instructions } = req.body as { instructions: string };
   fs.mkdirSync(INSTRUCTIONS_DIR, { recursive: true });
   fs.writeFileSync(filePath, instructions, 'utf-8');
   res.json({ success: true });
 });
 
 router.delete('/agent-instructions/:agent', (req, res) => {
+  if (!VALID_AGENT_KEYS.has(req.params.agent)) {
+    res.status(422).json({ errors: { agent_key: ['Invalid agent key.'] } });
+    return;
+  }
   const filePath = getInstructionsPath(req.params.agent);
   try {
     fs.unlinkSync(filePath);

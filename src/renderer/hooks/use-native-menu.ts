@@ -3,6 +3,8 @@ import { useEffect, useRef } from 'react';
 interface NativeMenuActions {
     onNewDocument?: () => void;
     onSave?: () => void;
+    onSaveAs?: () => void;
+    onExport?: () => void;
     onPrint?: () => void;
     onClose?: () => void;
     onDelete?: () => void;
@@ -69,6 +71,8 @@ export function printDocumentContent(title: string): void {
 const ACTION_MAP: Record<string, keyof NativeMenuActions> = {
     'new-document': 'onNewDocument',
     save: 'onSave',
+    'save-as': 'onSaveAs',
+    export: 'onExport',
     print: 'onPrint',
     close: 'onClose',
     delete: 'onDelete',

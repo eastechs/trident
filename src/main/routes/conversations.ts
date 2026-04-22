@@ -5,6 +5,24 @@ import { conversations, messages } from '../db/schema.js';
 
 const router = Router({ mergeParams: true });
 
+type ConversationRow = typeof conversations.$inferSelect;
+
+function serializeConversation(
+  c: ConversationRow,
+  messageCount = 0,
+): Record<string, unknown> {
+  return {
+    id: c.id,
+    project_id: c.projectId,
+    title: c.title,
+    side: c.side,
+    model: c.model,
+    created_at: c.createdAt,
+    updated_at: c.updatedAt,
+    message_count: messageCount,
+  };
+}
+
 // ─── Index ─────────────────────────────────────────────────
 
 router.get('/', async (req, res) => {
@@ -15,18 +33,13 @@ router.get('/', async (req, res) => {
     .where(eq(conversations.projectId, req.params.projectId))
     .orderBy(desc(conversations.updatedAt));
 
-  // Attach message counts
   const result = await Promise.all(
     projectConversations.map(async (conv) => {
       const [count] = await db
         .select({ count: sql<number>`count(*)` })
         .from(messages)
         .where(eq(messages.conversationId, conv.id));
-
-      return {
-        ...conv,
-        message_count: count?.count ?? 0,
-      };
+      return serializeConversation(conv, count?.count ?? 0);
     }),
   );
 
@@ -46,7 +59,7 @@ router.post('/', async (req, res) => {
     model: model ?? null,
   }).returning();
 
-  res.json(conversation);
+  res.json(serializeConversation(conversation, 0));
 });
 
 // ─── Update ────────────────────────────────────────────────
@@ -71,7 +84,12 @@ router.patch('/:conversationId', async (req, res) => {
 
   if (!updated) { res.status(404).json({ error: 'Not found' }); return; }
 
-  res.json(updated);
+  const [count] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(messages)
+    .where(eq(messages.conversationId, updated.id));
+
+  res.json(serializeConversation(updated, count?.count ?? 0));
 });
 
 // ─── Destroy ───────────────────────────────────────────────

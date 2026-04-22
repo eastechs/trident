@@ -1,4 +1,6 @@
 import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { createServer } from './server.js';
 import { buildMenu } from './native/menus.js';
@@ -44,7 +46,26 @@ async function createWindow() {
 // IPC handlers
 ipcMain.handle('select-directory', () => selectDirectory());
 
+function writeTridentMetadata(): void {
+  try {
+    const projectsDir = path.join(os.homedir(), 'Trident', 'Projects');
+    fs.mkdirSync(projectsDir, { recursive: true });
+
+    const metadataPath = path.join(os.homedir(), 'Trident', '.trident');
+    fs.writeFileSync(metadataPath, JSON.stringify({
+      app_version: app.getVersion(),
+      release_version: process.env.TRIDENT_RELEASE_VERSION ?? null,
+      migration_version: process.env.TRIDENT_MIGRATION_VERSION ?? null,
+    }));
+  } catch (err) {
+    console.error('Failed to write Trident metadata:', err);
+  }
+}
+
 app.whenReady().then(async () => {
+  // Write ~/Trident/.trident metadata and ensure ~/Trident/Projects exists
+  writeTridentMetadata();
+
   // Initialize settings (electron-store is ESM-only, requires dynamic import)
   await initSettings();
 
