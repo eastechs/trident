@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useDocumentTitle } from '@/hooks/use-document-title';
-import { api_get, api_post, api_put, api_patch, api_delete } from '@/lib/api';
+import { api_get, api_post, api_put, api_patch, api_delete, isApiError } from '@/lib/api';
 import {
     BellIcon,
     BotIcon,
@@ -95,7 +95,7 @@ export default function Settings() {
         setKeyErrors({ anthropic: null, openai: null, gemini: null });
 
         try {
-            const { data } = await axios.put<{
+            const data = await api_put<{
                 success: boolean;
                 saved: Array<'anthropic' | 'openai' | 'gemini'>;
                 invalid: Array<'anthropic' | 'openai' | 'gemini'>;
@@ -139,15 +139,15 @@ export default function Settings() {
                 setTimeout(() => setSaved(false), 3000);
             }
         } catch (error) {
-            if (axios.isAxiosError(error) && error.response?.status === 422) {
-                const responseErrors = (error.response.data as {
-                    errors?: Record<string, string[]>;
-                }).errors ?? {};
+            if (isApiError(error) && error.status === 422) {
+                const responseErrors = (error.response as { errors?: Record<string, string[]> })?.errors ?? {};
                 setKeyErrors({
                     anthropic: responseErrors.anthropic_key?.[0] ?? null,
                     openai: responseErrors.openai_key?.[0] ?? null,
                     gemini: responseErrors.gemini_key?.[0] ?? null,
                 });
+            } else {
+                console.error(error);
             }
         } finally {
             setSaving(false);
@@ -156,7 +156,7 @@ export default function Settings() {
 
     const handleClearKey = async (provider: 'anthropic' | 'openai' | 'gemini') => {
         try {
-            await api_delete('/api/settings/api-keys', { data: { provider } });
+            await api_delete('/api/settings/api-keys', { provider });
 
             if (provider === 'anthropic') {
                 setHasAnthropic(false);

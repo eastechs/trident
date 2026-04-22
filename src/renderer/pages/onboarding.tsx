@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '@/hooks/use-document-title';
-import { api_get, api_post, api_put, api_patch, api_delete } from '@/lib/api';
+import { api_get, api_post, api_put, api_patch, api_delete, isApiError } from '@/lib/api';
 import { EyeIcon, EyeOffIcon, KeyRoundIcon } from 'lucide-react';
 import type { FormEvent} from 'react';
 import { useState } from 'react';
@@ -54,8 +54,20 @@ export default function Onboarding() {
             });
             navigate('/');
         } catch (err) {
-            setError('Failed to save API keys. Please try again.');
-            console.error(err);
+            if (isApiError(err) && err.status === 422) {
+                const errors = (err.response as { errors?: Record<string, string[]> })?.errors ?? {};
+                const mapped: FieldErrors = {};
+                for (const [field, messages] of Object.entries(errors)) {
+                    if (field === 'anthropic_key' || field === 'openai_key' || field === 'gemini_key') {
+                        mapped[field] = Array.isArray(messages) ? messages[0] : String(messages);
+                    }
+                }
+                setFieldErrors(mapped);
+                setError('Please fix the errors below and try again.');
+            } else {
+                setError('Failed to save API keys. Please try again.');
+                console.error(err);
+            }
         } finally {
             setSaving(false);
         }

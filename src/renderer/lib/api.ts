@@ -1,7 +1,20 @@
-const BASE = '';
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly response: unknown,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export function isApiError(err: unknown): err is ApiError {
+  return err instanceof ApiError;
+}
 
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(path, {
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,
@@ -10,8 +23,10 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`API error ${res.status}: ${body}`);
+    const text = await res.text();
+    let parsed: unknown = text;
+    try { parsed = JSON.parse(text); } catch { /* leave as text */ }
+    throw new ApiError(res.status, parsed, `API error ${res.status}`);
   }
 
   return res.json();

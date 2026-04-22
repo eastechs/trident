@@ -56,21 +56,47 @@ router.get('/api-keys', (_req, res) => {
   res.json(getConfiguredProviders());
 });
 
-router.put('/api-keys', (req, res) => {
-  // Support both single-key format { provider, key } and bulk format { anthropic_key, openai_key, gemini_key }
-  const { provider, key, anthropic_key, openai_key, gemini_key } = req.body;
+router.put('/api-keys', async (req, res) => {
+  const { validateApiKey } = await import('../ai/validate-key.js');
+  const { anthropic_key, openai_key, gemini_key } = req.body;
 
-  if (provider && key) {
-    // Single-key format (from settings page)
-    setApiKey(provider, key);
-  } else {
-    // Bulk format (from onboarding page)
-    if (anthropic_key) setApiKey('anthropic', anthropic_key);
-    if (openai_key) setApiKey('openai', openai_key);
-    if (gemini_key) setApiKey('gemini', gemini_key);
+  const keys: Record<'anthropic' | 'openai' | 'gemini', string> = {} as Record<'anthropic' | 'openai' | 'gemini', string>;
+  const anthropic = (anthropic_key ?? '').trim();
+  const openai = (openai_key ?? '').trim();
+  const gemini = (gemini_key ?? '').trim();
+  if (anthropic) keys.anthropic = anthropic;
+  if (openai) keys.openai = openai;
+  if (gemini) keys.gemini = gemini;
+
+  if (Object.keys(keys).length === 0) {
+    res.status(422).json({
+      errors: { anthropic_key: ['At least one API key is required.'] },
+    });
+    return;
   }
 
-  res.json(getConfiguredProviders());
+  const saved: Array<'anthropic' | 'openai' | 'gemini'> = [];
+  const invalid: Array<'anthropic' | 'openai' | 'gemini'> = [];
+  const errors: Record<string, string[]> = {};
+
+  for (const [provider, key] of Object.entries(keys) as Array<['anthropic' | 'openai' | 'gemini', string]>) {
+    if (await validateApiKey(provider, key)) {
+      setApiKey(provider, key);
+      saved.push(provider);
+    } else {
+      invalid.push(provider);
+      errors[`${provider}_key`] = [`The ${provider} API key is invalid. Please check the key and try again.`];
+    }
+  }
+
+  if (saved.length === 0) {
+    res.status(422).json({ errors });
+    return;
+  }
+
+  setSetting('onboardingCompleted', true);
+
+  res.json({ success: true, saved, invalid });
 });
 
 router.delete('/api-keys', (req, res) => {

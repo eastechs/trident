@@ -596,9 +596,8 @@ return prev;
 
         setIsCreating(true);
 
-        axios
-            .post<{ id: string; filename: string }>(
-                `/projects/${project.id}/documents`,
+        api_post<{ id: string; filename: string }>(
+                `/api/projects/${project.id}/documents`,
             )
             .then((data) => {
                 setTabs((prev) => [...prev, { id: data.id, title: data.filename, type: 'document' }]);
@@ -1346,7 +1345,7 @@ return 1;
                                             {tab.type === 'image' ? (
                                                 <div className="flex flex-1 items-center justify-center overflow-hidden bg-neutral-50 p-8 dark:bg-neutral-950">
                                                     <img
-                                                        src={`/projects/${project.id}/images/${tab.id}`}
+                                                        src={`/api/projects/${project.id}/images/${tab.id}`}
                                                         alt={tab.title}
                                                         className="max-h-full max-w-full object-contain"
                                                     />

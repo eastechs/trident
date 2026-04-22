@@ -325,8 +325,7 @@ export default function Docs() {
     }, [renamingId]);
 
     useEffect(() => {
-        axios
-            .get('/api/settings/autosave')
+        api_get('/api/settings/autosave')
             .then((data) => setAutosaveEnabled(data.enabled))
             .catch(() => {});
     }, []);
@@ -338,8 +337,7 @@ export default function Docs() {
             return;
         }
 
-        axios
-            .get(`/api/projects/${project.id}/documents/${activeTabId}`)
+        api_get(`/api/projects/${project.id}/documents/${activeTabId}`)
             .then((data) => {
                 setTabContent((prev) => ({
                     ...prev,
@@ -361,8 +359,7 @@ export default function Docs() {
             const content = editorRef.getMarkdown();
             setSaveStatus((prev) => ({ ...prev, [tabId]: 'saving' }));
 
-            axios
-                .put(`/api/projects/${project.id}/documents/${tabId}/content`, {
+            api_put(`/api/projects/${project.id}/documents/${tabId}/content`, {
                     content,
                 })
                 .then(() => {
@@ -383,8 +380,7 @@ export default function Docs() {
 
     const revertDocument = useCallback(
         (tabId: string) => {
-            axios
-                .get(`/api/projects/${project.id}/documents/${tabId}`)
+            api_get(`/api/projects/${project.id}/documents/${tabId}`)
                 .then((data) => {
                     setTabContent((prev) => ({
                         ...prev,
@@ -481,9 +477,8 @@ export default function Docs() {
 
         setIsCreating(true);
 
-        axios
-            .post<{ id: string; filename: string }>(
-                `/projects/${project.id}/documents`,
+        api_post<{ id: string; filename: string }>(
+                `/api/projects/${project.id}/documents`,
             )
             .then((data) => {
                 setTabs((prev) => [
@@ -586,8 +581,7 @@ export default function Docs() {
                 return;
             }
 
-            axios
-                .patch(`/api/projects/${project.id}/documents/${docId}`, {
+            api_patch(`/api/projects/${project.id}/documents/${docId}`, {
                     name: renameValue.trim(),
                 })
                 .then((data) => {
@@ -618,8 +612,7 @@ export default function Docs() {
         const docId = deletingId;
         setDeletingId(null);
 
-        axios
-            .delete(`/api/projects/${project.id}/documents/${docId}`)
+        api_delete(`/api/projects/${project.id}/documents/${docId}`)
             .then(() => {
                 setTabs((prev) => {
                     const next = prev.filter((t) => t.id !== docId);

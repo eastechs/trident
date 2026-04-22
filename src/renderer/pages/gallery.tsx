@@ -283,8 +283,7 @@ export default function Gallery() {
                 return;
             }
 
-            axios
-                .patch(`/api/projects/${project.id}/images/${tabId}`, {
+            api_patch(`/api/projects/${project.id}/images/${tabId}`, {
                     name: renameValue.trim(),
                 })
                 .then((data) => {
@@ -317,8 +316,7 @@ export default function Gallery() {
         const tabId = deletingTabId;
         setDeletingTabId(null);
 
-        axios
-            .delete(`/api/projects/${project.id}/images/${tabId}`)
+        api_delete(`/api/projects/${project.id}/images/${tabId}`)
             .then(() => {
                 setTabs((prev) => {
                     const next = prev.filter((t) => t.id !== tabId);
@@ -436,7 +434,7 @@ export default function Gallery() {
                                                     }`}
                                                 >
                                                     <img
-                                                        src={`/projects/${project.id}/images/${image.id}`}
+                                                        src={`/api/projects/${project.id}/images/${image.id}`}
                                                         alt={image.name}
                                                         className="aspect-square w-full object-cover"
                                                     />
@@ -523,7 +521,7 @@ export default function Gallery() {
                         {activeTab ? (
                             <div className="flex flex-1 items-center justify-center overflow-hidden bg-neutral-50 p-8 dark:bg-neutral-950">
                                 <img
-                                    src={`/projects/${project.id}/images/${activeTab.id}`}
+                                    src={`/api/projects/${project.id}/images/${activeTab.id}`}
                                     alt={activeTab.title}
                                     className="max-h-full max-w-full object-contain"
                                 />

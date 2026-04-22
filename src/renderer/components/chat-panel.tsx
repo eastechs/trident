@@ -119,7 +119,7 @@ export function ChatPanel({
     useEffect(() => {
         if (initialPrompt && !autoStartedRef.current) {
             autoStartedRef.current = true;
-            axios.post<ConversationData>(`/api/projects/${projectId}/conversations`)
+            api_post<ConversationData>(`/api/projects/${projectId}/conversations`)
                 .then((data) => {
                     onConversationCreated(data);
                     setAutoCreatedId(data.id);
@@ -162,7 +162,7 @@ export function ChatPanel({
     }, [projectId, side]);
 
     const handleNewChat = useCallback(() => {
-        axios.post<ConversationData>(`/api/projects/${projectId}/conversations`)
+        api_post<ConversationData>(`/api/projects/${projectId}/conversations`)
             .then((data) => {
                 onConversationCreated(data);
                 setActiveConversationId(data.id);
@@ -218,7 +218,7 @@ export function ChatPanel({
         }
 
         if (activeConversation?.title === 'New Chat') {
-            axios.get<ConversationData[]>(`/api/projects/${projectId}/conversations`)
+            api_get<ConversationData[]>(`/api/projects/${projectId}/conversations`)
                 .then((data) => {
                     onConversationsRefreshed(data);
                 })
