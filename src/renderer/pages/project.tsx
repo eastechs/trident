@@ -244,10 +244,16 @@ export default function Project() {
 
     if (!data) return null;
 
-    return <ProjectView key={data.project.id} {...data} />;
+    return (
+        <ProjectView
+            key={data.project.id}
+            {...data}
+            onProjectUpdated={(updated) => setData((prev) => prev ? { ...prev, project: updated } : prev)}
+        />
+    );
 }
 
-function ProjectView({ project, documents, images, conversations, configuredProviders, shouldShowTour }: ProjectViewProps) {
+function ProjectView({ project, documents, images, conversations, configuredProviders, shouldShowTour, onProjectUpdated }: ProjectViewProps & { onProjectUpdated: (p: ProjectData) => void }) {
 
     const leftPanelRef = usePanelRef();
     const rightPanelRef = usePanelRef();
@@ -924,7 +930,7 @@ return;
                                     Gallery
                                 </TooltipContent>
                             </Tooltip>
-                            <ProjectSettingsDialog project={project} />
+                            <ProjectSettingsDialog project={project} onUpdated={onProjectUpdated} />
                         </nav>
                         <div data-tour="help" className="mt-auto">
                             <HelpSidebarButton />

@@ -66,6 +66,10 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 
+function toolLabel(toolName: string): string {
+    return toolName.replace(/([A-Z])/g, ' $1').trim();
+}
+
 const models = [
     {
         provider: 'Anthropic',
@@ -506,7 +510,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                                                     <ToolHeader
                                                         type={part.type}
                                                         state={part.state}
-                                                        title={getToolName(part)}
+                                                        title={toolLabel(getToolName(part))}
                                                     />
                                                 </Tool>
                                             );

@@ -212,10 +212,17 @@ export default function Docs() {
 
     if (!data) return null;
 
-    return <DocsView key={data.project.id} project={data.project} documents={data.documents} />;
+    return (
+        <DocsView
+            key={data.project.id}
+            project={data.project}
+            documents={data.documents}
+            onProjectUpdated={(updated) => setData((prev) => prev ? { ...prev, project: updated } : prev)}
+        />
+    );
 }
 
-function DocsView({ project, documents }: { project: ProjectData; documents: DocumentData[] }) {
+function DocsView({ project, documents, onProjectUpdated }: { project: ProjectData; documents: DocumentData[]; onProjectUpdated: (p: ProjectData) => void }) {
     const [localDocuments, setLocalDocuments] = useState<DocumentData[]>(documents);
     const storageKey = `trident:project:${project.id}:docs:tabs`;
     const [tabs, setTabs] = useState<Tab[]>(() => {
@@ -767,7 +774,7 @@ function DocsView({ project, documents }: { project: ProjectData; documents: Doc
                                     Gallery
                                 </TooltipContent>
                             </Tooltip>
-                            <ProjectSettingsDialog project={project} />
+                            <ProjectSettingsDialog project={project} onUpdated={onProjectUpdated} />
                         </nav>
                         <div className="mt-auto">
                             <HelpSidebarButton />

@@ -190,10 +190,17 @@ export default function Gallery() {
 
     if (!data) return null;
 
-    return <GalleryView key={data.project.id} project={data.project} images={data.images} />;
+    return (
+        <GalleryView
+            key={data.project.id}
+            project={data.project}
+            images={data.images}
+            onProjectUpdated={(updated) => setData((prev) => prev ? { ...prev, project: updated } : prev)}
+        />
+    );
 }
 
-function GalleryView({ project, images }: { project: ProjectData; images: ImageData[] }) {
+function GalleryView({ project, images, onProjectUpdated }: { project: ProjectData; images: ImageData[]; onProjectUpdated: (p: ProjectData) => void }) {
     const [localImages, setLocalImages] = useState<ImageData[]>(images);
     const [tabs, setTabs] = useState<Tab[]>([]);
     const [activeTabId, setActiveTabId] = useState<string | null>(null);
@@ -401,7 +408,7 @@ function GalleryView({ project, images }: { project: ProjectData; images: ImageD
                                     Gallery
                                 </TooltipContent>
                             </Tooltip>
-                            <ProjectSettingsDialog project={project} />
+                            <ProjectSettingsDialog project={project} onUpdated={onProjectUpdated} />
                         </nav>
                         <div className="mt-auto">
                             <HelpSidebarButton />
