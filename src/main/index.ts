@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import contextMenu from 'electron-context-menu';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -11,6 +12,15 @@ import { openDocumentationWindow } from './native/windows.js';
 
 const isDev = !app.isPackaged;
 const SERVER_PORT = 19274;
+
+// Enable native OS right-click menu (Select All, Copy, Paste, Cut, spellcheck
+// suggestions, etc.) on every BrowserWindow.
+contextMenu({
+  showSelectAll: true,
+  showCopyImage: true,
+  showSaveImageAs: true,
+  showInspectElement: isDev,
+});
 
 let mainWindow: BrowserWindow | null = null;
 
