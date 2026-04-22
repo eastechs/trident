@@ -170,7 +170,11 @@ interface SidebarChatProps {
     configuredProviders?: { anthropic: boolean; openai: boolean; gemini: boolean };
     initialPrompt?: string;
     onDocumentEdited?: (documentId: string) => void;
-    onDocumentCreated?: (documentId: string, documentName: string) => void;
+    onDocumentCreated?: (
+        documentId: string,
+        documentName: string,
+        meta?: { directory?: string; created_by?: string | null; last_edited_by?: string | null },
+    ) => void;
     onImageCreated?: (imageId: string, imageName: string) => void;
     onStreamingComplete?: () => void;
 }
@@ -261,7 +265,15 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                     if (toolName === 'EditDocument') {
                         onDocumentEdited?.(output.document_id as string);
                     } else if (toolName === 'CreateDocument') {
-                        onDocumentCreated?.(output.document_id as string, (output.document_name as string) ?? '');
+                        onDocumentCreated?.(
+                            output.document_id as string,
+                            (output.document_name as string) ?? '',
+                            {
+                                directory: output.directory as string | undefined,
+                                created_by: (output.created_by as string | null | undefined) ?? null,
+                                last_edited_by: (output.last_edited_by as string | null | undefined) ?? null,
+                            },
+                        );
                     }
                 }
                 if (toolName === 'GenerateImage' && output?.image_id) {

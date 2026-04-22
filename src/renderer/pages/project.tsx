@@ -740,7 +740,11 @@ return prev;
         fetchDocumentContent(documentId);
     }, [fetchDocumentContent]);
 
-    const handleDocumentCreated = useCallback((documentId: string, documentName: string) => {
+    const handleDocumentCreated = useCallback((
+        documentId: string,
+        documentName: string,
+        meta?: { directory?: string; created_by?: string | null; last_edited_by?: string | null },
+    ) => {
         setTabs(prev => {
             if (prev.some(t => t.id === documentId)) {
                 return prev;
@@ -757,9 +761,14 @@ return prev;
                 return prev;
             }
 
-            return [...prev, { id: documentId, name: documentName, created_by: null, last_edited_by: null, directory: '' }];
+            return [...prev, {
+                id: documentId,
+                name: documentName,
+                created_by: meta?.created_by ?? null,
+                last_edited_by: meta?.last_edited_by ?? null,
+                directory: meta?.directory ?? 'user',
+            }];
         });
-        // TODO: refetch documents
     }, [fetchDocumentContent]);
 
     const handleImageCreated = useCallback((imageId: string, imageName: string) => {

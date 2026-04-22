@@ -3,7 +3,7 @@ import { streamText, generateText, convertToModelMessages, stepCountIs, type UIM
 import { eq, asc, sql, inArray, and } from 'drizzle-orm';
 import { getDb } from '../database.js';
 import { conversations, messages, documents, projects } from '../db/schema.js';
-import { resolveModel, getProviderOptions } from '../ai/providers.js';
+import { resolveModel, getProviderOptions, modelLabel } from '../ai/providers.js';
 import { loadInstructions } from '../ai/instructions.js';
 import { createTools } from '../ai/tools/index.js';
 import { showNotification } from '../native/notifications.js';
@@ -154,7 +154,7 @@ router.post('/', async (req, res) => {
             .map((p) => p.text)
             .join('\n') ?? '';
           const preview = assistantText.split('\n').slice(0, 3).join('\n');
-          showNotification(model_id, preview || 'Agent response complete');
+          showNotification(modelLabel(model_id), preview || 'Agent response complete');
         } catch (err) {
           console.error('Error persisting messages:', err);
         }
