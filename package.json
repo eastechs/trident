@@ -1,5 +1,6 @@
 {
   "name": "electron-trident",
+  "productName": "Trident",
   "version": "0.1.0",
   "private": true,
   "main": "dist/main/index.js",

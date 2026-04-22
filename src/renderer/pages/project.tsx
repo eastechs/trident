@@ -258,53 +258,61 @@ function ProjectView({ project, documents, images, conversations, configuredProv
     const leftPanelRef = usePanelRef();
     const rightPanelRef = usePanelRef();
 
-    const [tabs, setTabs] = useState<Tab[]>([]);
-    const [activeTabId, setActiveTabId] = useState<string>('');
-    const tabsRestored = useRef(false);
-
-    // Restore tabs + activeTabId from localStorage
-    useEffect(() => {
-        if (tabsRestored.current) return;
-        tabsRestored.current = true;
-
+    const [tabs, setTabs] = useState<Tab[]>(() => {
         const saved = localStorage.getItem(`trident:project:${project.id}:tabs`);
-        const docMap = new Map(documents.map(d => [d.id, d]));
-        const imgMap = new Map((images ?? []).map(img => [img.id, img]));
-
-        let restoredTabs: Tab[] = [];
-        let restoredActiveId = '';
 
         if (saved) {
             try {
-                const { openTabs: savedTabs, openTabIds, activeTabId: savedActiveId } = JSON.parse(saved);
+                const { openTabs: savedTabs, openTabIds } = JSON.parse(saved);
+                const docMap = new Map(documents.map(d => [d.id, d]));
+                const imgMap = new Map((images ?? []).map(img => [img.id, img]));
+
                 const tabEntries: Array<{ id: string; type?: string }> = savedTabs
                     ?? openTabIds?.map((id: string) => ({ id, type: 'document' }))
                     ?? [];
 
-                restoredTabs = tabEntries
+                return tabEntries
                     .filter((t) => t.type === 'image' ? imgMap.has(t.id) : docMap.has(t.id))
                     .map((t) => t.type === 'image'
                         ? { id: t.id, title: imgMap.get(t.id)!.name, type: 'image' as const }
                         : { id: t.id, title: docMap.get(t.id)!.name, type: 'document' as const }
                     );
-
-                const validIds = restoredTabs.map((t) => t.id);
-                if (validIds.includes(savedActiveId)) {
-                    restoredActiveId = savedActiveId;
-                } else if (validIds.length > 0) {
-                    restoredActiveId = validIds[0];
-                }
             } catch { /* fall through */ }
         }
 
-        if (restoredTabs.length === 0) {
-            restoredTabs = documents.map((doc) => ({ id: doc.id, title: doc.name, type: 'document' as const }));
-            restoredActiveId = documents[0]?.id ?? '';
+        return documents.map((doc) => ({ id: doc.id, title: doc.name, type: 'document' as const }));
+    });
+    const [activeTabId, setActiveTabId] = useState<string>(() => {
+        const saved = localStorage.getItem(`trident:project:${project.id}:tabs`);
+
+        if (saved) {
+            try {
+                const { openTabs: savedTabs, openTabIds, activeTabId: savedActiveId } = JSON.parse(saved);
+                const docMap = new Map(documents.map(d => [d.id, d]));
+                const imgMap = new Map((images ?? []).map(img => [img.id, img]));
+
+                const tabEntries: Array<{ id: string; type?: string }> = savedTabs
+                    ?? openTabIds?.map((id: string) => ({ id, type: 'document' }))
+                    ?? [];
+
+                const validIds = tabEntries
+                    .filter((t) => t.type === 'image' ? imgMap.has(t.id) : docMap.has(t.id))
+                    .map((t) => t.id);
+
+                if (validIds.includes(savedActiveId)) {
+                    return savedActiveId;
+                }
+
+                if (validIds.length > 0) {
+                    return validIds[0];
+                }
+
+                return '';
+            } catch { /* fall through */ }
         }
 
-        setTabs(restoredTabs);
-        setActiveTabId(restoredActiveId);
-    }, [project, documents, images]);
+        return documents[0]?.id ?? '';
+    });
     const [isCreating, setIsCreating] = useState(false);
     const [deletingTabId, setDeletingTabId] = useState<string | null>(null);
     const [renamingTabId, setRenamingTabId] = useState<string | null>(null);

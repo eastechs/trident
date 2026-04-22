@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage } from 'electron';
 import contextMenu from 'electron-context-menu';
 import fs from 'fs';
 import os from 'os';
@@ -10,8 +10,14 @@ import { initSettings } from './settings.js';
 import { selectDirectory } from './native/dialogs.js';
 import { openDocumentationWindow } from './native/windows.js';
 
+app.setName('Trident');
+
 const isDev = !app.isPackaged;
 const SERVER_PORT = 19274;
+
+const iconPath = isDev
+  ? path.join(__dirname, '../../resources/images/app-icon.png')
+  : path.join(process.resourcesPath, 'images/app-icon.png');
 
 // Enable native OS right-click menu (Select All, Copy, Paste, Cut, spellcheck
 // suggestions, etc.) on every BrowserWindow.
@@ -30,6 +36,7 @@ async function createWindow() {
     height: 800,
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 12, y: 12 },
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -72,6 +79,10 @@ function writeTridentMetadata(): void {
 }
 
 app.whenReady().then(async () => {
+  if (isDev && process.platform === 'darwin') {
+    app.dock?.setIcon(nativeImage.createFromPath(iconPath));
+  }
+
   // Write ~/Trident/.trident metadata and ensure ~/Trident/Projects exists
   writeTridentMetadata();
 
