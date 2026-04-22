@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'path';
-import fs from 'fs';
 import { app as electronApp } from 'electron';
 import projectRoutes from './routes/projects.js';
 import documentRoutes from './routes/documents.js';
@@ -9,9 +8,8 @@ import conversationRoutes from './routes/conversations.js';
 import settingsRoutes from './routes/settings.js';
 import chatRoutes from './routes/chat.js';
 
-const isDev = !electronApp.isPackaged;
-
 export async function createServer(port: number): Promise<void> {
+  const isDev = !electronApp.isPackaged;
   const app = express();
 
   app.use(express.json());
@@ -31,25 +29,14 @@ export async function createServer(port: number): Promise<void> {
     res.json({ path: dirPath });
   });
 
-  // ─── SPA serving ────────────────────────────────────────
-  if (isDev) {
-    // In dev mode, proxy non-API requests to Vite dev server
-    const { createProxyMiddleware } = await import('http-proxy-middleware');
-    app.use(
-      '/',
-      createProxyMiddleware({
-        target: 'http://localhost:5173',
-        changeOrigin: true,
-        ws: true,
-      }),
-    );
-  } else {
-    // In production, serve built renderer files
+  // ─── SPA serving (production only) ──────────────────────
+  // In dev, Vite serves the SPA and proxies /api/* to this server.
+  if (!isDev) {
     const rendererDir = path.join(__dirname, '../renderer');
     app.use(express.static(rendererDir));
 
     // SPA catch-all — serve index.html for all non-API routes
-    app.get('*', (_req, res) => {
+    app.get('/{*splat}', (_req, res) => {
       res.sendFile(path.join(rendererDir, 'index.html'));
     });
   }

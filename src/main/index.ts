@@ -3,6 +3,7 @@ import path from 'path';
 import { createServer } from './server.js';
 import { buildMenu } from './native/menus.js';
 import { initDatabase } from './database.js';
+import { initSettings } from './settings.js';
 import { selectDirectory } from './native/dialogs.js';
 
 const isDev = !app.isPackaged;
@@ -25,12 +26,14 @@ async function createWindow() {
 
   Menu.setApplicationMenu(buildMenu(mainWindow));
 
-  // Always load from Express (which serves the Inertia HTML shell with data-page props).
-  // In dev mode, the Inertia HTML template points script/CSS tags at Vite's dev server.
-  mainWindow.loadURL(`http://localhost:${SERVER_PORT}`);
-
   if (isDev) {
+    // In dev, load from Vite dev server (which proxies /api/* to Express).
+    // This avoids cross-origin issues and gives us HMR out of the box.
+    mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
+  } else {
+    // In prod, load from Express which serves the built static files + API.
+    mainWindow.loadURL(`http://localhost:${SERVER_PORT}`);
   }
 
   mainWindow.on('closed', () => {
@@ -42,6 +45,9 @@ async function createWindow() {
 ipcMain.handle('select-directory', () => selectDirectory());
 
 app.whenReady().then(async () => {
+  // Initialize settings (electron-store is ESM-only, requires dynamic import)
+  await initSettings();
+
   // Initialize PGLite database
   await initDatabase();
 

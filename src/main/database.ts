@@ -92,5 +92,5 @@ async function runMigrations() {
     CREATE INDEX IF NOT EXISTS idx_messages_order ON messages(conversation_id, order_index);
   `;
 
-  await pglite.query(sql);
+  await pglite.exec(sql);
 }

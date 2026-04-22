@@ -25,6 +25,10 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Proxy API requests to the Express server running in Electron's main process
+    proxy: {
+      '/api': 'http://localhost:19274',
+    },
   },
   esbuild: {
     jsx: 'automatic',
