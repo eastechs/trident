@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { streamText, generateText, type UIMessage } from 'ai';
+import { streamText, generateText, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
 import { eq, asc, sql, inArray, and } from 'drizzle-orm';
 import { getDb } from '../database.js';
 import { conversations, messages, documents, projects } from '../db/schema.js';
@@ -16,7 +16,7 @@ const router = Router({ mergeParams: true });
 router.post('/', async (req, res) => {
   const db = getDb();
   const projectId = req.params.projectId;
-  const { model_id, conversation_id, side, document_ids } = req.body;
+  const { messages: requestMessages, model_id, conversation_id, side, document_ids } = req.body;
 
   if (!model_id || !conversation_id) {
     res.status(422).json({ error: 'model_id and conversation_id are required' });
@@ -27,19 +27,14 @@ router.post('/', async (req, res) => {
   const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
   if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
 
-  // Load conversation history from DB as UIMessage[]
-  const existingMessages = await db
-    .select()
-    .from(messages)
-    .where(eq(messages.conversationId, conversation_id))
-    .orderBy(asc(messages.orderIndex));
+  // The client (useChat) sends the full UIMessage[] including the new user message.
+  // Use that directly; the DB history would miss the new message.
+  const history: UIMessage[] = Array.isArray(requestMessages) ? requestMessages : [];
 
-  const history: UIMessage[] = existingMessages.map((m) => ({
-    id: m.id,
-    role: m.role as UIMessage['role'],
-    parts: m.parts as UIMessage['parts'],
-    ...(m.metadata ? { metadata: m.metadata as Record<string, unknown> } : {}),
-  }));
+  if (history.length === 0) {
+    res.status(422).json({ error: 'messages must not be empty' });
+    return;
+  }
 
   // Load document attachments if provided (only the requested IDs)
   let systemSuffix = '';
@@ -61,12 +56,14 @@ router.post('/', async (req, res) => {
   const systemPrompt = loadInstructions() + systemSuffix;
 
   try {
+    const modelMessages = await convertToModelMessages(history);
+
     const result = streamText({
       model,
       system: systemPrompt,
-      messages: history,
+      messages: modelMessages,
       tools,
-      maxSteps: 25,
+      stopWhen: stepCountIs(25),
       providerOptions: getProviderOptions(model_id),
     });
 

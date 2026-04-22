@@ -955,7 +955,7 @@ return;
                                 conversations={localConversations}
                                 otherSideActiveId={rightActiveId}
                                 documents={localDocuments}
-                                defaultModel="claude-opus-4-6"
+                                defaultModel="claude-opus-4-7"
                                 configuredProviders={configuredProviders}
                                 initialPrompt={initialPromptRef.current}
                                 onConversationCreated={handleConversationCreated}

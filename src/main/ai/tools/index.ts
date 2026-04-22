@@ -27,9 +27,9 @@ export function createTools(projectId: string, projectPath: string, modelId: str
   }
 
   return {
-    askQuestions: tool({
+    AskQuestions: tool({
       description: 'Present clarifying questions to the user before proceeding with work. This tool displays an interactive questionnaire in the chat UI. Each question has multiple-choice options the user can select from, plus a freeform "Something else" option. IMPORTANT: After calling this tool, you MUST stop and wait for the user\'s answers. Do NOT continue with any other actions or tool calls until you receive the user\'s response. The user\'s answers will arrive as their next message.',
-      parameters: z.object({
+      inputSchema: z.object({
         questions: z.array(z.object({
           question: z.string().describe('The question text to display to the user.'),
           options: z.array(z.object({
@@ -45,9 +45,9 @@ export function createTools(projectId: string, projectPath: string, modelId: str
       }),
     }),
 
-    configureImageGeneration: tool({
+    ConfigureImageGeneration: tool({
       description: 'Present image generation configuration options to the user before calling GenerateImage. The user will select their preferred model, aspect ratio, and quality. Use this exactly once before any image generation task. After the user responds, call GenerateImage with their selections.',
-      parameters: z.object({}),
+      inputSchema: z.object({}),
       execute: async () => ({
         status: 'pending',
         type: 'image_config',
@@ -55,9 +55,9 @@ export function createTools(projectId: string, projectPath: string, modelId: str
       }),
     }),
 
-    searchDocuments: tool({
+    SearchDocuments: tool({
       description: 'Search for documents in the project by name. Use this when the user references a document by name that is not attached to the conversation. Returns matching document IDs and names.',
-      parameters: z.object({
+      inputSchema: z.object({
         query: z.string().describe('The search term to match against document names.'),
       }),
       execute: async ({ query }) => {
@@ -81,9 +81,9 @@ export function createTools(projectId: string, projectPath: string, modelId: str
       },
     }),
 
-    readDocument: tool({
+    ReadDocument: tool({
       description: 'Read the full content of a document by its UUID. Use this after searching for documents to retrieve their content.',
-      parameters: z.object({
+      inputSchema: z.object({
         document_id: z.string().describe('The UUID of the document to read.'),
       }),
       execute: async ({ document_id }) => {
@@ -105,9 +105,9 @@ export function createTools(projectId: string, projectPath: string, modelId: str
       },
     }),
 
-    editDocument: tool({
+    EditDocument: tool({
       description: 'Edit the content of an existing document in the project. Use this when the user asks you to make changes to a document that was attached to the conversation. Provide the complete new markdown content for the document.',
-      parameters: z.object({
+      inputSchema: z.object({
         document_id: z.string().describe('The UUID of the document to edit. Must be one of the documents attached to this conversation.'),
         content: z.string().describe('The complete new markdown content for the document.'),
       }),
@@ -142,9 +142,9 @@ export function createTools(projectId: string, projectPath: string, modelId: str
       },
     }),
 
-    renameDocument: tool({
+    RenameDocument: tool({
       description: 'Rename an existing document in the project.',
-      parameters: z.object({
+      inputSchema: z.object({
         document_id: z.string().describe('The UUID of the document to rename.'),
         name: z.string().describe('The new name for the document (without file extension).'),
       }),
@@ -191,9 +191,9 @@ export function createTools(projectId: string, projectPath: string, modelId: str
       },
     }),
 
-    createDocument: tool({
+    CreateDocument: tool({
       description: 'Create a new document in the project. Use this when the user asks you to create a new document with specific content.',
-      parameters: z.object({
+      inputSchema: z.object({
         name: z.string().describe('The name for the new document (without file extension).'),
         content: z.string().describe('The initial markdown content for the new document.'),
       }),
@@ -248,9 +248,9 @@ export function createTools(projectId: string, projectPath: string, modelId: str
       },
     }),
 
-    generateImage: tool({
+    GenerateImage: tool({
       description: 'Generate an image using an AI image model and save it to the project. Use this after the user has selected their preferred image model and settings via ConfigureImageGeneration.',
-      parameters: z.object({
+      inputSchema: z.object({
         prompt: z.string().describe('The image generation prompt describing what to create.'),
         name: z.string().describe('A descriptive name for the image (without file extension).'),
         model: z.string().describe('The image model ID to use (e.g. gpt-image-1.5, gemini-3.1-flash-image-preview).'),

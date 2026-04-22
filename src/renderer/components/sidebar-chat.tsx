@@ -25,6 +25,7 @@ import {
     ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
 import { ImageConfigCard } from '@/components/ai-elements/image-config-card';
+import { Tool, ToolHeader } from '@/components/ai-elements/tool';
 import {
     Message,
     MessageContent,
@@ -69,8 +70,8 @@ const models = [
     {
         provider: 'Anthropic',
         providerSlug: 'anthropic',
-        id: 'claude-opus-4-6',
-        name: 'Opus 4.6',
+        id: 'claude-opus-4-7',
+        name: 'Opus 4.7',
         providers: ['anthropic'],
     },
     {
@@ -127,7 +128,7 @@ const models = [
 type ProviderName = 'Anthropic' | 'OpenAI' | 'Gemini';
 
 const modelContextWindows: Record<string, number> = {
-    'claude-opus-4-6': 1_000_000,
+    'claude-opus-4-7': 1_000_000,
     'claude-sonnet-4-6': 1_000_000,
     'claude-haiku-4-5': 200_000,
     'gpt-5.4': 1_000_000,
@@ -224,11 +225,19 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
     const { messages, setMessages, sendMessage, status } = useChat({
         id: conversationId,
         transport: new DefaultChatTransport({
-            api: `/projects/${projectId}/chat`,
-            body: {
-                model_id: modelRef.current,
-                conversation_id: conversationId,
-                side: side ?? undefined,
+            api: `/api/projects/${projectId}/chat`,
+            // Use a function so modelRef.current is read at send time (latest selection),
+            // not frozen at transport construction.
+            prepareSendMessagesRequest({ messages, body }) {
+                return {
+                    body: {
+                        messages,
+                        model_id: modelRef.current,
+                        conversation_id: conversationId,
+                        side: side ?? undefined,
+                        ...body,
+                    },
+                };
             },
         }),
         onFinish({ message }) {
@@ -245,13 +254,13 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                 const output = part.output as Record<string, unknown> | undefined;
 
                 if (output?.document_id) {
-                    if (toolName === 'editDocument') {
+                    if (toolName === 'EditDocument') {
                         onDocumentEdited?.(output.document_id as string);
-                    } else if (toolName === 'createDocument') {
+                    } else if (toolName === 'CreateDocument') {
                         onDocumentCreated?.(output.document_id as string, (output.document_name as string) ?? '');
                     }
                 }
-                if (toolName === 'generateImage' && output?.image_id) {
+                if (toolName === 'GenerateImage' && output?.image_id) {
                     onImageCreated?.(output.image_id as string, (output.image_name as string) ?? '');
                 }
             }
@@ -490,26 +499,17 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                                             );
                                         }
 
-                                        if (isToolUIPart(part) && getToolName(part) === 'GenerateImage') {
-                                            const output = typeof part.output === 'string'
-                                                ? JSON.parse(part.output)
-                                                : part.output as Record<string, unknown> | undefined;
-
-                                            if (output?.status === 'success') {
-                                                return (
-                                                    <div key={`${message.id}-${i}`} className="not-prose flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-                                                        <img
-                                                            src={`/projects/${projectId}/images/${output.image_id}`}
-                                                            alt={output.image_name as string}
-                                                            className="size-16 rounded-lg object-cover"
-                                                        />
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="text-sm font-medium text-foreground">{output.image_name as string}</div>
-                                                            <div className="truncate text-xs text-muted-foreground">{output.prompt as string}</div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }
+                                        // Render tool calls via the Tool component (status badge: Running / Completed / Error)
+                                        if (isToolUIPart(part)) {
+                                            return (
+                                                <Tool key={`${message.id}-${i}`}>
+                                                    <ToolHeader
+                                                        type={part.type}
+                                                        state={part.state}
+                                                        title={getToolName(part)}
+                                                    />
+                                                </Tool>
+                                            );
                                         }
 
                                         return null;

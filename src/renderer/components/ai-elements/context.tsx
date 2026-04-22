@@ -26,7 +26,7 @@ interface ModelPricing {
 }
 
 const modelPricing: Record<string, ModelPricing> = {
-  'claude-opus-4-6': { inputPerMTokens: 15, outputPerMTokens: 75, cacheReadPerMTokens: 1.5, cacheWritePerMTokens: 18.75 },
+  'claude-opus-4-7': { inputPerMTokens: 15, outputPerMTokens: 75, cacheReadPerMTokens: 1.5, cacheWritePerMTokens: 18.75 },
   'claude-sonnet-4-6': { inputPerMTokens: 3, outputPerMTokens: 15, cacheReadPerMTokens: 0.3, cacheWritePerMTokens: 3.75 },
   'claude-haiku-4-5': { inputPerMTokens: 0.8, outputPerMTokens: 4, cacheReadPerMTokens: 0.08, cacheWritePerMTokens: 1 },
   'gpt-5.4': { inputPerMTokens: 1.25, outputPerMTokens: 10, cacheReadPerMTokens: 0.13 },
