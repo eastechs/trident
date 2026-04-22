@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { api_get, api_post, api_put, api_patch, api_delete, isApiError } from '@/lib/api';
 import {
@@ -48,8 +48,12 @@ export default function Settings() {
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [trashEnabled, setTrashEnabled] = useState(true);
 
-    // Side menu state
-    const [activeSection, setActiveSection] = useState<'preferences' | 'providers' | 'agents'>('preferences');
+    // Side menu state — initial section can come from a ?section= query param
+    // (e.g. /settings?section=providers from the missing-keys alert).
+    const [searchParams] = useSearchParams();
+    const initialSection = (['preferences', 'providers', 'agents'] as const)
+        .find((s) => s === searchParams.get('section')) ?? 'preferences';
+    const [activeSection, setActiveSection] = useState<'preferences' | 'providers' | 'agents'>(initialSection);
 
     // Agent instructions state
     const [selectedAgent, setSelectedAgent] = useState<'collaborator'>('collaborator');

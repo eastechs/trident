@@ -213,7 +213,7 @@ export default function Main() {
                                         : `${missingProviders.join(', ')} API ${missingProviders.length === 1 ? 'key is' : 'keys are'} missing`}
                                 </p>
                                 <p className="mt-0.5 text-amber-800/80 dark:text-amber-200/70">
-                                    <Link to="/settings" className="underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100">
+                                    <Link to="/settings?section=providers" className="underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100">
                                         Add API keys in settings
                                     </Link>{' '}
                                     to use these providers.
