@@ -1,5 +1,6 @@
 import { Menu, BrowserWindow, app } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
+import { openDocumentationWindow } from './windows.js';
 
 export function buildMenu(mainWindow: BrowserWindow): Menu {
   const isMac = process.platform === 'darwin';
@@ -71,7 +72,7 @@ export function buildMenu(mainWindow: BrowserWindow): Menu {
       submenu: [
         {
           label: 'Documentation',
-          click: () => mainWindow.webContents.send('menu-action', 'documentation'),
+          click: () => openDocumentationWindow(),
         },
       ],
     },

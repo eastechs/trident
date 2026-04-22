@@ -259,7 +259,7 @@ export default function Main() {
                             {projects.map((project) => (
                                 <li key={project.id} className="relative">
                                     <Link
-                                        href={`/projects/${project.id}`}
+                                        to={`/projects/${project.id}`}
                                         className="group block h-full rounded-xl border border-neutral-200 bg-white p-5 transition hover:border-neutral-300 hover:shadow-sm dark:border-white/10 dark:bg-neutral-900 dark:hover:border-white/20"
                                     >
                                         <div className="flex items-start justify-between gap-3">

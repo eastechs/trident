@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('menu-action', (_event, action: string) => callback(action));
   },
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
+  openDocumentation: () => ipcRenderer.invoke('open-documentation'),
 });

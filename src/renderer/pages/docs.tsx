@@ -28,6 +28,7 @@ import React, {
 import type { EditorHandle } from '@/components/editor';
 import { MilkdownEditorWrapper } from '@/components/editor';
 import { HelpSidebarButton } from '@/components/help-sidebar-button';
+import { ProjectSettingsDialog } from '@/components/project-settings-dialog';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -198,22 +199,24 @@ function SortableDocTab({
 
 export default function Docs() {
     const { id } = useParams<{ id: string }>();
-    const [project, setProject] = useState<ProjectData | null>(null);
-    const [localDocuments, setLocalDocuments] = useState<DocumentData[]>([]);
+    const [data, setData] = useState<{ project: ProjectData; documents: DocumentData[] } | null>(null);
 
     useEffect(() => {
         if (!id) return;
         api_get<{ project: ProjectData; documents: DocumentData[] }>(`/api/projects/${id}`)
-            .then((data) => {
-                setProject(data.project);
-                setLocalDocuments(data.documents);
-            });
+            .then(setData)
+            .catch(console.error);
     }, [id]);
 
-    useDocumentTitle(project ? `Docs - ${project.name}` : 'Docs');
+    useDocumentTitle(data ? `Docs - ${data.project.name}` : 'Docs');
 
-    if (!project) return null;
+    if (!data) return null;
 
+    return <DocsView key={data.project.id} project={data.project} documents={data.documents} />;
+}
+
+function DocsView({ project, documents }: { project: ProjectData; documents: DocumentData[] }) {
+    const [localDocuments, setLocalDocuments] = useState<DocumentData[]>(documents);
     const storageKey = `trident:project:${project.id}:docs:tabs`;
     const [tabs, setTabs] = useState<Tab[]>(() => {
         const saved = localStorage.getItem(storageKey);
@@ -750,7 +753,7 @@ export default function Docs() {
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <Link
-                                        href={`/projects/${project.id}/gallery`}
+                                        to={`/projects/${project.id}/gallery`}
                                     >
                                         <Button variant="ghost" size="icon-sm">
                                             <ImageIcon className="size-4" />
@@ -764,6 +767,7 @@ export default function Docs() {
                                     Gallery
                                 </TooltipContent>
                             </Tooltip>
+                            <ProjectSettingsDialog project={project} />
                         </nav>
                         <div className="mt-auto">
                             <HelpSidebarButton />

@@ -1,13 +1,19 @@
-import { api_get, api_post, api_put, api_patch, api_delete } from '@/lib/api';
 import { CircleHelpIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-import { open as openDocumentation } from '@/actions/App/Http/Controllers/DocumentationController';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export function HelpSidebarButton() {
+    const navigate = useNavigate();
+
     const handleClick = () => {
-        api_post(openDocumentation.url());
+        // Open in a separate window via Electron IPC; fall back to in-app nav
+        if (window.electronAPI?.openDocumentation) {
+            window.electronAPI.openDocumentation();
+        } else {
+            navigate('/documentation');
+        }
     };
 
     return (

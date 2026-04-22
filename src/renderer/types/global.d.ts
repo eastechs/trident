@@ -5,6 +5,7 @@ declare global {
     electronAPI?: {
       onMenuAction: (callback: (action: string) => void) => void;
       selectDirectory: () => Promise<string | null>;
+      openDocumentation: () => Promise<void>;
     };
   }
 }

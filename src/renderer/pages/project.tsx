@@ -11,18 +11,15 @@ import {
     FileTextIcon,
     FilesIcon,
     FolderClosedIcon,
-    FolderOpenIcon,
     ImageIcon,
     MessageSquareIcon,
     PanelLeftIcon,
     PanelRightIcon,
     PlusIcon,
     SaveIcon,
-    Settings2Icon,
     Undo2Icon,
     XIcon,
 } from 'lucide-react';
-import type { FormEvent } from 'react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useDefaultLayout, usePanelRef } from 'react-resizable-panels';
 import { ChatPanel } from '@/components/chat-panel';
@@ -30,6 +27,7 @@ import type { ConversationData } from '@/components/conversation-history';
 import type { EditorHandle } from '@/components/editor';
 import { MilkdownEditorWrapper } from '@/components/editor';
 import { HelpSidebarButton } from '@/components/help-sidebar-button';
+import { ProjectSettingsDialog } from '@/components/project-settings-dialog';
 import { ProjectTour } from '@/components/project-tour';
 import {
     AlertDialog,
@@ -49,14 +47,6 @@ import {
     ContextMenuSeparator,
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
     Popover,
@@ -70,7 +60,6 @@ import {
 } from '@/components/ui/resizable';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
 import {
     Tooltip,
     TooltipContent,
@@ -232,36 +221,32 @@ function SortableTab({
     );
 }
 
+interface ProjectViewProps {
+    project: ProjectData;
+    documents: DocumentData[];
+    images: ImageData[];
+    conversations: ConversationData[];
+    configuredProviders: Props['configuredProviders'];
+    shouldShowTour: boolean;
+}
+
 export default function Project() {
     const { id } = useParams<{ id: string }>();
-    const [project, setProject] = useState<ProjectData | null>(null);
-    const [documents, setDocuments] = useState<DocumentData[]>([]);
-    const [images, setImages] = useState<ImageData[]>([]);
-    const [conversations, setConversations] = useState<ConversationData[]>([]);
-    const [configuredProviders, setConfiguredProviders] = useState<Props['configuredProviders']>({ anthropic: false, openai: false, gemini: false });
-    const [shouldShowTour, setShouldShowTour] = useState(false);
+    const [data, setData] = useState<ProjectViewProps | null>(null);
 
     useEffect(() => {
         if (!id) return;
-        api_get<{
-            project: ProjectData;
-            documents: DocumentData[];
-            images: ImageData[];
-            conversations: ConversationData[];
-            configuredProviders: Props['configuredProviders'];
-            shouldShowTour: boolean;
-        }>(`/api/projects/${id}`)
-            .then((data) => {
-                setProject(data.project);
-                setDocuments(data.documents);
-                setImages(data.images);
-                setConversations(data.conversations);
-                setConfiguredProviders(data.configuredProviders);
-                setShouldShowTour(data.shouldShowTour);
-            });
+        api_get<ProjectViewProps>(`/api/projects/${id}`).then(setData).catch(console.error);
     }, [id]);
 
-    useDocumentTitle(project?.name);
+    useDocumentTitle(data?.project.name);
+
+    if (!data) return null;
+
+    return <ProjectView key={data.project.id} {...data} />;
+}
+
+function ProjectView({ project, documents, images, conversations, configuredProviders, shouldShowTour }: ProjectViewProps) {
 
     const leftPanelRef = usePanelRef();
     const rightPanelRef = usePanelRef();
@@ -270,9 +255,9 @@ export default function Project() {
     const [activeTabId, setActiveTabId] = useState<string>('');
     const tabsRestored = useRef(false);
 
-    // Restore tabs + activeTabId from localStorage after project data loads
+    // Restore tabs + activeTabId from localStorage
     useEffect(() => {
-        if (!project || tabsRestored.current) return;
+        if (tabsRestored.current) return;
         tabsRestored.current = true;
 
         const saved = localStorage.getItem(`trident:project:${project.id}:tabs`);
@@ -336,42 +321,9 @@ export default function Project() {
     const [localDocuments, setLocalDocuments] = useState<DocumentData[]>(documents);
     const [localImages, setLocalImages] = useState<ImageData[]>(images ?? []);
     const [trashEnabled, setTrashEnabled] = useState(true);
-    const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
-    const [updateFormData, setUpdateFormData] = useState({
-        name: project?.name ?? '',
-        description: project?.description ?? '',
-        filesystem_root: project?.filesystem_root ?? '',
-    });
-    const [updateFormProcessing, setUpdateFormProcessing] = useState(false);
-    const [updateFormErrors, setUpdateFormErrors] = useState<Record<string, string>>({});
-    const updateForm = {
-        data: updateFormData,
-        setData: (key: string, value: string) => setUpdateFormData((prev) => ({ ...prev, [key]: value })),
-        errors: updateFormErrors,
-        processing: updateFormProcessing,
-        clearErrors: () => setUpdateFormErrors({}),
-        patch: (url: string, opts?: { onSuccess?: () => void }) => {
-            setUpdateFormProcessing(true);
-            setUpdateFormErrors({});
-            api_patch(url, updateFormData)
-                .then(() => opts?.onSuccess?.())
-                .catch(console.error)
-                .finally(() => setUpdateFormProcessing(false));
-        },
-    };
-
     useEffect(() => {
         setLocalDocuments(documents);
     }, [documents]);
-
-    useEffect(() => {
-        if (!project) return;
-        setUpdateFormData({
-            name: project.name,
-            description: project.description ?? '',
-            filesystem_root: project.filesystem_root ?? '',
-        });
-    }, [project]);
 
     useEffect(() => {
         setLocalImages(images ?? []);
@@ -383,37 +335,6 @@ export default function Project() {
             .catch(() => {});
     }, []);
 
-    function openUpdateDialog() {
-        updateForm.clearErrors();
-        updateForm.setData({
-            name: project.name,
-            description: project.description ?? '',
-            filesystem_root: project.filesystem_root ?? '',
-        });
-        setIsUpdateDialogOpen(true);
-    }
-
-    async function handleSelectUpdateDirectory() {
-        try {
-            const result = await api_post<{ path: string | null }>('/api/select-directory');
-
-            if (result.path) {
-                updateForm.setData('filesystem_root', result.path);
-            }
-        } catch (error) {
-            console.error('Failed to select directory:', error);
-        }
-    }
-
-    function handleUpdateSubmit(e: FormEvent) {
-        e.preventDefault();
-        updateForm.patch(`/api/projects/${project.id}`, {
-            onSuccess: () => {
-                setIsUpdateDialogOpen(false);
-            },
-        });
-    }
-
     const [localConversations, setLocalConversations] = useState<ConversationData[]>(conversations);
 
     useEffect(() => {
@@ -421,15 +342,9 @@ export default function Project() {
     }, [conversations]);
 
     // Auto-send initial prompt to both chats on first load (no conversations yet)
-    const initialPromptRef = useRef<string | undefined>(undefined);
-    const initialPromptSetRef = useRef(false);
-    useEffect(() => {
-        if (!project || initialPromptSetRef.current) return;
-        if (conversations.length === 0 && project.initial_prompt) {
-            initialPromptRef.current = project.initial_prompt;
-        }
-        initialPromptSetRef.current = true;
-    }, [project, conversations]);
+    const initialPromptRef = useRef<string | undefined>(
+        conversations.length === 0 && project.initial_prompt ? project.initial_prompt : undefined,
+    );
 
     // Track active conversation IDs for dual-open prevention (updated via callback from ChatPanel)
     const [leftActiveId, setLeftActiveId] = useState<string | null>(null);
@@ -934,8 +849,6 @@ return;
 
     const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
-    if (!project) return null;
-
     return (
         <div className="flex h-screen flex-col">
             <ProjectTour shouldShowTour={shouldShowTour} />
@@ -1010,21 +923,7 @@ return;
                                     Gallery
                                 </TooltipContent>
                             </Tooltip>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        onClick={openUpdateDialog}
-                                    >
-                                        <Settings2Icon className="size-4" />
-                                        <span className="sr-only">Project Settings</span>
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="right">
-                                    Project Settings
-                                </TooltipContent>
-                            </Tooltip>
+                            <ProjectSettingsDialog project={project} />
                         </nav>
                         <div data-tour="help" className="mt-auto">
                             <HelpSidebarButton />
@@ -1488,118 +1387,6 @@ setDeletingTabId(null);
                 </AlertDialogContent>
             </AlertDialog>
             {/* Clear conversation dialog hidden — replaced by per-conversation delete in history panel */}
-
-            <Dialog open={isUpdateDialogOpen} onOpenChange={setIsUpdateDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Project Settings</DialogTitle>
-                        <DialogDescription>
-                            Update this project's name, description, and workspace directory.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleUpdateSubmit} className="grid gap-4">
-                        <div className="grid gap-2">
-                            <label
-                                htmlFor="update-name"
-                                className="text-sm font-medium"
-                            >
-                                Name
-                            </label>
-                            <Input
-                                id="update-name"
-                                value={updateForm.data.name}
-                                onChange={(e) =>
-                                    updateForm.setData('name', e.target.value)
-                                }
-                                placeholder="My Project"
-                                required
-                            />
-                            {updateForm.errors.name && (
-                                <p className="text-sm text-destructive">
-                                    {updateForm.errors.name}
-                                </p>
-                            )}
-                        </div>
-                        <div className="grid gap-2">
-                            <label
-                                htmlFor="update-description"
-                                className="text-sm font-medium"
-                            >
-                                Description
-                            </label>
-                            <Textarea
-                                id="update-description"
-                                value={updateForm.data.description}
-                                onChange={(e) =>
-                                    updateForm.setData(
-                                        'description',
-                                        e.target.value,
-                                    )
-                                }
-                                placeholder="A short description of the project"
-                            />
-                            {updateForm.errors.description && (
-                                <p className="text-sm text-destructive">
-                                    {updateForm.errors.description}
-                                </p>
-                            )}
-                        </div>
-                        <div className="grid gap-2">
-                            <label className="text-sm font-medium">
-                                Workspace Directory{' '}
-                                <span className="font-normal text-neutral-400">(optional)</span>
-                            </label>
-                            <div className="flex gap-2">
-                                <Input
-                                    value={updateForm.data.filesystem_root}
-                                    readOnly
-                                    placeholder="No directory selected"
-                                    className="flex-1"
-                                />
-                                {updateForm.data.filesystem_root && (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={() => updateForm.setData('filesystem_root', '')}
-                                        title="Clear workspace directory"
-                                    >
-                                        <XIcon className="size-4" />
-                                    </Button>
-                                )}
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={handleSelectUpdateDirectory}
-                                >
-                                    <FolderOpenIcon className="size-4" />
-                                </Button>
-                            </div>
-                            {updateForm.errors.filesystem_root && (
-                                <p className="text-sm text-destructive">
-                                    {updateForm.errors.filesystem_root}
-                                </p>
-                            )}
-                        </div>
-                        <DialogFooter>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setIsUpdateDialogOpen(false)}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                type="submit"
-                                disabled={updateForm.processing}
-                            >
-                                Save
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

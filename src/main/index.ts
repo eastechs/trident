@@ -7,6 +7,7 @@ import { buildMenu } from './native/menus.js';
 import { initDatabase } from './database.js';
 import { initSettings } from './settings.js';
 import { selectDirectory } from './native/dialogs.js';
+import { openDocumentationWindow } from './native/windows.js';
 
 const isDev = !app.isPackaged;
 const SERVER_PORT = 19274;
@@ -28,14 +29,11 @@ async function createWindow() {
 
   Menu.setApplicationMenu(buildMenu(mainWindow));
 
+  const url = isDev ? 'http://localhost:5173' : `http://localhost:${SERVER_PORT}`;
+  mainWindow.loadURL(url);
+
   if (isDev) {
-    // In dev, load from Vite dev server (which proxies /api/* to Express).
-    // This avoids cross-origin issues and gives us HMR out of the box.
-    mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
-  } else {
-    // In prod, load from Express which serves the built static files + API.
-    mainWindow.loadURL(`http://localhost:${SERVER_PORT}`);
   }
 
   mainWindow.on('closed', () => {
@@ -45,6 +43,7 @@ async function createWindow() {
 
 // IPC handlers
 ipcMain.handle('select-directory', () => selectDirectory());
+ipcMain.handle('open-documentation', () => openDocumentationWindow());
 
 function writeTridentMetadata(): void {
   try {

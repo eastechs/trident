@@ -13,8 +13,9 @@ import {
     MessageSquareIcon,
     XIcon,
 } from 'lucide-react';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { HelpSidebarButton } from '@/components/help-sidebar-button';
+import { ProjectSettingsDialog } from '@/components/project-settings-dialog';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -176,21 +177,24 @@ function SortableImageTab({
 
 export default function Gallery() {
     const { id } = useParams<{ id: string }>();
-    const [project, setProject] = useState<ProjectData | null>(null);
-    const [localImages, setLocalImages] = useState<ImageData[]>([]);
+    const [data, setData] = useState<{ project: ProjectData; images: ImageData[] } | null>(null);
 
     useEffect(() => {
         if (!id) return;
         api_get<{ project: ProjectData; images: ImageData[] }>(`/api/projects/${id}`)
-            .then((data) => {
-                setProject(data.project);
-                setLocalImages(data.images);
-            });
+            .then(setData)
+            .catch(console.error);
     }, [id]);
 
-    useDocumentTitle(project ? `Gallery - ${project.name}` : 'Gallery');
+    useDocumentTitle(data ? `Gallery - ${data.project.name}` : 'Gallery');
 
-    if (!project) return null;
+    if (!data) return null;
+
+    return <GalleryView key={data.project.id} project={data.project} images={data.images} />;
+}
+
+function GalleryView({ project, images }: { project: ProjectData; images: ImageData[] }) {
+    const [localImages, setLocalImages] = useState<ImageData[]>(images);
     const [tabs, setTabs] = useState<Tab[]>([]);
     const [activeTabId, setActiveTabId] = useState<string | null>(null);
     const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
@@ -397,6 +401,7 @@ export default function Gallery() {
                                     Gallery
                                 </TooltipContent>
                             </Tooltip>
+                            <ProjectSettingsDialog project={project} />
                         </nav>
                         <div className="mt-auto">
                             <HelpSidebarButton />

@@ -1,8 +1,6 @@
-import { api_get, api_post, api_put, api_patch, api_delete } from '@/lib/api';
+import { api_put } from '@/lib/api';
 import { driver } from 'driver.js';
 import { useEffect, useRef } from 'react';
-
-import { setProjectTourCompleted } from '@/actions/App/Http/Controllers/SettingsController';
 
 interface Props {
     shouldShowTour: boolean;
@@ -71,7 +69,7 @@ export function ProjectTour({ shouldShowTour }: Props) {
                 },
             ],
             onDestroyed: () => {
-                api_put(setProjectTourCompleted.url());
+                api_put('/api/settings/project-tour');
             },
         });
 
