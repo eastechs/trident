@@ -91,7 +91,7 @@ export const MilkdownEditorWrapper = forwardRef<EditorHandle, MilkdownEditorWrap
         return (
             <div
                 ref={containerRef}
-                className="flex h-full flex-col [&_.milkdown]:flex [&_.milkdown]:flex-1 [&_.milkdown]:flex-col [&_.milkdown]:border-none [&_.milkdown]:shadow-none [&_.milkdown]:outline-none [&_.ProseMirror]:flex-1 [&_.ProseMirror]:font-serif [&_.ProseMirror]:outline-none"
+                className="flex h-full flex-col [&_.milkdown]:flex [&_.milkdown]:flex-1 [&_.milkdown]:flex-col [&_.milkdown]:border-none [&_.milkdown]:shadow-none [&_.milkdown]:outline-none [&_.milkdown-top-bar]:p-0! [&_.milkdown-top-bar_.top-bar-inner]:px-3 [&_.milkdown-top-bar_.top-bar-inner]:overflow-x-auto [&_.milkdown-top-bar_.top-bar-inner]:flex-nowrap [&_.milkdown-top-bar_.top-bar-inner:has(.top-bar-heading-dropdown)]:overflow-visible [&_.ProseMirror]:flex-1 [&_.ProseMirror]:font-serif [&_.ProseMirror]:outline-none"
             />
         );
     }
