@@ -52,11 +52,35 @@ router.post('/', async (req, res) => {
 
   // Resolve model and create tools
   const model = resolveModel(model_id);
-  const tools = createTools(projectId, project.path, model_id);
+  const baseTools = createTools(projectId, project.path, model_id);
+
+  // Add a provider-native web search tool so the agent can look up current info.
+  const provider = model_id.startsWith('claude-')
+    ? 'anthropic'
+    : model_id.startsWith('gemini-')
+      ? 'gemini'
+      : 'openai';
+
+  let WebSearch: unknown = undefined;
+  if (provider === 'anthropic') {
+    const anthropicKey = getApiKey('anthropic');
+    if (anthropicKey) {
+      const { createAnthropic } = await import('@ai-sdk/anthropic');
+      WebSearch = createAnthropic({ apiKey: anthropicKey }).tools.webSearch_20260209({ maxUses: 5 });
+    }
+  } else if (provider === 'openai') {
+    const openaiKey = getApiKey('openai');
+    if (openaiKey) {
+      const { createOpenAI } = await import('@ai-sdk/openai');
+      WebSearch = createOpenAI({ apiKey: openaiKey }).tools.webSearch();
+    }
+  }
+
+  const tools = WebSearch ? { ...baseTools, WebSearch } : baseTools;
   const systemPrompt = loadInstructions() + systemSuffix;
 
   try {
-    const modelMessages = await convertToModelMessages(history);
+    const modelMessages = await convertToModelMessages(history, { tools });
 
     const result = streamText({
       model,
@@ -67,16 +91,15 @@ router.post('/', async (req, res) => {
       providerOptions: getProviderOptions(model_id),
     });
 
-    // Use toUIMessageStreamResponse which:
-    // 1. Streams to the client via Data Stream Protocol
-    // 2. Provides UIMessage[] (not CoreMessage[]) in onFinish
-    const stream = result.toUIMessageStreamResponse({
+    // Pipe the UI message stream directly to the Express response.
+    // This hands lifecycle to the AI SDK so onFinish reliably runs before
+    // the response closes, avoiding a race where the last assistant message
+    // wouldn't get persisted.
+    result.pipeUIMessageStreamToResponse(res, {
       sendReasoning: true,
       originalMessages: history,
-      onFinish: async ({ messages: allMessages }) => {
+      onFinish: async ({ messages: allMessages, responseMessage }) => {
         try {
-          // allMessages is the complete UIMessage[] including history + new messages
-          // Persist only messages that aren't already in the DB
           const [maxOrder] = await db
             .select({ max: sql<number>`COALESCE(MAX(order_index), -1)` })
             .from(messages)
@@ -99,13 +122,19 @@ router.post('/', async (req, res) => {
                 metadata: { model: model_id },
                 orderIndex: nextIndex++,
               });
+            } else if (msg.id === responseMessage.id) {
+              // The response message may extend an existing assistant message
+              // (isContinuation). Update parts to the latest state.
+              await db
+                .update(messages)
+                .set({ parts: msg.parts as unknown as Record<string, unknown> })
+                .where(eq(messages.id, msg.id));
             }
           }
 
           // Update conversation title on first message
           const [conv] = await db.select().from(conversations).where(eq(conversations.id, conversation_id));
           if (conv?.title === 'New Chat') {
-            // Find the first user message in this batch for title generation
             const firstUserMsg = allMessages.find((m) => m.role === 'user');
             const title = await generateConversationTitle(firstUserMsg);
             await db
@@ -120,8 +149,7 @@ router.post('/', async (req, res) => {
           }
 
           // Show notification with model ID as title and first 3 lines of response as body
-          const lastAssistant = [...allMessages].reverse().find((m) => m.role === 'assistant');
-          const assistantText = lastAssistant?.parts
+          const assistantText = responseMessage.parts
             ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
             .map((p) => p.text)
             .join('\n') ?? '';
@@ -132,20 +160,6 @@ router.post('/', async (req, res) => {
         }
       },
     });
-
-    // Forward the ReadableStream response to Express
-    res.writeHead(stream.status, Object.fromEntries(stream.headers.entries()));
-    const reader = stream.body?.getReader();
-    if (reader) {
-      const pump = async () => {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) { res.end(); break; }
-          res.write(value);
-        }
-      };
-      pump().catch(() => res.end());
-    }
   } catch (err) {
     console.error('Chat error:', err);
     res.status(500).json({ error: (err as Error).message });

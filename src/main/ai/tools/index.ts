@@ -8,6 +8,29 @@ import { getDb } from '../../database.js';
 import { documents, images } from '../../db/schema.js';
 import { getApiKey } from '../../settings.js';
 
+// OpenAI image models (gpt-image-1, gpt-image-1.5) accept size in "WxH" format
+// and only support specific resolutions. Map common aspect ratios to those.
+function sizeFromAspect(aspect: string): `${number}x${number}` {
+  switch (aspect) {
+    case '1:1': return '1024x1024';
+    case '3:2': return '1536x1024';
+    case '2:3': return '1024x1536';
+    case '16:9': return '1536x1024';
+    case '9:16': return '1024x1536';
+    default: return '1024x1024';
+  }
+}
+
+// Reverse lookup for Gemini where we've been given a "WxH" string.
+function aspectFromSize(size: string): `${number}:${number}` {
+  const [w, h] = size.split('x').map(Number);
+  if (!w || !h) return '1:1';
+  // Return a simple form; Gemini accepts e.g. "16:9", "3:2", etc.
+  const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
+  const d = gcd(w, h);
+  return `${w / d}:${h / d}` as `${number}:${number}`;
+}
+
 /**
  * Creates all tools for the DocumentCollaborator agent,
  * scoped to a specific project.
@@ -278,11 +301,13 @@ export function createTools(projectId: string, projectPath: string, modelId: str
 
           const genOptions: Record<string, unknown> = { model: imageModel, prompt };
           if (size) {
-            // OpenAI typically uses "1024x1024"-style size; Gemini uses aspectRatio "16:9"
-            if (size.includes(':')) {
-              genOptions.aspectRatio = size;
+            if (isGemini) {
+              // Gemini supports aspectRatio directly (e.g. '16:9', '3:2').
+              genOptions.aspectRatio = size.includes(':') ? size : aspectFromSize(size);
             } else {
-              genOptions.size = size;
+              // OpenAI image models (gpt-image-1/1.5) need size as WxH.
+              // Map aspect ratios to the model's supported resolutions.
+              genOptions.size = size.includes(':') ? sizeFromAspect(size) : size;
             }
           }
           if (quality) {
