@@ -10,11 +10,14 @@ import { getConfiguredProviders, getSetting } from '../settings.js';
 
 const router = Router();
 
-function slugify(text: string): string {
+// Normalize a project name for use as a filesystem directory name.
+// Preserves the human-readable form (spaces, mixed case) and only strips
+// characters that are unsafe on common filesystems.
+function projectDirName(text: string): string {
   return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
+    .replace(/[/\\:*?"<>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Untitled Project';
 }
 
 function resolveProvider(modelId: string): string {
@@ -167,8 +170,8 @@ router.post('/', async (req, res) => {
   const db = getDb();
   const { name, description, filesystem_root, initial_prompt } = req.body;
 
-  const slug = slugify(name);
-  const directoryPath = `Trident/Projects/${slug}`;
+  const dirName = projectDirName(name);
+  const directoryPath = `Trident/Projects/${dirName}`;
   const fullPath = path.join(os.homedir(), directoryPath);
 
   fs.mkdirSync(path.join(fullPath, 'documents', 'user'), { recursive: true });
@@ -210,6 +213,9 @@ router.patch('/:id', async (req, res) => {
   const db = getDb();
   const { name, description, filesystem_root } = req.body;
 
+  const [existing] = await db.select().from(projects).where(eq(projects.id, req.params.id));
+  if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
+
   let resolvedRoot: string | null = null;
   if (filesystem_root) {
     try {
@@ -220,9 +226,67 @@ router.patch('/:id', async (req, res) => {
     } catch { /* ignore */ }
   }
 
+  // If the name changed, rename the project directory and update all paths
+  let newProjectPath = existing.path;
+  if (name && name !== existing.name) {
+    const oldDirName = existing.path.split('/').pop() ?? '';
+    let newDirName = projectDirName(name);
+    let candidatePath = `Trident/Projects/${newDirName}`;
+    let counter = 2;
+    while (newDirName !== oldDirName && fs.existsSync(path.join(os.homedir(), candidatePath))) {
+      newDirName = `${projectDirName(name)} (${counter})`;
+      candidatePath = `Trident/Projects/${newDirName}`;
+      counter++;
+    }
+
+    if (candidatePath !== existing.path) {
+      const oldFullPath = path.join(os.homedir(), existing.path);
+      const newFullPath = path.join(os.homedir(), candidatePath);
+
+      try {
+        if (fs.existsSync(oldFullPath)) {
+          fs.renameSync(oldFullPath, newFullPath);
+        }
+      } catch (err) {
+        console.error('Failed to rename project directory:', err);
+        res.status(500).json({ error: 'Failed to rename project directory' });
+        return;
+      }
+
+      newProjectPath = candidatePath;
+
+      // Update document and image paths that lived under the old project path
+      const projectDocs = await db.select().from(documents).where(eq(documents.projectId, existing.id));
+      for (const doc of projectDocs) {
+        if (doc.path.startsWith(existing.path)) {
+          await db
+            .update(documents)
+            .set({ path: candidatePath + doc.path.substring(existing.path.length) })
+            .where(eq(documents.id, doc.id));
+        }
+      }
+
+      const projectImages = await db.select().from(images).where(eq(images.projectId, existing.id));
+      for (const img of projectImages) {
+        if (img.path.startsWith(existing.path)) {
+          await db
+            .update(images)
+            .set({ path: candidatePath + img.path.substring(existing.path.length) })
+            .where(eq(images.id, img.id));
+        }
+      }
+    }
+  }
+
   const [updated] = await db
     .update(projects)
-    .set({ name, description: description ?? '', filesystemRoot: resolvedRoot, updatedAt: new Date() })
+    .set({
+      name,
+      description: description ?? '',
+      filesystemRoot: resolvedRoot,
+      path: newProjectPath,
+      updatedAt: new Date(),
+    })
     .where(eq(projects.id, req.params.id))
     .returning();
 
@@ -250,14 +314,14 @@ router.post('/:id/duplicate', async (req, res) => {
   if (!project) { res.status(404).json({ error: 'Not found' }); return; }
 
   let newName = `${project.name} Copy`;
-  let newSlug = slugify(newName);
-  let newPath = `Trident/Projects/${newSlug}`;
+  let newDirName = projectDirName(newName);
+  let newPath = `Trident/Projects/${newDirName}`;
   let counter = 2;
 
   while (fs.existsSync(path.join(os.homedir(), newPath))) {
     newName = `${project.name} Copy ${counter}`;
-    newSlug = slugify(newName);
-    newPath = `Trident/Projects/${newSlug}`;
+    newDirName = projectDirName(newName);
+    newPath = `Trident/Projects/${newDirName}`;
     counter++;
   }
 

@@ -49,7 +49,9 @@ export function getProviderOptions(modelId: string): Record<string, unknown> {
   if (provider === 'anthropic') {
     return {
       anthropic: {
-        thinking: { type: 'enabled', budgetTokens: 10_000 },
+        thinking: { type: 'adaptive', display: 'summarized' },
+        effort: 'high',
+        sendReasoning: true,
       },
     };
   }
@@ -57,7 +59,8 @@ export function getProviderOptions(modelId: string): Record<string, unknown> {
   if (provider === 'openai') {
     return {
       openai: {
-        reasoning: { effort: 'high', summary: 'auto' },
+        reasoningEffort: 'high',
+        reasoningSummary: 'auto',
       },
     };
   }

@@ -518,22 +518,29 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
 
                                         return null;
                                     })}
-                                    {message.role === 'assistant' &&
-                                        isStreaming &&
-                                        isLastMessage &&
-                                        message.parts.every((p) =>
-                                            (p.type === 'text' && p.text === '') ||
-                                            (p.type !== 'text' && p.type !== 'reasoning' && !isToolUIPart(p))
-                                        ) && (
-                                            <div className="flex items-center gap-2">
-                                                <GridLoader size={3} color="var(--primary)" />
-                                                <span className="animate-pulse text-sm text-neutral-400">Thinking...</span>
-                                            </div>
-                                        )}
                                 </MessageContent>
                             </Message>
                         );
                     })}
+                    {isStreaming && (() => {
+                        // Show a "Thinking..." indicator while the assistant is working
+                        // but has no visible content yet (no text, no reasoning, no tool call).
+                        const lastMessage = messages[messages.length - 1];
+                        const hasVisibleAssistantContent =
+                            lastMessage?.role === 'assistant' &&
+                            lastMessage.parts.some((p) =>
+                                (p.type === 'text' && p.text !== '') ||
+                                p.type === 'reasoning' ||
+                                isToolUIPart(p),
+                            );
+                        if (hasVisibleAssistantContent) return null;
+                        return (
+                            <div className="flex items-center gap-2 px-3">
+                                <GridLoader size={3} color="var(--primary)" />
+                                <span className="animate-pulse text-sm text-neutral-400">Thinking...</span>
+                            </div>
+                        );
+                    })()}
                 </ConversationContent>
                 <ConversationScrollButton />
             </Conversation>
