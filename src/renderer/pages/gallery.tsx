@@ -107,7 +107,7 @@ function SortableImageTab({
                 <ContextMenuTrigger asChild>
                     <button
                         onClick={() => onSelect(tab.id)}
-                        className={`group flex w-40 min-w-0 shrink-0 items-center gap-1.5 border px-3 py-1.5 text-sm transition-colors ${
+                        className={`group flex w-48 min-w-0 shrink-0 items-center gap-1.5 border px-3 py-1.5 text-sm transition-colors ${
                             isActive
                                 ? 'border-primary bg-primary text-primary-foreground'
                                 : 'border-transparent text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300'
