@@ -543,6 +543,19 @@ return prev;
                 setActiveTabId(data.id);
                 setRenamingTabId(data.id);
                 setRenameValue(data.filename);
+                setLocalDocuments((prev) => {
+                    if (prev.some((d) => d.id === data.id)) {
+                        return prev;
+                    }
+
+                    return [...prev, {
+                        id: data.id,
+                        name: data.filename,
+                        created_by: 'user',
+                        last_edited_by: null,
+                        directory: 'user',
+                    }];
+                });
             })
             .catch((error) => {
                 console.error('Failed to create document:', error);
@@ -668,7 +681,7 @@ return prev;
                 if (isImage) {
                     setLocalImages(prev => prev.map(img => img.id === itemId ? { ...img, name: data.name } : img));
                 } else {
-                    // TODO: refetch documents
+                    setLocalDocuments(prev => prev.map(d => d.id === itemId ? { ...d, name: data.name } : d));
                 }
             })
             .catch((error) => {
@@ -686,11 +699,11 @@ return prev;
             return;
         }
 
-        const tab = tabs.find(t => t.id === deletingTabId);
         const tabId = deletingTabId;
+        const isImage = localImages.some(img => img.id === tabId);
         setDeletingTabId(null);
 
-        const endpoint = tab?.type === 'image'
+        const endpoint = isImage
             ? `/api/projects/${project.id}/images/${tabId}`
             : `/api/projects/${project.id}/documents/${tabId}`;
 
@@ -708,17 +721,17 @@ return prev;
                     return next;
                 });
 
-                if (tab?.type === 'image') {
+                if (isImage) {
                     setLocalImages(prev => prev.filter(img => img.id !== tabId));
                 } else {
-                    // TODO: refetch documents
+                    setLocalDocuments(prev => prev.filter(d => d.id !== tabId));
                 }
             })
             .catch((error) => {
                 console.error('Failed to delete:', error);
-                window.alert(`Failed to delete ${tab?.type === 'image' ? 'image' : 'document'}.`);
+                window.alert(`Failed to delete ${isImage ? 'image' : 'document'}.`);
             });
-    }, [deletingTabId, project.id, activeTabId, tabs]);
+    }, [deletingTabId, project.id, activeTabId, localImages]);
 
     const fetchDocumentContent = useCallback((documentId: string) => {
         api_get(`/api/projects/${project.id}/documents/${documentId}`)
