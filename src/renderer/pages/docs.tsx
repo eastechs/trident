@@ -283,6 +283,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
     const [fileListRenameValue, setFileListRenameValue] = useState('');
     const fileListRenameInputRef = useRef<HTMLInputElement>(null);
     const fileListRenameStartTime = useRef<number>(0);
+    const [trashEnabled, setTrashEnabled] = useState(true);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -342,6 +343,12 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
     useEffect(() => {
         api_get<{ enabled: boolean }>('/api/settings/autosave')
             .then((data) => setAutosaveEnabled(data.enabled))
+            .catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        api_get<{ enabled: boolean }>('/api/settings/trash')
+            .then((data) => setTrashEnabled(data.enabled))
             .catch(() => {});
     }, []);
 
@@ -1165,10 +1172,13 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
             >
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete document?</AlertDialogTitle>
+                        <AlertDialogTitle>
+                            {trashEnabled ? 'Move to Trash?' : 'Delete document?'}
+                        </AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will permanently delete this document. This
-                            action cannot be undone.
+                            {trashEnabled
+                                ? 'This document will be moved to the system trash.'
+                                : 'This will permanently delete this document. This action cannot be undone.'}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1177,7 +1187,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                             onClick={confirmDelete}
                             className="bg-red-600 text-white hover:bg-red-700"
                         >
-                            Delete
+                            {trashEnabled ? 'Move to Trash' : 'Delete'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

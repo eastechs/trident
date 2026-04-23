@@ -1,5 +1,6 @@
-import { MessageSquarePlusIcon } from 'lucide-react';
+import { MessageSquareIcon, MessageSquarePlusIcon } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
+import { ModelSelectorLogo } from '@/components/ai-elements/model-selector';
 import {
     ContextMenu,
     ContextMenuContent,
@@ -25,39 +26,52 @@ interface ConversationHistoryProps {
     onNewChat: () => void;
 }
 
-function getModelBadge(model: string | null): { label: string; className: string } | null {
+function getModelInfo(model: string | null): { providerSlug: string; displayName: string } | null {
     if (!model) {
         return null;
     }
 
     if (model.startsWith('claude-')) {
-        const name = model.replace('claude-', '').split('-')[0];
+        const rest = model.replace('claude-', '');
+        const parts = rest.split('-');
+        const family = parts[0];
+        const version = parts.slice(1).join('.');
+        const familyCased = family.charAt(0).toUpperCase() + family.slice(1);
 
         return {
-            label: name.charAt(0).toUpperCase() + name.slice(1),
-            className: 'bg-purple-500/15 text-purple-400',
+            providerSlug: 'anthropic',
+            displayName: version ? `${familyCased} ${version}` : familyCased,
         };
     }
 
     if (model.startsWith('gpt-')) {
+        const rest = model.replace('gpt-', '');
+        const parts = rest.split('-');
+        const version = parts[0];
+        const variant = parts
+            .slice(1)
+            .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+            .join(' ');
+
         return {
-            label: model.toUpperCase().replace('-', ' '),
-            className: 'bg-blue-500/15 text-blue-400',
+            providerSlug: 'openai',
+            displayName: variant ? `GPT-${version} ${variant}` : `GPT-${version}`,
         };
     }
 
     if (model.startsWith('gemini-')) {
-        const name = model.replace('gemini-', '');
+        const rest = model.replace('gemini-', '');
+        const parts = rest.split('-').map((p) => p.charAt(0).toUpperCase() + p.slice(1));
 
         return {
-            label: `Gemini ${name}`,
-            className: 'bg-emerald-500/15 text-emerald-400',
+            providerSlug: 'google',
+            displayName: `Gemini ${parts.join(' ')}`,
         };
     }
 
     return {
-        label: model,
-        className: 'bg-emerald-500/15 text-emerald-400',
+        providerSlug: 'anthropic',
+        displayName: model,
     };
 }
 
@@ -136,22 +150,24 @@ export function ConversationHistory({ conversations, activeId, otherSideActiveId
                 {conversations.map((conversation) => {
                     const isActive = conversation.id === activeId;
                     const isOtherSide = conversation.id === otherSideActiveId;
-                    const badge = getModelBadge(conversation.model);
+                    const modelInfo = getModelInfo(conversation.model);
 
                     if (isOtherSide) {
                         return (
                             <Tooltip key={conversation.id}>
                                 <TooltipTrigger asChild>
-                                    <div className="flex cursor-not-allowed items-center justify-between rounded-md px-3 py-2 opacity-50">
-                                        <div className="min-w-0">
-                                            <div className="truncate text-sm text-muted-foreground">{conversation.title}</div>
+                                    <div className="flex cursor-not-allowed items-center rounded-md px-3 py-2 opacity-50">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex min-w-0 items-center gap-2">
+                                                {modelInfo ? (
+                                                    <ModelSelectorLogo provider={modelInfo.providerSlug} className="size-4 shrink-0" />
+                                                ) : (
+                                                    <MessageSquareIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
+                                                )}
+                                                <div className="truncate text-sm text-muted-foreground">{conversation.title}</div>
+                                            </div>
                                             <div className="text-xs text-muted-foreground/60">{formatRelativeTime(conversation.updated_at)}</div>
                                         </div>
-                                        {badge && (
-                                            <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}>
-                                                {badge.label}
-                                            </span>
-                                        )}
                                     </div>
                                 </TooltipTrigger>
                                 <TooltipContent side="right">Open in other panel</TooltipContent>
@@ -165,7 +181,7 @@ export function ConversationHistory({ conversations, activeId, otherSideActiveId
                                 <button
                                     type="button"
                                     onClick={() => onSelect(conversation.id)}
-                                    className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left transition-colors ${
+                                    className={`flex w-full items-center rounded-md px-3 py-2 text-left transition-colors ${
                                         isActive
                                             ? 'bg-muted text-foreground'
                                             : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
@@ -196,15 +212,27 @@ export function ConversationHistory({ conversations, activeId, otherSideActiveId
                                                 onClick={(e) => e.stopPropagation()}
                                             />
                                         ) : (
-                                            <div className="truncate text-sm font-medium">{conversation.title}</div>
+                                            <div className="flex min-w-0 items-center gap-2">
+                                                {modelInfo ? (
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <span
+                                                                className="flex shrink-0 cursor-default items-center"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <ModelSelectorLogo provider={modelInfo.providerSlug} className="size-4" />
+                                                            </span>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="right">{modelInfo.displayName}</TooltipContent>
+                                                    </Tooltip>
+                                                ) : (
+                                                    <MessageSquareIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
+                                                )}
+                                                <div className="truncate text-sm font-medium">{conversation.title}</div>
+                                            </div>
                                         )}
                                         <div className="text-xs text-muted-foreground/60">{formatRelativeTime(conversation.updated_at)}</div>
                                     </div>
-                                    {badge && (
-                                        <span className={`ml-2 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}>
-                                            {badge.label}
-                                        </span>
-                                    )}
                                 </button>
                             </ContextMenuTrigger>
                             <ContextMenuContent>

@@ -440,10 +440,10 @@
 }
 
 .dark .milkdown {
-  --crepe-color-background: #1a1a1a;
+  --crepe-color-background: #0a0a0a;
   --crepe-color-on-background: #e6e6e6;
-  --crepe-color-surface: #121212;
-  --crepe-color-surface-low: #1c1c1c;
+  --crepe-color-surface: #0a0a0a;
+  --crepe-color-surface-low: #171717;
   --crepe-color-on-surface: #d1d1d1;
   --crepe-color-on-surface-variant: #a9a9a9;
   --crepe-color-outline: #757575;
@@ -463,10 +463,10 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not(.light) .milkdown {
-    --crepe-color-background: #1a1a1a;
+    --crepe-color-background: #0a0a0a;
     --crepe-color-on-background: #e6e6e6;
-    --crepe-color-surface: #222222;
-    --crepe-color-surface-low: #1c1c1c;
+    --crepe-color-surface: #0a0a0a;
+    --crepe-color-surface-low: #171717;
     --crepe-color-on-surface: #d1d1d1;
     --crepe-color-on-surface-variant: #a9a9a9;
     --crepe-color-outline: #757575;
