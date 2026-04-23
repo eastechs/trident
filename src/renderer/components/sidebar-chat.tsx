@@ -547,10 +547,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                 <div className={`relative ${isStreaming ? 'chat-input-shimmer' : ''}`}>
                 <div className="pointer-events-none absolute -inset-6 rounded-full bg-primary/10 blur-3xl dark:bg-primary/20" />
                 <div className="relative">
-                <PromptInput
-                    onSubmit={handleSubmit}
-                    className="rounded-lg"
-                >
+                <PromptInput onSubmit={handleSubmit}>
                     <PromptInputBody>
                         <PromptInputTextarea
                             placeholder={questionsLocked ? 'Answer the questions above to continue...' : 'Ask anything...'}
