@@ -279,6 +279,10 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
     const autosaveTimerRef = useRef<Record<string, NodeJS.Timeout>>({});
     const renameInputRef = useRef<HTMLInputElement>(null);
     const renameStartTime = useRef<number>(0);
+    const [fileListRenamingId, setFileListRenamingId] = useState<string | null>(null);
+    const [fileListRenameValue, setFileListRenameValue] = useState('');
+    const fileListRenameInputRef = useRef<HTMLInputElement>(null);
+    const fileListRenameStartTime = useRef<number>(0);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -322,6 +326,18 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
             return () => clearTimeout(timer);
         }
     }, [renamingId]);
+
+    useEffect(() => {
+        if (fileListRenamingId !== null) {
+            const timer = setTimeout(() => {
+                fileListRenameInputRef.current?.focus();
+                fileListRenameInputRef.current?.select();
+                fileListRenameStartTime.current = Date.now();
+            }, 50);
+
+            return () => clearTimeout(timer);
+        }
+    }, [fileListRenamingId]);
 
     useEffect(() => {
         api_get<{ enabled: boolean }>('/api/settings/autosave')
@@ -555,10 +571,9 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
         [activeTabId],
     );
 
-    const startRename = useCallback((id: string, name: string) => {
-        setRenamingId(id);
-        setRenameValue(name);
-        renameStartTime.current = Date.now();
+    const handleFileListRename = useCallback((id: string, name: string) => {
+        setFileListRenamingId(id);
+        setFileListRenameValue(name);
     }, []);
 
     const handleRenameById = useCallback(
@@ -566,10 +581,11 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
             const tab = tabs.find((t) => t.id === id);
 
             if (tab) {
-                startRename(id, tab.title);
+                setRenamingId(id);
+                setRenameValue(tab.title);
             }
         },
-        [tabs, startRename],
+        [tabs],
     );
 
     const submitRename = useCallback(
@@ -601,6 +617,37 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                 .finally(() => setRenamingId(null));
         },
         [renameValue, project.id],
+    );
+
+    const submitFileListRename = useCallback(
+        (docId: string) => {
+            if (!fileListRenameValue.trim()) {
+                setFileListRenamingId(null);
+
+                return;
+            }
+
+            api_patch<{ id: string; name: string }>(`/api/projects/${project.id}/documents/${docId}`, {
+                    name: fileListRenameValue.trim(),
+                })
+                .then((data) => {
+                    setTabs((prev) =>
+                        prev.map((t) =>
+                            t.id === docId ? { ...t, title: data.name } : t,
+                        ),
+                    );
+                    setLocalDocuments((prev) =>
+                        prev.map((d) =>
+                            d.id === docId ? { ...d, name: data.name } : d,
+                        ),
+                    );
+                })
+                .catch((error) => {
+                    console.error('Failed to rename:', error);
+                })
+                .finally(() => setFileListRenamingId(null));
+        },
+        [fileListRenameValue, project.id],
     );
 
     const confirmDelete = useCallback(() => {
@@ -835,20 +882,20 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                                                                     }`}
                                                                 >
                                                                     <FileTextIcon className="size-3.5 shrink-0 text-neutral-400" />
-                                                                    {renamingId ===
+                                                                    {fileListRenamingId ===
                                                                     doc.id ? (
                                                                         <input
                                                                             ref={
-                                                                                renameInputRef
+                                                                                fileListRenameInputRef
                                                                             }
                                                                             type="text"
                                                                             value={
-                                                                                renameValue
+                                                                                fileListRenameValue
                                                                             }
                                                                             onChange={(
                                                                                 e,
                                                                             ) =>
-                                                                                setRenameValue(
+                                                                                setFileListRenameValue(
                                                                                     e
                                                                                         .target
                                                                                         .value,
@@ -861,7 +908,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                                                                                     e.key ===
                                                                                     'Enter'
                                                                                 ) {
-                                                                                    submitRename(
+                                                                                    submitFileListRename(
                                                                                         doc.id,
                                                                                     );
                                                                                 }
@@ -870,7 +917,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                                                                                     e.key ===
                                                                                     'Escape'
                                                                                 ) {
-                                                                                    setRenamingId(
+                                                                                    setFileListRenamingId(
                                                                                         null,
                                                                                     );
                                                                                 }
@@ -878,10 +925,10 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                                                                             onBlur={() => {
                                                                                 if (
                                                                                     Date.now() -
-                                                                                        renameStartTime.current >
+                                                                                        fileListRenameStartTime.current >
                                                                                     100
                                                                                 ) {
-                                                                                    submitRename(
+                                                                                    submitFileListRename(
                                                                                         doc.id,
                                                                                     );
                                                                                 }
@@ -911,7 +958,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                                                             <ContextMenuContent>
                                                                 <ContextMenuItem
                                                                     onSelect={() =>
-                                                                        startRename(
+                                                                        handleFileListRename(
                                                                             doc.id,
                                                                             doc.name,
                                                                         )
