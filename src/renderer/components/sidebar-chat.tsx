@@ -446,7 +446,16 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                                             );
                                         }
 
-                                        if (isToolUIPart(part) && getToolName(part) === 'AskQuestions') {
+                                        if (
+                                            isToolUIPart(part)
+                                            && getToolName(part) === 'AskQuestions'
+                                            && (
+                                                part.state === 'input-available'
+                                                || part.state === 'approval-requested'
+                                                || part.state === 'approval-responded'
+                                                || part.state === 'output-available'
+                                            )
+                                        ) {
                                             const input = part.input as Record<string, unknown> | undefined;
                                             const output = typeof part.output === 'string'
                                                 ? JSON.parse(part.output)
