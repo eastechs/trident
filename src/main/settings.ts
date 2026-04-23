@@ -3,6 +3,7 @@ import { safeStorage } from 'electron';
 interface SettingsSchema {
   autosave: boolean;
   notifications: boolean;
+  agentChime: boolean;
   useTrash: boolean;
   onboardingCompleted: boolean;
   projectTourCompleted: boolean;
@@ -16,6 +17,7 @@ interface SettingsSchema {
 const DEFAULTS: SettingsSchema = {
   autosave: true,
   notifications: true,
+  agentChime: true,
   useTrash: true,
   onboardingCompleted: false,
   projectTourCompleted: false,

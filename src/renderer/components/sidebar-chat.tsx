@@ -289,10 +289,21 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
     }, [initialPrompt, messagesLoaded, status]);
 
     // Play chime and notify parent when streaming finishes
+    const chimeEnabledRef = useRef(true);
+    useEffect(() => {
+        api_get<{ enabled: boolean }>('/api/settings/agent-chime')
+            .then((data) => {
+                chimeEnabledRef.current = data.enabled;
+            })
+            .catch(() => {});
+    }, []);
+
     const prevStatusRef = useRef(status);
     useEffect(() => {
         if (prevStatusRef.current === 'streaming' && status === 'ready') {
-            new Audio(agentChimeUrl).play().catch(() => {});
+            if (chimeEnabledRef.current) {
+                new Audio(agentChimeUrl).play().catch(() => {});
+            }
             onStreamingComplete?.();
         }
 

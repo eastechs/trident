@@ -46,6 +46,7 @@ export default function Settings() {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+    const [chimeEnabled, setChimeEnabled] = useState(true);
     const [trashEnabled, setTrashEnabled] = useState(true);
 
     // Side menu state — initial section can come from a ?section= query param
@@ -70,6 +71,12 @@ export default function Settings() {
     useEffect(() => {
         api_get<{ enabled: boolean }>('/api/settings/notifications')
             .then((data) => setNotificationsEnabled(data.enabled))
+            .catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        api_get<{ enabled: boolean }>('/api/settings/agent-chime')
+            .then((data) => setChimeEnabled(data.enabled))
             .catch(() => {});
     }, []);
 
@@ -373,6 +380,47 @@ export default function Settings() {
                                                     />
                                                     <label htmlFor="notify-none" className="block text-sm/6 font-medium text-foreground">
                                                         No notifications
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </fieldset>
+
+                                        <fieldset>
+                                            <legend className="text-sm/6 font-semibold text-foreground">Agent chime</legend>
+                                            <p className="mt-1 text-sm/6 text-muted-foreground">
+                                                Play a short sound when the agent finishes responding.
+                                            </p>
+                                            <div className="mt-6 space-y-6">
+                                                <div className="flex items-center gap-x-3">
+                                                    <input
+                                                        checked={chimeEnabled}
+                                                        onChange={() => {
+                                                            setChimeEnabled(true);
+                                                            api_put('/api/settings/agent-chime', { enabled: true }).catch(() => {});
+                                                        }}
+                                                        id="chime-on"
+                                                        name="chime"
+                                                        type="radio"
+                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-800 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
+                                                    />
+                                                    <label htmlFor="chime-on" className="block text-sm/6 font-medium text-foreground">
+                                                        Play chime
+                                                    </label>
+                                                </div>
+                                                <div className="flex items-center gap-x-3">
+                                                    <input
+                                                        checked={!chimeEnabled}
+                                                        onChange={() => {
+                                                            setChimeEnabled(false);
+                                                            api_put('/api/settings/agent-chime', { enabled: false }).catch(() => {});
+                                                        }}
+                                                        id="chime-off"
+                                                        name="chime"
+                                                        type="radio"
+                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-800 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
+                                                    />
+                                                    <label htmlFor="chime-off" className="block text-sm/6 font-medium text-foreground">
+                                                        Silent
                                                     </label>
                                                 </div>
                                             </div>

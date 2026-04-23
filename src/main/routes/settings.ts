@@ -32,6 +32,17 @@ router.put('/notifications', (req, res) => {
   res.json({ enabled: getSetting('notifications') });
 });
 
+// ─── Agent chime ───────────────────────────────────────────
+
+router.get('/agent-chime', (_req, res) => {
+  res.json({ enabled: getSetting('agentChime') });
+});
+
+router.put('/agent-chime', (req, res) => {
+  setSetting('agentChime', !!req.body.enabled);
+  res.json({ enabled: getSetting('agentChime') });
+});
+
 // ─── Trash ─────────────────────────────────────────────────
 
 router.get('/trash', (_req, res) => {
