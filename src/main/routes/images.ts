@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { eq, and, desc } from 'drizzle-orm';
 import fs from 'fs';
 import os from 'os';
@@ -10,9 +10,12 @@ import { getSetting } from '../settings.js';
 
 const router = Router({ mergeParams: true });
 
+type ProjectRequest = Request<{ projectId: string }>;
+type ImageRequest = Request<{ projectId: string; imageId: string }>;
+
 // ─── Index ─────────────────────────────────────────────────
 
-router.get('/', async (req, res) => {
+router.get('/', async (req: ProjectRequest, res) => {
   const db = getDb();
   const projectImages = await db
     .select({
@@ -39,7 +42,7 @@ router.get('/', async (req, res) => {
 
 // ─── Show (serve image file) ───────────────────────────────
 
-router.get('/:imageId', async (req, res) => {
+router.get('/:imageId', async (req: ImageRequest, res) => {
   const db = getDb();
   const [image] = await db
     .select()
@@ -56,7 +59,7 @@ router.get('/:imageId', async (req, res) => {
 
 // ─── Update (rename) ──────────────────────────────────────
 
-router.patch('/:imageId', async (req, res) => {
+router.patch('/:imageId', async (req: ImageRequest, res) => {
   const db = getDb();
   const { name } = req.body;
   if (!name) { res.status(422).json({ error: 'Name is required' }); return; }
@@ -88,7 +91,7 @@ router.patch('/:imageId', async (req, res) => {
 
 // ─── Destroy ───────────────────────────────────────────────
 
-router.delete('/:imageId', async (req, res) => {
+router.delete('/:imageId', async (req: ImageRequest, res) => {
   const db = getDb();
   const [image] = await db
     .select()

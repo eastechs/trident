@@ -1,9 +1,12 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { getDb } from '../database.js';
 import { conversations, messages } from '../db/schema.js';
 
 const router = Router({ mergeParams: true });
+
+type ProjectRequest = Request<{ projectId: string }>;
+type ConversationRequest = Request<{ projectId: string; conversationId: string }>;
 
 type ConversationRow = typeof conversations.$inferSelect;
 
@@ -25,7 +28,7 @@ function serializeConversation(
 
 // ─── Index ─────────────────────────────────────────────────
 
-router.get('/', async (req, res) => {
+router.get('/', async (req: ProjectRequest, res) => {
   const db = getDb();
   const projectConversations = await db
     .select()
@@ -48,7 +51,7 @@ router.get('/', async (req, res) => {
 
 // ─── Store ─────────────────────────────────────────────────
 
-router.post('/', async (req, res) => {
+router.post('/', async (req: ProjectRequest, res) => {
   const db = getDb();
   const { title, side, model } = req.body;
 
@@ -64,7 +67,7 @@ router.post('/', async (req, res) => {
 
 // ─── Update ────────────────────────────────────────────────
 
-router.patch('/:conversationId', async (req, res) => {
+router.patch('/:conversationId', async (req: ConversationRequest, res) => {
   const db = getDb();
   const { title, side, model } = req.body;
 
@@ -94,7 +97,7 @@ router.patch('/:conversationId', async (req, res) => {
 
 // ─── Destroy ───────────────────────────────────────────────
 
-router.delete('/:conversationId', async (req, res) => {
+router.delete('/:conversationId', async (req: ConversationRequest, res) => {
   const db = getDb();
   // Cascade delete handles messages
   await db.delete(conversations).where(and(

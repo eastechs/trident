@@ -65,6 +65,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import type { DocumentData } from '@/types/api';
 
 function toolLabel(toolName: string): string {
     return toolName.replace(/([A-Z])/g, ' $1').trim();
@@ -151,14 +152,6 @@ interface UsageData {
     reasoning_tokens?: number;
 }
 
-interface DocumentData {
-    id: string;
-    name: string;
-    created_by: string | null;
-    last_edited_by: string | null;
-    directory: string;
-}
-
 interface SidebarChatProps {
     projectId: string;
     conversationId: string;
@@ -183,7 +176,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
     const [providers, setProviders] = useState(initialProviders);
 
     useEffect(() => {
-        api_get('/api/settings/api-keys')
+        api_get<{ anthropic: boolean; openai: boolean; gemini: boolean }>('/api/settings/api-keys')
             .then((data) => setProviders(data))
             .catch(() => {});
     }, []);
@@ -517,13 +510,23 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
 
                                         // Render tool calls via the Tool component (status badge: Running / Completed / Error)
                                         if (isToolUIPart(part)) {
+                                            const toolName = getToolName(part);
                                             return (
                                                 <Tool key={`${message.id}-${i}`}>
-                                                    <ToolHeader
-                                                        type={part.type}
-                                                        state={part.state}
-                                                        title={toolLabel(getToolName(part))}
-                                                    />
+                                                    {part.type === 'dynamic-tool' ? (
+                                                        <ToolHeader
+                                                            type={part.type}
+                                                            state={part.state}
+                                                            toolName={toolName}
+                                                            title={toolLabel(toolName)}
+                                                        />
+                                                    ) : (
+                                                        <ToolHeader
+                                                            type={part.type}
+                                                            state={part.state}
+                                                            title={toolLabel(toolName)}
+                                                        />
+                                                    )}
                                                 </Tool>
                                             );
                                         }

@@ -18,13 +18,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-
-interface ProjectData {
-    id: string;
-    name: string;
-    description: string | null;
-    filesystem_root: string | null;
-}
+import type { ProjectData } from '@/types/api';
 
 interface FormData {
     name: string;

@@ -1,5 +1,5 @@
-import { Router } from 'express';
-import { streamText, generateText, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
+import { Router, type Request } from 'express';
+import { streamText, generateText, convertToModelMessages, stepCountIs, generateId, type UIMessage, type ToolSet } from 'ai';
 import { eq, asc, sql, inArray, and } from 'drizzle-orm';
 import { getDb } from '../database.js';
 import { conversations, messages, documents, projects } from '../db/schema.js';
@@ -11,11 +11,13 @@ import { getApiKey } from '../settings.js';
 
 const router = Router({ mergeParams: true });
 
+type ProjectRequest = Request<{ projectId: string }>;
+
 // ─── Send message (streaming) ──────────────────────────────
 
-router.post('/', async (req, res) => {
+router.post('/', async (req: ProjectRequest, res) => {
   const db = getDb();
-  const projectId = req.params.projectId;
+  const { projectId } = req.params;
   const { messages: requestMessages, model_id, conversation_id, side, document_ids } = req.body;
 
   if (!model_id || !conversation_id) {
@@ -61,7 +63,7 @@ router.post('/', async (req, res) => {
       ? 'gemini'
       : 'openai';
 
-  let WebSearch: unknown = undefined;
+  let WebSearch: ToolSet[string] | undefined = undefined;
   if (provider === 'anthropic') {
     const anthropicKey = getApiKey('anthropic');
     if (anthropicKey) {
@@ -98,6 +100,7 @@ router.post('/', async (req, res) => {
     result.pipeUIMessageStreamToResponse(res, {
       sendReasoning: true,
       originalMessages: history,
+      generateMessageId: generateId,
       onFinish: async ({ messages: allMessages, responseMessage }) => {
         try {
           const [maxOrder] = await db
@@ -193,14 +196,15 @@ router.get('/messages', async (req, res) => {
 // ─── Clear messages in all project conversations ─────────
 // Matches Laravel: deletes messages but keeps the conversation records.
 
-router.delete('/', async (req, res) => {
+router.delete('/', async (req: ProjectRequest, res) => {
   const db = getDb();
+  const { projectId } = req.params;
   const { projects } = await import('../db/schema.js');
 
   const convIds = await db
     .select({ id: conversations.id })
     .from(conversations)
-    .where(eq(conversations.projectId, req.params.projectId));
+    .where(eq(conversations.projectId, projectId));
 
   for (const { id } of convIds) {
     await db.delete(messages).where(eq(messages.conversationId, id));
@@ -210,7 +214,7 @@ router.delete('/', async (req, res) => {
   await db
     .update(projects)
     .set({ updatedAt: new Date() })
-    .where(eq(projects.id, req.params.projectId));
+    .where(eq(projects.id, projectId));
 
   res.status(204).end();
 });

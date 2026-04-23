@@ -24,7 +24,7 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useDefaultLayout, usePanelRef } from 'react-resizable-panels';
 import { ChatPanel } from '@/components/chat-panel';
-import type { ConversationData } from '@/components/conversation-history';
+import type { ConversationData, DocumentData, ImageData, ProjectData } from '@/types/api';
 import type { EditorHandle } from '@/components/editor';
 import { MilkdownEditorWrapper } from '@/components/editor';
 import { HelpSidebarButton } from '@/components/help-sidebar-button';
@@ -69,35 +69,10 @@ import {
 } from '@/components/ui/tooltip';
 import { useNativeMenu, printDocumentContent } from '@/hooks/use-native-menu';
 
-interface ProjectData {
-    id: string;
-    name: string;
-    description: string | null;
-    filesystem_root: string | null;
-    initial_prompt: string | null;
-    path: string;
-    created_at: string;
-    updated_at: string;
-}
-
 interface Tab {
     id: string;
     title: string;
     type: 'document' | 'image';
-}
-
-interface DocumentData {
-    id: string;
-    name: string;
-    created_by: string | null;
-    last_edited_by: string | null;
-    directory: string;
-}
-
-interface ImageData {
-    id: string;
-    name: string;
-    created_by: string | null;
 }
 
 interface Props {
@@ -345,7 +320,7 @@ function ProjectView({ project, documents, images, conversations, configuredProv
     }, [images]);
 
     useEffect(() => {
-        api_get('/api/settings/trash')
+        api_get<{ enabled: boolean }>('/api/settings/trash')
             .then((data) => setTrashEnabled(data.enabled))
             .catch(() => {});
     }, []);
@@ -412,7 +387,7 @@ function ProjectView({ project, documents, images, conversations, configuredProv
     }, [fileListRenamingId]);
 
     useEffect(() => {
-        api_get('/api/settings/autosave')
+        api_get<{ enabled: boolean }>('/api/settings/autosave')
             .then((data) => setAutosaveEnabled(data.enabled))
             .catch(() => {});
     }, []);
@@ -428,7 +403,7 @@ function ProjectView({ project, documents, images, conversations, configuredProv
             return;
         }
 
-        api_get(`/api/projects/${project.id}/documents/${activeTabId}`)
+        api_get<{ content: string | null }>(`/api/projects/${project.id}/documents/${activeTabId}`)
             .then((data) => {
                 setTabContent(prev => ({ ...prev, [activeTabId]: data.content ?? '' }));
             })
@@ -461,7 +436,7 @@ function ProjectView({ project, documents, images, conversations, configuredProv
     }, [project.id]);
 
     const revertDocument = useCallback((tabId: string) => {
-        api_get(`/api/projects/${project.id}/documents/${tabId}`)
+        api_get<{ content: string | null }>(`/api/projects/${project.id}/documents/${tabId}`)
             .then((data) => {
                 setTabContent(prev => ({ ...prev, [tabId]: data.content ?? '' }));
                 setDirtyTabs(prev => ({ ...prev, [tabId]: false }));
@@ -641,7 +616,7 @@ return prev;
             ? `/api/projects/${project.id}/images/${tabId}`
             : `/api/projects/${project.id}/documents/${tabId}`;
 
-        api_patch(endpoint, { name: renameValue.trim() })
+        api_patch<{ id: string; name: string }>(endpoint, { name: renameValue.trim() })
             .then((data) => {
                 setTabs(prev => prev.map(t => t.id === tabId ? { ...t, title: data.name } : t));
 
@@ -674,7 +649,7 @@ return prev;
             ? `/api/projects/${project.id}/images/${itemId}`
             : `/api/projects/${project.id}/documents/${itemId}`;
 
-        api_patch(endpoint, { name: fileListRenameValue.trim() })
+        api_patch<{ id: string; name: string }>(endpoint, { name: fileListRenameValue.trim() })
             .then((data) => {
                 setTabs(prev => prev.map(t => t.id === itemId ? { ...t, title: data.name } : t));
 
@@ -734,7 +709,7 @@ return prev;
     }, [deletingTabId, project.id, activeTabId, localImages]);
 
     const fetchDocumentContent = useCallback((documentId: string) => {
-        api_get(`/api/projects/${project.id}/documents/${documentId}`)
+        api_get<{ content: string | null; last_edited_by: string | null }>(`/api/projects/${project.id}/documents/${documentId}`)
             .then((data) => {
                 setTabContent(prev => ({ ...prev, [documentId]: data.content ?? '' }));
                 setDirtyTabs(prev => ({ ...prev, [documentId]: false }));

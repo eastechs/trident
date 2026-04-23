@@ -2,7 +2,6 @@ import { api_get, api_post, api_put, api_patch, api_delete } from '@/lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatPanelHeader } from '@/components/chat-panel-header';
 import { ConversationHistory  } from '@/components/conversation-history';
-import type {ConversationData} from '@/components/conversation-history';
 import { SidebarChat } from '@/components/sidebar-chat';
 import {
     AlertDialog,
@@ -14,14 +13,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-
-interface DocumentData {
-    id: string;
-    name: string;
-    created_by: string | null;
-    last_edited_by: string | null;
-    directory: string;
-}
+import type { ConversationData, DocumentData } from '@/types/api';
 
 interface ChatPanelProps {
     projectId: string;
@@ -172,7 +164,7 @@ export function ChatPanel({
     }, [projectId, onConversationCreated]);
 
     const handleRename = useCallback((id: string, title: string) => {
-        api_patch(`/api/projects/${projectId}/conversations/${id}`, { title })
+        api_patch<ConversationData>(`/api/projects/${projectId}/conversations/${id}`, { title })
             .then((data) => {
                 onConversationUpdated(id, { title: data.title });
             })

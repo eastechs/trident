@@ -61,18 +61,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useNativeMenu, printDocumentContent } from '@/hooks/use-native-menu';
 
-interface DocumentData {
-    id: string;
-    name: string;
-    created_by: string | null;
-    last_edited_by: string | null;
-    directory: string;
-}
-
-interface ProjectData {
-    id: string;
-    name: string;
-}
+import type { DocumentData, ProjectData } from '@/types/api';
 
 interface Tab {
     id: string;
@@ -335,7 +324,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
     }, [renamingId]);
 
     useEffect(() => {
-        api_get('/api/settings/autosave')
+        api_get<{ enabled: boolean }>('/api/settings/autosave')
             .then((data) => setAutosaveEnabled(data.enabled))
             .catch(() => {});
     }, []);
@@ -347,7 +336,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
             return;
         }
 
-        api_get(`/api/projects/${project.id}/documents/${activeTabId}`)
+        api_get<{ content: string | null }>(`/api/projects/${project.id}/documents/${activeTabId}`)
             .then((data) => {
                 setTabContent((prev) => ({
                     ...prev,
@@ -390,7 +379,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
 
     const revertDocument = useCallback(
         (tabId: string) => {
-            api_get(`/api/projects/${project.id}/documents/${tabId}`)
+            api_get<{ content: string | null }>(`/api/projects/${project.id}/documents/${tabId}`)
                 .then((data) => {
                     setTabContent((prev) => ({
                         ...prev,
@@ -591,7 +580,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                 return;
             }
 
-            api_patch(`/api/projects/${project.id}/documents/${docId}`, {
+            api_patch<{ id: string; name: string }>(`/api/projects/${project.id}/documents/${docId}`, {
                     name: renameValue.trim(),
                 })
                 .then((data) => {

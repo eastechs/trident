@@ -68,19 +68,19 @@ export default function Settings() {
     const lastSavedInstructions = useRef('');
 
     useEffect(() => {
-        api_get('/api/settings/notifications')
+        api_get<{ enabled: boolean }>('/api/settings/notifications')
             .then((data) => setNotificationsEnabled(data.enabled))
             .catch(() => {});
     }, []);
 
     useEffect(() => {
-        api_get('/api/settings/trash')
+        api_get<{ enabled: boolean }>('/api/settings/trash')
             .then((data) => setTrashEnabled(data.enabled))
             .catch(() => {});
     }, []);
 
     useEffect(() => {
-        api_get('/api/settings/api-keys')
+        api_get<{ anthropic: boolean; openai: boolean; gemini: boolean }>('/api/settings/api-keys')
             .then((data) => {
                 setHasAnthropic(data.anthropic);
                 setHasOpenai(data.openai);
@@ -182,7 +182,7 @@ export default function Settings() {
         setAgentLoading(true);
         setAgentDirty(false);
         setAgentSaved(false);
-        api_get(`/api/settings/agent-instructions/${agentKey}`)
+        api_get<{ instructions: string; isCustom: boolean }>(`/api/settings/agent-instructions/${agentKey}`)
             .then((data) => {
                 setAgentInstructions(data.instructions);
                 setAgentIsCustom(data.isCustom);

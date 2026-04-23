@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { eq, and } from 'drizzle-orm';
 import fs from 'fs';
 import os from 'os';
@@ -10,11 +10,14 @@ import { getSetting } from '../settings.js';
 
 const router = Router({ mergeParams: true });
 
+type ProjectRequest = Request<{ projectId: string }>;
+type DocRequest = Request<{ projectId: string; docId: string }>;
+
 // ─── Store (create new untitled document) ──────────────────
 
-router.post('/', async (req, res) => {
+router.post('/', async (req: ProjectRequest, res) => {
   const db = getDb();
-  const projectId = req.params.projectId;
+  const { projectId } = req.params;
 
   // Look up the project path
   const { projects } = await import('../db/schema.js');
@@ -52,7 +55,7 @@ router.post('/', async (req, res) => {
 
 // ─── Show (get document metadata + content) ────────────────
 
-router.get('/:docId', async (req, res) => {
+router.get('/:docId', async (req: DocRequest, res) => {
   const db = getDb();
   const [document] = await db
     .select()
@@ -72,7 +75,7 @@ router.get('/:docId', async (req, res) => {
 
 // ─── Update (rename) ──────────────────────────────────────
 
-router.patch('/:docId', async (req, res) => {
+router.patch('/:docId', async (req: DocRequest, res) => {
   const db = getDb();
   const { name } = req.body;
   if (!name) { res.status(422).json({ error: 'Name is required' }); return; }
@@ -119,7 +122,7 @@ router.patch('/:docId', async (req, res) => {
 
 // ─── Update content ────────────────────────────────────────
 
-router.put('/:docId/content', async (req, res) => {
+router.put('/:docId/content', async (req: DocRequest, res) => {
   const db = getDb();
   const { content } = req.body;
   if (content === undefined) { res.status(422).json({ error: 'Content is required' }); return; }
@@ -146,7 +149,7 @@ router.put('/:docId/content', async (req, res) => {
 
 // ─── Destroy ───────────────────────────────────────────────
 
-router.delete('/:docId', async (req, res) => {
+router.delete('/:docId', async (req: DocRequest, res) => {
   const db = getDb();
   const [document] = await db
     .select()

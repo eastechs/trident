@@ -13,15 +13,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-
-export interface ConversationData {
-    id: string;
-    title: string;
-    side: string | null;
-    model: string | null;
-    updated_at: string;
-    message_count: number;
-}
+import type { ConversationData } from '@/types/api';
 
 interface ConversationHistoryProps {
     conversations: ConversationData[];

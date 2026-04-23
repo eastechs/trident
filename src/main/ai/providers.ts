@@ -2,6 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
+import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import { getApiKey } from '../settings.js';
 
 export type ProviderName = 'anthropic' | 'openai' | 'gemini';
@@ -58,7 +59,7 @@ export function resolveModel(modelId: string): LanguageModel {
  * Applied by provider (not by model name prefix) so every OpenAI model
  * receives reasoning options, not just the ones starting with "o".
  */
-export function getProviderOptions(modelId: string): Record<string, unknown> {
+export function getProviderOptions(modelId: string): ProviderOptions {
   const provider = resolveProviderName(modelId);
 
   if (provider === 'anthropic') {

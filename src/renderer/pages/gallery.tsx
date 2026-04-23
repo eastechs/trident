@@ -41,16 +41,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 
-interface ImageData {
-    id: string;
-    name: string;
-    created_by: string | null;
-}
-
-interface ProjectData {
-    id: string;
-    name: string;
-}
+import type { ImageData, ProjectData } from '@/types/api';
 
 interface Tab {
     id: string;
@@ -294,7 +285,7 @@ function GalleryView({ project, images, onProjectUpdated }: { project: ProjectDa
                 return;
             }
 
-            api_patch(`/api/projects/${project.id}/images/${tabId}`, {
+            api_patch<{ id: string; name: string }>(`/api/projects/${project.id}/images/${tabId}`, {
                     name: renameValue.trim(),
                 })
                 .then((data) => {
