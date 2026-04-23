@@ -21,7 +21,7 @@ export function ChatPanelHeader({ activeTab, onTabChange, conversationTitle, onN
     return (
         <div className="flex items-center gap-1.5 border-b px-2 py-1.5">
             <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as 'chat' | 'history')} className="min-w-0 flex-1">
-                <TabsList className="h-7 w-full justify-start bg-neutral-100 dark:bg-neutral-800">
+                <TabsList className="h-7 w-full justify-start bg-neutral-50 dark:bg-neutral-900">
                     <TabsTrigger value="history" className="h-full flex-none px-2">
                         <ClockIcon className="size-3.5" />
                     </TabsTrigger>

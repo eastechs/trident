@@ -159,7 +159,7 @@ export default function Main() {
 
             <div className="flex h-[calc(100vh-2rem)] w-full overflow-hidden">
                 <TooltipProvider>
-                    <aside className="flex w-12 flex-col items-center border-r border-neutral-100 bg-white py-2 dark:border-neutral-800 dark:bg-neutral-900">
+                    <aside className="flex w-12 flex-col items-center border-r border-border bg-white py-2 dark:bg-neutral-950">
                         <img
                             src={appIcon}
                             alt="Trident"
@@ -260,7 +260,7 @@ export default function Main() {
                                 <li key={project.id} className="relative">
                                     <Link
                                         to={`/projects/${project.id}`}
-                                        className="group block h-full rounded-xl border border-neutral-200 bg-white p-5 transition hover:border-neutral-300 hover:shadow-sm dark:border-white/10 dark:bg-neutral-900 dark:hover:border-white/20"
+                                        className="group block h-full rounded-xl border border-border bg-white p-5 transition hover:border-neutral-300 hover:shadow-sm dark:bg-neutral-950 dark:hover:border-neutral-700"
                                     >
                                         <div className="flex items-start justify-between gap-3">
                                             <h3 className="truncate text-base font-semibold text-neutral-900 dark:text-white">
@@ -279,19 +279,19 @@ export default function Main() {
 
                                         <div className="mt-6 flex items-end justify-between gap-3">
                                             <div className="flex min-w-0 flex-1 items-center gap-2">
-                                                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs font-medium text-neutral-600 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300">
+                                                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-neutral-50 px-2 py-1 text-xs font-medium text-neutral-600 dark:bg-white/5 dark:text-neutral-300">
                                                     <FilesIcon className="size-3.5" aria-hidden="true" />
                                                     <span>{project.document_count}</span>
                                                     <span className="sr-only">documents</span>
                                                 </span>
-                                                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs font-medium text-neutral-600 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300">
+                                                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-neutral-50 px-2 py-1 text-xs font-medium text-neutral-600 dark:bg-white/5 dark:text-neutral-300">
                                                     <ImagesIcon className="size-3.5" aria-hidden="true" />
                                                     <span>{project.image_count}</span>
                                                     <span className="sr-only">images</span>
                                                 </span>
                                                 {project.filesystem_root && (
                                                     <span
-                                                        className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs font-medium text-neutral-600 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300"
+                                                        className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-neutral-50 px-2 py-1 text-xs font-medium text-neutral-600 dark:bg-white/5 dark:text-neutral-300"
                                                         title={project.filesystem_root}
                                                     >
                                                         <FolderOpenIcon className="size-3.5 shrink-0" aria-hidden="true" />
@@ -323,14 +323,14 @@ export default function Main() {
                                     >
                                         <MenuButton
                                             onClick={(e: MouseEvent) => e.stopPropagation()}
-                                            className="relative flex size-7 items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-white"
+                                            className="relative flex size-7 items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-50 hover:text-neutral-600 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-white"
                                         >
                                             <span className="sr-only">Open options</span>
                                             <Ellipsis aria-hidden="true" className="size-5" />
                                         </MenuButton>
                                         <MenuItems
                                             transition
-                                            className="absolute right-0 z-10 mt-0.5 w-32 origin-top-right rounded-md bg-white py-2 shadow-lg outline-1 outline-neutral-900/5 transition data-enter:duration-100 data-enter:ease-out data-leave:duration-75 data-leave:ease-in dark:bg-neutral-800 dark:shadow-none dark:-outline-offset-1 dark:outline-white/10 data-closed:scale-95 data-closed:transform data-closed:opacity-0"
+                                            className="absolute right-0 z-10 mt-0.5 w-32 origin-top-right rounded-md bg-white py-2 shadow-lg outline-1 outline-neutral-900/5 transition data-enter:duration-100 data-enter:ease-out data-leave:duration-75 data-leave:ease-in dark:bg-neutral-900 dark:shadow-none dark:-outline-offset-1 dark:outline-white/10 data-closed:scale-95 data-closed:transform data-closed:opacity-0"
                                         >
                                             <MenuItem>
                                                 <button

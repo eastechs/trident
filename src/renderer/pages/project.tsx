@@ -131,7 +131,7 @@ function SortableTab({
                         className={`group flex w-48 min-w-0 shrink-0 items-center gap-1.5 border px-3 py-1.5 text-sm transition-colors ${
                             isActive
                                 ? 'border-primary bg-primary text-primary-foreground'
-                                : 'border-transparent text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300'
+                                : 'border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300'
                         }`}
                     >
                         {isRenaming ? (
@@ -882,7 +882,7 @@ return;
 
             <div className="flex h-[calc(100vh-2rem)] w-full overflow-hidden">
                 <TooltipProvider>
-                    <aside className="flex w-12 flex-col items-center border-r border-neutral-100 bg-white py-2 dark:border-neutral-800 dark:bg-neutral-900">
+                    <aside className="flex w-12 flex-col items-center border-r border-border bg-white py-2 dark:bg-neutral-950">
                         <Link to="/">
                             {/*<img*/}
                             {/*    src={appIcon}*/}
@@ -890,7 +890,7 @@ return;
                             {/*    className="size-8 rounded-lg"*/}
                             {/*/>*/}
 
-                            <div className="size-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-black dark:text-primary flex items-center justify-center">
+                            <div className="size-8 rounded-lg bg-neutral-50 dark:bg-neutral-900 text-black dark:text-primary flex items-center justify-center">
                                 <ArrowLeftIcon className="size-4" />
                             </div>
                         </Link>
@@ -986,7 +986,7 @@ return;
                         minSize="20%"
                     >
                         <div data-tour="main-content" className="flex h-full flex-col overflow-hidden">
-                            <div className="flex min-h-9 items-center border-b border-neutral-100 dark:border-neutral-800">
+                            <div className="flex min-h-9 items-center border-b border-border">
                                     <Popover open={fileListOpen} onOpenChange={setFileListOpen}>
                                         <PopoverTrigger asChild>
                                             <button className="mx-1 flex shrink-0 items-center justify-center rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-700 dark:hover:text-neutral-300">
@@ -1034,9 +1034,9 @@ return 1;
                                                                                             openDocument(doc);
                                                                                         }
                                                                                     }}
-                                                                                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+                                                                                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
                                                                                         doc.id === activeTabId
-                                                                                            ? 'bg-neutral-100 dark:bg-neutral-800 font-medium'
+                                                                                            ? 'bg-neutral-50 dark:bg-neutral-900 font-medium'
                                                                                             : ''
                                                                                     }`}
                                                                                 >
@@ -1089,10 +1089,10 @@ return 1;
                                                             <p className="px-2 py-1.5 text-sm text-neutral-400">No documents yet</p>
                                                         )}
                                                     </div>
-                                                    <div className="mt-1 border-t border-neutral-100 dark:border-neutral-800 pt-1">
+                                                    <div className="mt-1 border-t border-border pt-1">
                                                         <button
                                                             onClick={addTab}
-                                                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
                                                         >
                                                             <PlusIcon className="size-4" />
                                                             <span>New Document</span>
@@ -1110,9 +1110,9 @@ return 1;
                                                                                 openImage(image);
                                                                             }
                                                                         }}
-                                                                        className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+                                                                        className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
                                                                             image.id === activeTabId
-                                                                                ? 'bg-neutral-100 dark:bg-neutral-800 font-medium'
+                                                                                ? 'bg-neutral-50 dark:bg-neutral-900 font-medium'
                                                                                 : ''
                                                                         }`}
                                                                     >
@@ -1198,13 +1198,13 @@ return 1;
                                     </button>
                                 </div>
                             {/* {activeTab && (
-                                <div className="flex items-center justify-between border-b border-neutral-100 bg-white px-2 py-1.5 dark:border-neutral-800 dark:bg-neutral-900">
+                                <div className="flex items-center justify-between border-b border-border bg-white px-2 py-1.5 dark:bg-neutral-950">
                                     <div className="flex items-center gap-2">
                                         <h2 className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
                                             {activeTab.title}
                                         </h2>
                                         {activeTab.type === 'document' && localDocuments.find((d) => d.id === activeTabId)?.last_edited_by && (
-                                            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500">
+                                            <span className="rounded bg-neutral-50 px-1.5 py-0.5 text-[10px] text-neutral-400 dark:bg-neutral-900 dark:text-neutral-500">
                                                 {localDocuments.find((d) => d.id === activeTabId)?.last_edited_by === 'user'
                                                     ? 'You'
                                                     : localDocuments.find((d) => d.id === activeTabId)?.last_edited_by}
@@ -1290,7 +1290,7 @@ return 1;
                                 const activeDoc = localDocuments.find(d => d.id === activeTabId);
 
                                 return (
-                                    <div className="h-8 flex items-center justify-between border-t border-neutral-100 bg-neutral-50 px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900">
+                                    <div className="h-8 flex items-center justify-between border-t border-border bg-neutral-50 px-2 py-1 dark:bg-neutral-950">
                                         <div className="flex items-center gap-2">
                                             <label htmlFor="autosave-toggle" className="text-xs text-neutral-400 dark:text-neutral-500">
                                                 Autosave

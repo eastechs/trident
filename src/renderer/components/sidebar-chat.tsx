@@ -533,7 +533,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
 
             <div className="px-2 pb-2">
                 {hasNoProviders && (
-                    <div className="flex items-center justify-center rounded-lg border border-dashed border-neutral-200 px-3 py-4 dark:border-neutral-700">
+                    <div className="flex items-center justify-center rounded-lg border border-dashed border-border px-3 py-4">
                         <p className="text-center text-xs text-muted-foreground">
                             Add an API key in{' '}
                             <Link to="/settings" className="font-medium text-primary underline underline-offset-2">
@@ -661,7 +661,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                                 <PopoverTrigger asChild>
                                     <button
                                         type="button"
-                                        className="relative flex shrink-0 items-center justify-center rounded p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+                                        className="relative flex shrink-0 items-center justify-center rounded p-1.5 text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
                                     >
                                         <PlusIcon className="size-4" />
                                         {selectedDocumentIds.size > 0 && (
@@ -707,9 +707,9 @@ return 1;
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => toggleDocument(doc.id)}
-                                                                        className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+                                                                        className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
                                                                             selectedDocumentIds.has(doc.id)
-                                                                                ? 'bg-neutral-100 dark:bg-neutral-800'
+                                                                                ? 'bg-neutral-50 dark:bg-neutral-900'
                                                                                 : ''
                                                                         }`}
                                                                     >

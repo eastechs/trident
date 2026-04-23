@@ -251,7 +251,7 @@ export default function Settings() {
 
             <div className="flex h-[calc(100vh-2rem)] w-full overflow-hidden">
                 <TooltipProvider>
-                    <aside className="flex w-12 flex-col items-center border-r border-neutral-100 bg-white py-2 dark:border-neutral-800 dark:bg-neutral-900">
+                    <aside className="flex w-12 flex-col items-center border-r border-border bg-white py-2 dark:bg-neutral-950">
                         <Link to="/">
                             <img
                                 src={appIcon}
@@ -294,7 +294,7 @@ export default function Settings() {
 
                 <div className="flex min-h-0 flex-1">
                     {/* Settings side menu */}
-                    <nav className="flex w-44 shrink-0 flex-col border-r border-neutral-200 bg-neutral-50 py-4 dark:border-neutral-800 dark:bg-neutral-900/50">
+                    <nav className="flex w-44 shrink-0 flex-col border-r border-border bg-neutral-50 py-4 dark:bg-neutral-950">
                         <div className="px-4 pb-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                             Settings
                         </div>
@@ -302,7 +302,7 @@ export default function Settings() {
                             onClick={() => setActiveSection('preferences')}
                             className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
                                 activeSection === 'preferences'
-                                    ? 'border-l-2 border-primary bg-white font-medium text-foreground dark:bg-neutral-800'
+                                    ? 'border-l-2 border-primary bg-white font-medium text-foreground dark:bg-neutral-900'
                                     : 'border-l-2 border-transparent text-muted-foreground hover:text-foreground'
                             }`}
                         >
@@ -313,7 +313,7 @@ export default function Settings() {
                             onClick={() => setActiveSection('providers')}
                             className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
                                 activeSection === 'providers'
-                                    ? 'border-l-2 border-primary bg-white font-medium text-foreground dark:bg-neutral-800'
+                                    ? 'border-l-2 border-primary bg-white font-medium text-foreground dark:bg-neutral-900'
                                     : 'border-l-2 border-transparent text-muted-foreground hover:text-foreground'
                             }`}
                         >
@@ -324,7 +324,7 @@ export default function Settings() {
                             onClick={() => setActiveSection('agents')}
                             className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
                                 activeSection === 'agents'
-                                    ? 'border-l-2 border-primary bg-white font-medium text-foreground dark:bg-neutral-800'
+                                    ? 'border-l-2 border-primary bg-white font-medium text-foreground dark:bg-neutral-900'
                                     : 'border-l-2 border-transparent text-muted-foreground hover:text-foreground'
                             }`}
                         >
@@ -338,7 +338,7 @@ export default function Settings() {
                         {/* Preferences: Notifications + File Deletion */}
                         {activeSection === 'preferences' && (
                             <div className="space-y-12">
-                                <div className="grid grid-cols-1 gap-x-8 gap-y-10 border-b border-neutral-200 pb-12 md:grid-cols-3 dark:border-neutral-800">
+                                <div className="grid grid-cols-1 gap-x-8 gap-y-10 border-b border-border pb-12 md:grid-cols-3">
                                     <div>
                                         <h2 className="text-base/7 font-semibold text-foreground">Notifications</h2>
                                         <p className="mt-1 text-sm/6 text-muted-foreground">
@@ -360,7 +360,7 @@ export default function Settings() {
                                                         id="notify-all"
                                                         name="notifications"
                                                         type="radio"
-                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-800 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
+                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-900 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
                                                     />
                                                     <label htmlFor="notify-all" className="block text-sm/6 font-medium text-foreground">
                                                         All responses
@@ -376,7 +376,7 @@ export default function Settings() {
                                                         id="notify-none"
                                                         name="notifications"
                                                         type="radio"
-                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-800 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
+                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-900 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
                                                     />
                                                     <label htmlFor="notify-none" className="block text-sm/6 font-medium text-foreground">
                                                         No notifications
@@ -401,7 +401,7 @@ export default function Settings() {
                                                         id="chime-on"
                                                         name="chime"
                                                         type="radio"
-                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-800 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
+                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-900 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
                                                     />
                                                     <label htmlFor="chime-on" className="block text-sm/6 font-medium text-foreground">
                                                         Play chime
@@ -417,7 +417,7 @@ export default function Settings() {
                                                         id="chime-off"
                                                         name="chime"
                                                         type="radio"
-                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-800 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
+                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-900 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
                                                     />
                                                     <label htmlFor="chime-off" className="block text-sm/6 font-medium text-foreground">
                                                         Silent
@@ -450,7 +450,7 @@ export default function Settings() {
                                                         id="trash-enabled"
                                                         name="trash"
                                                         type="radio"
-                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-800 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
+                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-900 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
                                                     />
                                                     <label htmlFor="trash-enabled" className="block text-sm/6 font-medium text-foreground">
                                                         Move to Trash
@@ -466,7 +466,7 @@ export default function Settings() {
                                                         id="trash-disabled"
                                                         name="trash"
                                                         type="radio"
-                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-800 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
+                                                        className="relative size-4 appearance-none rounded-full border border-neutral-300 bg-white before:absolute before:inset-1 before:rounded-full before:bg-white not-checked:before:hidden checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:border-neutral-600 dark:bg-neutral-900 dark:checked:border-primary dark:checked:bg-primary forced-colors:appearance-auto forced-colors:before:hidden"
                                                     />
                                                     <label htmlFor="trash-disabled" className="block text-sm/6 font-medium text-foreground">
                                                         Delete permanently
@@ -682,7 +682,7 @@ export default function Settings() {
                                     <select
                                         value={selectedAgent}
                                         onChange={(e) => setSelectedAgent(e.target.value as 'collaborator')}
-                                        className="appearance-none rounded-md border border-neutral-300 bg-white bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23888%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-size-[16px] bg-position-[right_8px_center] bg-no-repeat py-1.5 pl-3 pr-8 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-neutral-700 dark:bg-neutral-800"
+                                        className="appearance-none rounded-md border border-neutral-300 bg-white bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23888%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-size-[16px] bg-position-[right_8px_center] bg-no-repeat py-1.5 pl-3 pr-8 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-neutral-700 dark:bg-neutral-900"
                                     >
                                         <option value="collaborator">Collaborator</option>
                                     </select>
@@ -713,7 +713,7 @@ export default function Settings() {
                                     </div>
                                 </div>
 
-                                <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
+                                <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border">
                                     {agentLoading ? (
                                         <div className="flex h-full items-center justify-center">
                                             <p className="text-sm text-muted-foreground">Loading...</p>

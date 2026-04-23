@@ -43,7 +43,7 @@ export const ProgressTasks = memo(({ tasks, isStreaming = false, className }: Pr
                 </span>
                 <ChevronDownIcon className={cn('ml-auto size-3.5 transition-transform', isOpen && 'rotate-180')} />
             </CollapsibleTrigger>
-            <CollapsibleContent className="rounded-t-none border-x border-neutral-200 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
+            <CollapsibleContent className="rounded-t-none border-x border-border bg-white px-3 py-2 dark:bg-neutral-950">
                 <div className="space-y-1">
                     {tasks.map((task, i) => {
                         const config = statusConfig[task.status];

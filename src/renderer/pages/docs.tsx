@@ -121,7 +121,7 @@ function SortableDocTab({
                         className={`group flex w-48 min-w-0 shrink-0 items-center gap-1.5 border px-3 py-1.5 text-sm transition-colors ${
                             isActive
                                 ? 'border-primary bg-primary text-primary-foreground'
-                                : 'border-transparent text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300'
+                                : 'border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300'
                         }`}
                     >
                         {isRenaming ? (
@@ -701,7 +701,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                         {activeTab?.title}
                     </h2>
                     {activeDocument?.last_edited_by && (
-                        <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500">
+                        <span className="rounded bg-neutral-50 px-1.5 py-0.5 text-[10px] text-neutral-400 dark:bg-neutral-900 dark:text-neutral-500">
                             {activeDocument.last_edited_by ===
                             'user'
                                 ? 'You'
@@ -710,11 +710,11 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                     )}
                 </div>
             </header>
-            <div className="flex flex-1 overflow-hidden bg-white select-none dark:bg-neutral-900">
+            <div className="flex flex-1 overflow-hidden bg-white select-none dark:bg-neutral-950">
                 <TooltipProvider delayDuration={300}>
-                    <aside className="flex w-12 flex-col items-center border-r border-neutral-100 bg-white py-2 dark:border-neutral-800 dark:bg-neutral-900">
+                    <aside className="flex w-12 flex-col items-center border-r border-border bg-white py-2 dark:bg-neutral-950">
                         <Link to={`/projects/${project.id}`}>
-                            <div className="flex size-8 items-center justify-center rounded-lg bg-neutral-100 text-black dark:bg-neutral-800 dark:text-primary">
+                            <div className="flex size-8 items-center justify-center rounded-lg bg-neutral-50 text-black dark:bg-neutral-900 dark:text-primary">
                                 <ArrowLeftIcon className="size-4" />
                             </div>
                         </Link>
@@ -773,8 +773,8 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
 
                 <div className="flex flex-1 overflow-hidden">
                     {/* File tree */}
-                    <div className="flex w-80 shrink-0 flex-col border-r border-neutral-100 dark:border-neutral-800">
-                        <div className="flex items-center justify-between border-b border-neutral-100 px-3 py-2 dark:border-neutral-800">
+                    <div className="flex w-80 shrink-0 flex-col border-r border-border">
+                        <div className="flex items-center justify-between border-b border-border px-3 py-2">
                             <div className="flex items-center gap-2">
                                 <FileTextIcon className="size-5 text-neutral-400" />
                                 <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
@@ -827,10 +827,10 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                                                                             );
                                                                         }
                                                                     }}
-                                                                    className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+                                                                    className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
                                                                         doc.id ===
                                                                         activeTabId
-                                                                            ? 'bg-neutral-100 font-medium dark:bg-neutral-800'
+                                                                            ? 'bg-neutral-50 font-medium dark:bg-neutral-900'
                                                                             : 'text-neutral-600 dark:text-neutral-400'
                                                                     }`}
                                                                 >
@@ -945,7 +945,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                     {/* Editor area */}
                     <div className="flex flex-1 flex-col overflow-hidden">
                         {/* Tab bar */}
-                        <div className="flex min-h-9 items-center border-b border-neutral-100 dark:border-neutral-800">
+                        <div className="flex min-h-9 items-center border-b border-border">
                             <DndContext
                                 sensors={sensors}
                                 collisionDetection={closestCenter}
@@ -1046,7 +1046,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
 
                         {/* Footer */}
                         {activeTab && (
-                            <div className="h-8 flex items-center justify-between border-t border-neutral-100 bg-neutral-50 px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900">
+                            <div className="h-8 flex items-center justify-between border-t border-border bg-neutral-50 px-2 py-1 dark:bg-neutral-950">
                                 <div className="flex items-center gap-2">
                                     <label
                                         htmlFor="docs-autosave-toggle"

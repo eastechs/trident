@@ -24,7 +24,7 @@ export default function Documentation() {
             </header>
 
             <div className="flex flex-1 overflow-hidden">
-                <nav className="flex w-52 shrink-0 flex-col border-r border-neutral-200 bg-neutral-50 py-4 dark:border-neutral-800 dark:bg-neutral-900/50">
+                <nav className="flex w-52 shrink-0 flex-col border-r border-border bg-neutral-50 py-4 dark:bg-neutral-950">
                     <div className="flex items-center gap-2 px-4 pb-4">
                         <img src={appIcon} alt="Trident" className="size-6 rounded-md" />
                         <span className="text-sm font-semibold text-foreground">Trident</span>
@@ -38,7 +38,7 @@ export default function Documentation() {
                             onClick={() => setActiveSlug(s.slug)}
                             className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
                                 s.slug === activeSlug
-                                    ? 'border-l-2 border-primary bg-white font-medium text-foreground dark:bg-neutral-800'
+                                    ? 'border-l-2 border-primary bg-white font-medium text-foreground dark:bg-neutral-900'
                                     : 'border-l-2 border-transparent text-muted-foreground hover:text-foreground'
                             }`}
                         >

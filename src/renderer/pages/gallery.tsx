@@ -101,7 +101,7 @@ function SortableImageTab({
                         className={`group flex w-48 min-w-0 shrink-0 items-center gap-1.5 border px-3 py-1.5 text-sm transition-colors ${
                             isActive
                                 ? 'border-primary bg-primary text-primary-foreground'
-                                : 'border-transparent text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300'
+                                : 'border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300'
                         }`}
                     >
                         {isRenaming ? (
@@ -348,11 +348,11 @@ function GalleryView({ project, images, onProjectUpdated }: { project: ProjectDa
     return (
         <div className="flex h-screen flex-col">
             <header className="title-bar" />
-            <div className="flex flex-1 overflow-hidden bg-white select-none dark:bg-neutral-900">
+            <div className="flex flex-1 overflow-hidden bg-white select-none dark:bg-neutral-950">
                 <TooltipProvider delayDuration={300}>
-                    <aside className="flex w-12 flex-col items-center border-r border-neutral-100 bg-white py-2 dark:border-neutral-800 dark:bg-neutral-900">
+                    <aside className="flex w-12 flex-col items-center border-r border-border bg-white py-2 dark:bg-neutral-950">
                         <Link to={`/projects/${project.id}`}>
-                            <div className="flex size-8 items-center justify-center rounded-lg bg-neutral-100 text-black dark:bg-neutral-800 dark:text-primary">
+                            <div className="flex size-8 items-center justify-center rounded-lg bg-neutral-50 text-black dark:bg-neutral-900 dark:text-primary">
                                 <ArrowLeftIcon className="size-4" />
                             </div>
                         </Link>
@@ -409,8 +409,8 @@ function GalleryView({ project, images, onProjectUpdated }: { project: ProjectDa
 
                 <div className="flex flex-1 overflow-hidden">
                     {/* Image grid */}
-                    <div className="flex w-80 shrink-0 flex-col border-r border-neutral-100 dark:border-neutral-800">
-                        <div className="flex items-center gap-2 border-b border-neutral-100 px-3 py-2 dark:border-neutral-800">
+                    <div className="flex w-80 shrink-0 flex-col border-r border-border">
+                        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
                             <ImageIcon className="size-5 text-neutral-400" />
                             <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
                                 Gallery
@@ -476,7 +476,7 @@ function GalleryView({ project, images, onProjectUpdated }: { project: ProjectDa
                     {/* Image viewer */}
                     <div className="flex flex-1 flex-col overflow-hidden">
                         {/* Tab bar */}
-                        <div className="flex min-h-9 items-center border-b border-neutral-100 dark:border-neutral-800">
+                        <div className="flex min-h-9 items-center border-b border-border">
                             <DndContext
                                 sensors={sensors}
                                 collisionDetection={closestCenter}
@@ -513,7 +513,7 @@ function GalleryView({ project, images, onProjectUpdated }: { project: ProjectDa
 
                         {/* Image name */}
                         {activeTab && (
-                            <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-1 dark:border-neutral-800">
+                            <div className="flex items-center gap-2 border-b border-border px-4 py-1">
                                 <h2 className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
                                     {activeTab.title}
                                 </h2>

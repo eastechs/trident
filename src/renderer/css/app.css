@@ -18,7 +18,7 @@
 }
 
 .title-bar {
-    @apply h-8 pl-20 flex items-center bg-white dark:bg-neutral-900 border-b border-neutral-100 dark:border-neutral-800 cursor-grab;
+    @apply h-8 pl-20 flex items-center bg-white dark:bg-neutral-950 border-b border-border cursor-grab;
     -webkit-app-region: drag;
 }
 
@@ -122,9 +122,9 @@
     --destructive:
         oklch(0.577 0.245 27.325);
     --border:
-        oklch(0.922 0 0);
+        oklch(0.95 0 0);
     --input:
-        oklch(0.922 0 0);
+        oklch(0.95 0 0);
     --ring:
         oklch(0.708 0 0);
     --chart-1:
@@ -486,7 +486,7 @@
 
 @layer base {
   * {
-    @apply dark:border-neutral-800 border-border outline-ring/50;
+    @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
