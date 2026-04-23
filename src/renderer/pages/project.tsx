@@ -80,7 +80,6 @@ interface Props {
     documents: DocumentData[];
     images: ImageData[];
     conversations: ConversationData[];
-    configuredProviders: { anthropic: boolean; openai: boolean; gemini: boolean };
     shouldShowTour: boolean;
 }
 
@@ -202,7 +201,6 @@ interface ProjectViewProps {
     documents: DocumentData[];
     images: ImageData[];
     conversations: ConversationData[];
-    configuredProviders: Props['configuredProviders'];
     shouldShowTour: boolean;
 }
 
@@ -228,7 +226,7 @@ export default function Project() {
     );
 }
 
-function ProjectView({ project, documents, images, conversations, configuredProviders, shouldShowTour, onProjectUpdated }: ProjectViewProps & { onProjectUpdated: (p: ProjectData) => void }) {
+function ProjectView({ project, documents, images, conversations, shouldShowTour, onProjectUpdated }: ProjectViewProps & { onProjectUpdated: (p: ProjectData) => void }) {
 
     const leftPanelRef = usePanelRef();
     const rightPanelRef = usePanelRef();
@@ -967,7 +965,6 @@ return;
                                 otherSideActiveId={rightActiveId}
                                 documents={localDocuments}
                                 defaultModel="claude-opus-4-7"
-                                configuredProviders={configuredProviders}
                                 initialPrompt={initialPromptRef.current}
                                 onConversationCreated={handleConversationCreated}
                                 onConversationUpdated={handleConversationUpdated}
@@ -1361,7 +1358,6 @@ return 1;
                                 otherSideActiveId={leftActiveId}
                                 documents={localDocuments}
                                 defaultModel="gpt-5.4"
-                                configuredProviders={configuredProviders}
                                 initialPrompt={initialPromptRef.current}
                                 onConversationCreated={handleConversationCreated}
                                 onConversationUpdated={handleConversationUpdated}

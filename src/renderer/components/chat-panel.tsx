@@ -22,7 +22,6 @@ interface ChatPanelProps {
     otherSideActiveId: string | null;
     documents: DocumentData[];
     defaultModel?: string;
-    configuredProviders?: { anthropic: boolean; openai: boolean; gemini: boolean };
     initialPrompt?: string;
     onConversationCreated: (conversation: ConversationData) => void;
     onConversationUpdated: (id: string, updates: Partial<ConversationData>) => void;
@@ -78,7 +77,6 @@ export function ChatPanel({
     otherSideActiveId,
     documents,
     defaultModel,
-    configuredProviders,
     initialPrompt,
     onConversationCreated,
     onConversationUpdated,
@@ -249,7 +247,6 @@ export function ChatPanel({
                             defaultModel={defaultModel}
                             lockedModel={activeConversation?.model ?? null}
                             side={side}
-                            configuredProviders={configuredProviders}
                             initialPrompt={activeConversationId === autoCreatedId ? initialPrompt : undefined}
                             onDocumentEdited={onDocumentEdited}
                             onDocumentCreated={onDocumentCreated}

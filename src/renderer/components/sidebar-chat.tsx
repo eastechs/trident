@@ -65,83 +65,30 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { DocumentData } from '@/types/api';
+import type { DocumentData, ModelInfo } from '@/types/api';
 
 function toolLabel(toolName: string): string {
     return toolName.replace(/([A-Z])/g, ' $1').trim();
 }
 
-const models = [
-    {
-        provider: 'Anthropic',
-        providerSlug: 'anthropic',
-        id: 'claude-opus-4-7',
-        name: 'Opus 4.7',
-        providers: ['anthropic'],
-    },
-    {
-        provider: 'Anthropic',
-        providerSlug: 'anthropic',
-        id: 'claude-sonnet-4-6',
-        name: 'Sonnet 4.6',
-        providers: ['anthropic'],
-    },
-    {
-        provider: 'Anthropic',
-        providerSlug: 'anthropic',
-        id: 'claude-haiku-4-5',
-        name: 'Haiku 4.5',
-        providers: ['anthropic'],
-    },
-    {
-        provider: 'OpenAI',
-        providerSlug: 'openai',
-        id: 'gpt-5.4',
-        name: 'GPT-5.4',
-        providers: ['openai'],
-    },
-    {
-        provider: 'OpenAI',
-        providerSlug: 'openai',
-        id: 'gpt-5.4-mini',
-        name: 'GPT-5.4 Mini',
-        providers: ['openai'],
-    },
-    {
-        provider: 'OpenAI',
-        providerSlug: 'openai',
-        id: 'gpt-5.4-nano',
-        name: 'GPT-5.4 Nano',
-        providers: ['openai'],
-    },
-    {
-        provider: 'Gemini',
-        providerSlug: 'google',
-        id: 'gemini-3.1-pro-preview',
-        name: 'Gemini 3.1 Pro Preview',
-        providers: ['gemini'],
-    },
-    {
-        provider: 'Gemini',
-        providerSlug: 'google',
-        id: 'gemini-3-flash-preview',
-        name: 'Gemini 3 Flash Preview',
-        providers: ['gemini'],
-    },
-] as const;
+const FALLBACK_MODELS: ModelInfo[] = [
+    { id: 'claude-opus-4-7', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Opus 4.7' },
+    { id: 'claude-sonnet-4-6', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Sonnet 4.6' },
+    { id: 'claude-haiku-4-5', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Haiku 4.5' },
+    { id: 'gpt-5.4', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.4' },
+    { id: 'gpt-5.4-mini', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.4 Mini' },
+    { id: 'gpt-5.4-nano', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.4 Nano' },
+    { id: 'gemini-3.1-pro-preview', provider: 'Gemini', providerSlug: 'google', name: 'Gemini 3.1 Pro Preview' },
+    { id: 'gemini-3-flash-preview', provider: 'Gemini', providerSlug: 'google', name: 'Gemini 3 Flash Preview' },
+];
 
-type ProviderName = 'Anthropic' | 'OpenAI' | 'Gemini';
-
-const modelContextWindows: Record<string, number> = {
-    'claude-opus-4-7': 1_000_000,
-    'claude-sonnet-4-6': 1_000_000,
-    'claude-haiku-4-5': 200_000,
-    'gpt-5.4': 1_000_000,
-    'gpt-5.4-mini': 400_000,
-    'gpt-5.4-nano': 400_000,
-    'gemini-3.1-pro-preview': 1_000_000,
-    'gemini-3-flash-preview': 1_000_000,
-};
+function contextWindowFor(modelId: string): number {
+    if (modelId.includes('haiku')) return 200_000;
+    if (modelId.startsWith('claude-')) return 1_000_000;
+    if (modelId.startsWith('gemini-')) return 1_000_000;
+    if (/^gpt-\d/.test(modelId)) return modelId.includes('mini') || modelId.includes('nano') ? 400_000 : 1_000_000;
+    return 200_000;
+}
 
 
 interface UsageData {
@@ -160,7 +107,6 @@ interface SidebarChatProps {
     lockedModel?: string | null;
     side?: 'left' | 'right';
     conversationVersion?: number;
-    configuredProviders?: { anthropic: boolean; openai: boolean; gemini: boolean };
     initialPrompt?: string;
     onDocumentEdited?: (documentId: string) => void;
     onDocumentCreated?: (
@@ -172,26 +118,40 @@ interface SidebarChatProps {
     onStreamingComplete?: () => void;
 }
 
-export function SidebarChat({ projectId, conversationId, documents, defaultModel, lockedModel, side, conversationVersion = 0, configuredProviders: initialProviders, initialPrompt, onDocumentEdited, onDocumentCreated, onImageCreated, onStreamingComplete }: SidebarChatProps) {
-    const [providers, setProviders] = useState(initialProviders);
+export function SidebarChat({ projectId, conversationId, documents, defaultModel, lockedModel, side, conversationVersion = 0, initialPrompt, onDocumentEdited, onDocumentCreated, onImageCreated, onStreamingComplete }: SidebarChatProps) {
+    const [availableModels, setAvailableModels] = useState<ModelInfo[]>(FALLBACK_MODELS);
+    const [modelsLoaded, setModelsLoaded] = useState(false);
 
     useEffect(() => {
-        api_get<{ anthropic: boolean; openai: boolean; gemini: boolean }>('/api/settings/api-keys')
-            .then((data) => setProviders(data))
-            .catch(() => {});
+        api_get<ModelInfo[]>('/api/settings/models')
+            .then((data) => {
+                setAvailableModels(data);
+                setModelsLoaded(true);
+            })
+            .catch(() => setModelsLoaded(true));
     }, []);
 
-    const availableModels = providers
-        ? models.filter((m) => m.providers.some((p) => providers[p as keyof typeof providers]))
-        : models;
-    const availableProviders = [...new Set(availableModels.map((m) => m.provider))] as ProviderName[];
+    const availableProviders = useMemo(
+        () => [...new Set(availableModels.map((m) => m.provider))],
+        [availableModels],
+    );
     const [model, setModel] = useState<string>(() => {
-        const preferred = lockedModel ?? defaultModel ?? models[0].id;
-
+        const preferred = lockedModel ?? defaultModel ?? FALLBACK_MODELS[0].id;
         return availableModels.some((m) => m.id === preferred)
             ? preferred
-            : availableModels[0]?.id ?? models[0].id;
+            : availableModels[0]?.id ?? FALLBACK_MODELS[0].id;
     });
+
+    // Once the dynamic list loads, drop to the first available model if the
+    // current selection isn't in it (e.g. fallback id no longer offered).
+    useEffect(() => {
+        if (!modelsLoaded || availableModels.length === 0) return;
+        if (lockedModel != null) return;
+        if (!availableModels.some((m) => m.id === model)) {
+            setModel(availableModels[0].id);
+        }
+    }, [modelsLoaded, availableModels, model, lockedModel]);
+
     const modelRef = useRef(model);
     modelRef.current = model;
     const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
@@ -200,10 +160,10 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
     const answeredQuestionsRef = useRef<Map<string, Array<{ question: string; answer: string }>>>(new Map());
     const [conversationUsage, setConversationUsage] = useState<UsageData>({});
 
-    const selectedModelData = models.find((m) => m.id === model);
+    const selectedModelData = availableModels.find((m) => m.id === model);
 
     const usedTokens = (conversationUsage.prompt_tokens ?? 0) + (conversationUsage.completion_tokens ?? 0);
-    const maxTokens = modelContextWindows[model] ?? 200_000;
+    const maxTokens = contextWindowFor(model);
     const inputTokens = conversationUsage.prompt_tokens ?? 0;
     const outputTokens = conversationUsage.completion_tokens ?? 0;
     const contextUsage = useMemo(() => ({

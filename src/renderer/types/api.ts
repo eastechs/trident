@@ -31,3 +31,10 @@ export interface ConversationData {
     updated_at: string;
     message_count: number;
 }
+
+export interface ModelInfo {
+    id: string;
+    provider: 'Anthropic' | 'OpenAI' | 'Gemini';
+    providerSlug: 'anthropic' | 'openai' | 'google';
+    name: string;
+}

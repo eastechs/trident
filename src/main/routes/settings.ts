@@ -58,6 +58,7 @@ router.get('/api-keys', (_req, res) => {
 
 router.put('/api-keys', async (req, res) => {
   const { validateApiKey } = await import('../ai/validate-key.js');
+  const { invalidateModelCache } = await import('../ai/model-registry.js');
   const { anthropic_key, openai_key, gemini_key } = req.body;
 
   const keys: Record<'anthropic' | 'openai' | 'gemini', string> = {} as Record<'anthropic' | 'openai' | 'gemini', string>;
@@ -82,6 +83,7 @@ router.put('/api-keys', async (req, res) => {
   for (const [provider, key] of Object.entries(keys) as Array<['anthropic' | 'openai' | 'gemini', string]>) {
     if (await validateApiKey(provider, key)) {
       setApiKey(provider, key);
+      invalidateModelCache(provider);
       saved.push(provider);
     } else {
       invalid.push(provider);
@@ -99,14 +101,23 @@ router.put('/api-keys', async (req, res) => {
   res.json({ success: true, saved, invalid });
 });
 
-router.delete('/api-keys', (req, res) => {
+router.delete('/api-keys', async (req, res) => {
+  const { invalidateModelCache } = await import('../ai/model-registry.js');
   const { provider } = req.body as { provider: 'anthropic' | 'openai' | 'gemini' };
   if (!provider) {
     res.status(422).json({ error: 'Provider is required' });
     return;
   }
   deleteApiKey(provider);
+  invalidateModelCache(provider);
   res.json(getConfiguredProviders());
+});
+
+// ─── Models ────────────────────────────────────────────────
+
+router.get('/models', async (_req, res) => {
+  const { fetchAvailableModels } = await import('../ai/model-registry.js');
+  res.json(await fetchAvailableModels());
 });
 
 // ─── Agent instructions ────────────────────────────────────
