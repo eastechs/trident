@@ -96,13 +96,13 @@ export function QuestionsCard({ questions, onSubmit, submitted }: QuestionsCardP
                     Question
                 </span>
                 {questions.length > 1 && (
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                         {currentIndex + 1} of {questions.length}
                     </span>
                 )}
             </div>
 
-            <h3 className="mb-5 text-lg font-semibold leading-snug text-foreground">
+            <h3 className="mb-5 font-semibold leading-snug text-foreground">
                 {currentQuestion.question}
             </h3>
 
@@ -134,7 +134,7 @@ export function QuestionsCard({ questions, onSubmit, submitted }: QuestionsCardP
                             </div>
                             <div className="min-w-0 flex-1">
                                 <div className={cn(
-                                    'text-sm font-semibold',
+                                    'text-xs font-semibold',
                                     isSelected
                                         ? 'text-green-700 dark:text-green-300'
                                         : 'text-foreground',
@@ -142,7 +142,7 @@ export function QuestionsCard({ questions, onSubmit, submitted }: QuestionsCardP
                                     {option.label}
                                 </div>
                                 <div className={cn(
-                                    'mt-0.5 text-sm leading-relaxed',
+                                    'mt-0.5 text-xs leading-relaxed',
                                     isSelected
                                         ? 'text-green-600 dark:text-green-400'
                                         : 'text-muted-foreground',
@@ -177,7 +177,7 @@ export function QuestionsCard({ questions, onSubmit, submitted }: QuestionsCardP
                     </div>
                     <div className="min-w-0 flex-1">
                         <div className={cn(
-                            'text-sm font-semibold',
+                            'text-xs font-semibold',
                             isCustomSelected
                                 ? 'text-green-700 dark:text-green-300'
                                 : 'text-foreground',
@@ -191,7 +191,7 @@ export function QuestionsCard({ questions, onSubmit, submitted }: QuestionsCardP
                                 onClick={(e) => e.stopPropagation()}
                                 placeholder="Explain your answer..."
                                 rows={2}
-                                className="mt-2 w-full resize-none rounded-md border border-border bg-background p-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
+                                className="mt-2 w-full resize-none rounded-md border border-border bg-background p-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
                             />
                         )}
                     </div>
@@ -204,7 +204,7 @@ export function QuestionsCard({ questions, onSubmit, submitted }: QuestionsCardP
                     <button
                         type="button"
                         onClick={handleBack}
-                        className="rounded-lg border border-border px-5 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+                        className="rounded-lg border border-border px-5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-accent"
                     >
                         Back
                     </button>
@@ -216,7 +216,7 @@ export function QuestionsCard({ questions, onSubmit, submitted }: QuestionsCardP
                     onClick={handleNext}
                     disabled={!canProceed}
                     className={cn(
-                        'rounded-lg px-5 py-2 text-sm font-semibold transition-colors',
+                        'rounded-lg px-5 py-2 text-xs font-semibold transition-colors',
                         canProceed
                             ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                             : 'cursor-not-allowed bg-muted text-muted-foreground',

@@ -388,8 +388,8 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
     }, []);
 
     return (
-        <div className="flex h-full flex-col">
-            <Conversation className="flex-1">
+        <div className="flex h-full min-h-0 flex-col">
+            <Conversation className="min-h-0 flex-1">
                 <ConversationContent className="gap-4 p-3" scrollClassName="thin-scrollbar">
                     {messages.length === 0 && !isStreaming && (
                         <div className="flex h-full items-center justify-center text-sm text-neutral-400">

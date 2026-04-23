@@ -217,7 +217,7 @@ export function ChatPanel({
     }, [projectId, activeConversation?.title, activeConversationId, autoCreatedId, onConversationsRefreshed]);
 
     return (
-        <div className="flex h-full flex-col">
+        <div className="flex h-full min-h-0 flex-col">
             <ChatPanelHeader
                 activeTab={effectiveTab}
                 onTabChange={handleTabChange}

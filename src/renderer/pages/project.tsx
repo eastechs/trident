@@ -957,7 +957,7 @@ return;
                         collapsedSize="0%"
                         className="text-sidebar-foreground"
                     >
-                        <div data-tour="chat-left" className="h-full w-full">
+                        <div data-tour="chat-left" className="h-full w-full overflow-hidden">
                             <ChatPanel
                                 projectId={project.id}
                                 side="left"
@@ -1350,7 +1350,7 @@ return 1;
                         collapsedSize="0%"
                         className="text-sidebar-foreground"
                     >
-                        <div data-tour="chat-right" className="h-full w-full">
+                        <div data-tour="chat-right" className="h-full w-full overflow-hidden">
                             <ChatPanel
                                 projectId={project.id}
                                 side="right"
