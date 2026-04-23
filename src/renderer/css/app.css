@@ -404,6 +404,7 @@
 }
 
 .milkdown .milkdown-top-bar .top-bar-inner {
+  @apply px-2.5;
   flex-wrap: nowrap !important;
   /* overflow-x: auto !important; */
 }
