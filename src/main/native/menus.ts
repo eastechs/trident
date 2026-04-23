@@ -1,6 +1,6 @@
 import { Menu, BrowserWindow, app } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { openDocumentationWindow } from './windows.js';
+import { openAboutWindow, openDocumentationWindow } from './windows.js';
 
 export function buildMenu(mainWindow: BrowserWindow): Menu {
   const isMac = process.platform === 'darwin';
@@ -11,7 +11,7 @@ export function buildMenu(mainWindow: BrowserWindow): Menu {
           {
             label: app.name,
             submenu: [
-              { role: 'about' as const },
+              { label: `About ${app.name}`, click: () => openAboutWindow() },
               { type: 'separator' as const },
               { role: 'services' as const },
               { type: 'separator' as const },

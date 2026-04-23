@@ -13,6 +13,12 @@ import { appIconPath } from './native/app-icon.js';
 
 app.setName('Trident');
 app.setAppUserModelId('com.eastechs.trident');
+app.setAboutPanelOptions({
+  applicationName: 'Trident',
+  applicationVersion: app.getVersion(),
+  copyright: `Copyright © ${new Date().getFullYear()} Eastechs`,
+  iconPath: appIconPath(),
+});
 
 const isDev = !app.isPackaged;
 const SERVER_PORT = 19274;

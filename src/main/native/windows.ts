@@ -46,3 +46,34 @@ export function openDocumentationWindow(): void {
     height: 700,
   });
 }
+
+export function openAboutWindow(): void {
+  const key = 'about';
+  const existing = secondaryWindows.get(key);
+  if (existing && !existing.isDestroyed()) {
+    existing.focus();
+    return;
+  }
+
+  const win = new BrowserWindow({
+    width: 380,
+    height: 520,
+    title: 'About Trident',
+    titleBarStyle: 'hidden',
+    trafficLightPosition: { x: 12, y: 12 },
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  win.setMenu(null);
+  win.loadURL(`${baseUrl()}/about?version=${encodeURIComponent(app.getVersion())}`);
+  secondaryWindows.set(key, win);
+  win.on('closed', () => secondaryWindows.delete(key));
+}
