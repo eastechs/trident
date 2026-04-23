@@ -621,7 +621,7 @@ return prev;
                 if (tab?.type === 'image') {
                     setLocalImages(prev => prev.map(img => img.id === tabId ? { ...img, name: data.name } : img));
                 } else {
-                    // TODO: refetch documents
+                    setLocalDocuments(prev => prev.map(d => d.id === tabId ? { ...d, name: data.name } : d));
                 }
             })
             .catch((error) => {
