@@ -945,7 +945,7 @@ function DocsView({ project, documents, onProjectUpdated }: { project: ProjectDa
                     {/* Editor area */}
                     <div className="flex flex-1 flex-col overflow-hidden">
                         {/* Tab bar */}
-                        <div className="flex min-h-9 items-center border-b border-neutral-100 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900">
+                        <div className="flex min-h-9 items-center border-b border-neutral-100 dark:border-neutral-800">
                             <DndContext
                                 sensors={sensors}
                                 collisionDetection={closestCenter}

@@ -955,7 +955,7 @@ return;
                         maxSize="30%"
                         collapsible
                         collapsedSize="0%"
-                        className="bg-sidebar text-sidebar-foreground"
+                        className="text-sidebar-foreground"
                     >
                         <div data-tour="chat-left" className="h-full w-full">
                             <ChatPanel
@@ -986,7 +986,7 @@ return;
                         minSize="20%"
                     >
                         <div data-tour="main-content" className="flex h-full flex-col overflow-hidden">
-                            <div className="flex min-h-9 items-center border-b border-neutral-100 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900">
+                            <div className="flex min-h-9 items-center border-b border-neutral-100 dark:border-neutral-800">
                                     <Popover open={fileListOpen} onOpenChange={setFileListOpen}>
                                         <PopoverTrigger asChild>
                                             <button className="mx-1 flex shrink-0 items-center justify-center rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-700 dark:hover:text-neutral-300">
@@ -1348,7 +1348,7 @@ return 1;
                         maxSize="30%"
                         collapsible
                         collapsedSize="0%"
-                        className="bg-sidebar text-sidebar-foreground"
+                        className="text-sidebar-foreground"
                     >
                         <div data-tour="chat-right" className="h-full w-full">
                             <ChatPanel
