@@ -544,6 +544,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                     </div>
                 )}
                 {!hasNoProviders && (
+                <div className={isStreaming ? 'chat-input-shimmer' : undefined}>
                 <PromptInput
                     onSubmit={handleSubmit}
                     className="rounded-lg"
@@ -742,6 +743,7 @@ return 1;
                         </div>
                     </PromptInputFooter>
                 </PromptInput>
+                </div>
                 )}
             </div>
         </div>

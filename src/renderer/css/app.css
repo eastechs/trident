@@ -39,6 +39,57 @@
     scrollbar-color: var(--border) transparent;
 }
 
+@property --chat-shimmer-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+}
+
+@keyframes chat-shimmer-rotate {
+    to { --chat-shimmer-angle: 360deg; }
+}
+
+.chat-input-shimmer {
+    position: relative;
+    border-radius: 1.125rem;
+}
+
+.chat-input-shimmer::before {
+    content: '';
+    position: absolute;
+    inset: -1.5px;
+    border-radius: calc(1.125rem + 1.5px);
+    padding: 1.5px;
+    background: conic-gradient(
+        from var(--chat-shimmer-angle),
+        transparent 0%,
+        transparent 14%,
+        color-mix(in oklch, var(--primary), transparent 70%) 18%,
+        var(--primary) 22%,
+        color-mix(in oklch, var(--primary), transparent 70%) 26%,
+        transparent 30%,
+        transparent 62%,
+        color-mix(in oklch, var(--primary), transparent 85%) 66%,
+        color-mix(in oklch, var(--primary), transparent 55%) 70%,
+        color-mix(in oklch, var(--primary), transparent 85%) 74%,
+        transparent 78%,
+        transparent 100%
+    );
+    -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: chat-shimmer-rotate 2.4s linear infinite, chat-shimmer-in 0.35s ease-out;
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes chat-shimmer-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
 :root {
     --background:
         oklch(1 0 0);
