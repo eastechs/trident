@@ -84,9 +84,9 @@ const FALLBACK_MODELS: ModelInfo[] = [
     { id: 'claude-opus-4-7', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Opus 4.7' },
     { id: 'claude-sonnet-4-6', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Sonnet 4.6' },
     { id: 'claude-haiku-4-5', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Haiku 4.5' },
-    { id: 'gpt-5.4', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.4' },
-    { id: 'gpt-5.4-mini', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.4 Mini' },
-    { id: 'gpt-5.4-nano', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.4 Nano' },
+    { id: 'gpt-5.5', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.5' },
+    { id: 'gpt-5.5-mini', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.5 Mini' },
+    { id: 'gpt-5.5-nano', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.5 Nano' },
     { id: 'gemini-3.1-pro-preview', provider: 'Gemini', providerSlug: 'google', name: 'Gemini 3.1 Pro Preview' },
     { id: 'gemini-3-flash-preview', provider: 'Gemini', providerSlug: 'google', name: 'Gemini 3 Flash Preview' },
 ];

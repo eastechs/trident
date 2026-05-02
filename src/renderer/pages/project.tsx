@@ -1357,7 +1357,7 @@ return 1;
                                 conversations={localConversations}
                                 otherSideActiveId={leftActiveId}
                                 documents={localDocuments}
-                                defaultModel="gpt-5.4"
+                                defaultModel="gpt-5.5"
                                 initialPrompt={initialPromptRef.current}
                                 onConversationCreated={handleConversationCreated}
                                 onConversationUpdated={handleConversationUpdated}

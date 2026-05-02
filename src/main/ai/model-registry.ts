@@ -25,9 +25,9 @@ const FALLBACK: Record<ProviderKey, ModelInfo[]> = {
     { id: 'claude-haiku-4-5', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Haiku 4.5' },
   ],
   openai: [
-    { id: 'gpt-5.4', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.4' },
-    { id: 'gpt-5.4-mini', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.4 Mini' },
-    { id: 'gpt-5.4-nano', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.4 Nano' },
+    { id: 'gpt-5.5', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.5' },
+    { id: 'gpt-5.5-mini', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.5 Mini' },
+    { id: 'gpt-5.5-nano', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.5 Nano' },
   ],
   gemini: [
     { id: 'gemini-3.1-pro-preview', provider: 'Gemini', providerSlug: 'google', name: 'Gemini 3.1 Pro Preview' },
@@ -156,7 +156,7 @@ function isOpenAIChatModel(id: string): boolean {
 
 function deriveOpenAIName(id: string): string {
   if (id.startsWith('gpt-')) {
-    // "gpt-5.4-mini" → "GPT-5.4 Mini"
+    // "gpt-5.5-mini" → "GPT-5.5 Mini"
     const rest = id.slice(4);
     return 'GPT-' + rest
       .split('-')

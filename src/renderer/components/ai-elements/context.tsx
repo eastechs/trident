@@ -29,9 +29,9 @@ const modelPricing: Record<string, ModelPricing> = {
   'claude-opus-4-7': { inputPerMTokens: 15, outputPerMTokens: 75, cacheReadPerMTokens: 1.5, cacheWritePerMTokens: 18.75 },
   'claude-sonnet-4-6': { inputPerMTokens: 3, outputPerMTokens: 15, cacheReadPerMTokens: 0.3, cacheWritePerMTokens: 3.75 },
   'claude-haiku-4-5': { inputPerMTokens: 0.8, outputPerMTokens: 4, cacheReadPerMTokens: 0.08, cacheWritePerMTokens: 1 },
-  'gpt-5.4': { inputPerMTokens: 1.25, outputPerMTokens: 10, cacheReadPerMTokens: 0.13 },
-  'gpt-5.4-mini': { inputPerMTokens: 0.75, outputPerMTokens: 4.5, cacheReadPerMTokens: 0.075 },
-  'gpt-5.4-nano': { inputPerMTokens: 0.2, outputPerMTokens: 1.25, cacheReadPerMTokens: 0.02 },
+  'gpt-5.5': { inputPerMTokens: 1.25, outputPerMTokens: 10, cacheReadPerMTokens: 0.13 },
+  'gpt-5.5-mini': { inputPerMTokens: 0.75, outputPerMTokens: 4.5, cacheReadPerMTokens: 0.075 },
+  'gpt-5.5-nano': { inputPerMTokens: 0.2, outputPerMTokens: 1.25, cacheReadPerMTokens: 0.02 },
   'gemini-3.1-pro-preview': { inputPerMTokens: 1.25, outputPerMTokens: 10 },
   'gemini-3-flash-preview': { inputPerMTokens: 0.15, outputPerMTokens: 0.6 },
 };

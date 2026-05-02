@@ -17,9 +17,9 @@ const MODEL_LABELS: Record<string, string> = {
   'claude-opus-4-7': 'Opus 4.7',
   'claude-sonnet-4-6': 'Sonnet 4.6',
   'claude-haiku-4-5': 'Haiku 4.5',
-  'gpt-5.4': 'GPT-5.4',
-  'gpt-5.4-mini': 'GPT-5.4 Mini',
-  'gpt-5.4-nano': 'GPT-5.4 Nano',
+  'gpt-5.5': 'GPT-5.5',
+  'gpt-5.5-mini': 'GPT-5.5 Mini',
+  'gpt-5.5-nano': 'GPT-5.5 Nano',
   'gemini-3.1-pro-preview': 'Gemini 3.1 Pro Preview',
   'gemini-3-flash-preview': 'Gemini 3 Flash Preview',
 };
