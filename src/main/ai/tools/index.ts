@@ -333,7 +333,7 @@ export function createTools(
 
   return {
     AskQuestions: tool({
-      description: 'Present clarifying questions to the user before proceeding with work. This tool displays an interactive questionnaire in the chat UI. Each question has multiple-choice options the user can select from, plus a freeform "Something else" option. IMPORTANT: After calling this tool, you MUST stop and wait for the user\'s answers. Do NOT continue with any other actions or tool calls until you receive the user\'s response. The user\'s answers will arrive as their next message.',
+      description: 'Present clarifying questions to the user before proceeding with work. This tool displays an interactive questionnaire in the chat UI. Each question has multiple-choice options the user can select from, plus a freeform "Something else" option. IMPORTANT: After calling this tool, you MUST stop and wait for the user\'s answers. Do NOT continue with any other actions or tool calls, and do NOT generate any additional text — the tool handles all display. The user\'s answers will arrive as their next message.',
       inputSchema: z.object({
         questions: z.array(z.object({
           question: z.string().describe('The question text to display to the user.'),
@@ -454,7 +454,7 @@ export function createTools(
       description: 'Rename an existing document in the project.',
       inputSchema: z.object({
         document_id: z.string().describe('The UUID of the document to rename.'),
-        name: z.string().describe('The new name for the document (without file extension). Use a natural, human-readable title with normal spacing and capitalization (e.g. "Chuck Norris Tribute") — not kebab-case, snake_case, camelCase, or PascalCase.'),
+        name: z.string().describe('The new name for the document (without file extension). Use a natural, descriptive, human-readable title with normal spacing and capitalization — not kebab-case, snake_case, camelCase, or PascalCase.'),
       }),
       execute: async ({ document_id, name: newName }, { abortSignal }) => {
         throwIfAborted(abortSignal);
@@ -503,7 +503,7 @@ export function createTools(
     CreateDocument: tool({
       description: 'Create a new document in the project. Use this when the user asks you to create a new document with specific content.',
       inputSchema: z.object({
-        name: z.string().describe('The name for the new document (without file extension). Use a natural, human-readable title with normal spacing and capitalization (e.g. "Chuck Norris Tribute", "Solar System Outline") — not kebab-case, snake_case, camelCase, or PascalCase.'),
+        name: z.string().describe('The name for the new document (without file extension). Use a natural, descriptive, human-readable title with normal spacing and capitalization — not kebab-case, snake_case, camelCase, or PascalCase.'),
         content: z.string().describe('The initial markdown content for the new document.'),
       }),
       execute: async ({ name, content }, { abortSignal }) => {
@@ -562,7 +562,7 @@ export function createTools(
       description: 'Generate an image using an AI image model and save it to the project. Use this after the user has selected their preferred image model and settings via ConfigureImageGeneration.',
       inputSchema: z.object({
         prompt: z.string().describe('The image generation prompt describing what to create.'),
-        name: z.string().describe('A descriptive name for the image (without file extension). Use a natural, human-readable title with normal spacing and capitalization (e.g. "Chuck Norris Tribute") — not kebab-case, snake_case, camelCase, or PascalCase.'),
+        name: z.string().describe('A name for the image (without file extension). Use a natural, descriptive, human-readable title with normal spacing and capitalization — not kebab-case, snake_case, camelCase, or PascalCase.'),
         model: z.string().describe('The image model ID to use (e.g. gpt-image-1.5, gemini-3.1-flash-image-preview).'),
         size: z.string().optional().describe('The aspect ratio for the image (e.g. 1:1, 3:2, 2:3, 16:9).'),
         quality: z.string().optional().describe('The quality or resolution setting (e.g. low, medium, high for OpenAI; 1K, 2K, 4K for Gemini).'),
