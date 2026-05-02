@@ -86,9 +86,10 @@ function toolLabel(toolName: string): string {
 }
 
 // Attached documents are prepended to the user message server-side as text
-// parts wrapped in <attached_document>…</attached_document>. The model needs
-// to see them; the user doesn't — they already know what they attached.
-const ATTACHED_DOC_RE = /<attached_document name="[^"]*">[\s\S]*?<\/attached_document>\n?/g;
+// parts wrapped in <attached_document id="..." name="...">…</attached_document>.
+// The model needs to see them; the user doesn't — they already know what they
+// attached. Tag attribute order isn't fixed, so match anything up to `>`.
+const ATTACHED_DOC_RE = /<attached_document\b[^>]*>[\s\S]*?<\/attached_document>\n?/g;
 
 function cleanText(text: string): string {
     return text.replace(ATTACHED_DOC_RE, '');

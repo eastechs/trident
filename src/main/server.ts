@@ -12,8 +12,12 @@ export async function createServer(port: number): Promise<void> {
   const isDev = !electronApp.isPackaged;
   const app = express();
 
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  // Default body-parser limit is 100 KB; chat requests carry the full
+  // UIMessage history including any embedded document attachments, which
+  // blows past that quickly in a multi-turn conversation. 50 MB is safely
+  // above any realistic chat payload for this local-only server.
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   // ─── JSON API routes ────────────────────────────────────
   app.use('/api/projects', projectRoutes);

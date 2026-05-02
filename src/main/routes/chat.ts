@@ -63,8 +63,8 @@ router.post('/', async (req: ProjectRequest, res) => {
       if (lastUserIndex >= 0) {
         const lastUser = history[lastUserIndex];
         const docParts = attachedDocs.map((d) => {
-          // Escape XML-special characters in the name attribute so a doc
-          // titled e.g. `Bob's "Notes" <draft>` doesn't break the delimiter.
+          // Escape XML-special characters in attributes so a doc titled
+          // e.g. `Bob's "Notes" <draft>` doesn't break the delimiter.
           const safeName = (d.name ?? '')
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
@@ -75,9 +75,13 @@ router.post('/', async (req: ProjectRequest, res) => {
           // space the `</` so the model still sees the text but the pattern
           // doesn't match the delimiter.
           const safeContent = (d.content ?? '').replace(/<\/attached_document>/g, '<​/attached_document>');
+          // Include the doc id so the agent can call EditDocument directly.
+          // Without this it would have to call SearchDocuments first, which
+          // is scoped to the calling agent's own directory and won't find
+          // docs created by a different model.
           return {
             type: 'text' as const,
-            text: `<attached_document name="${safeName}">\n${safeContent}\n</attached_document>`,
+            text: `<attached_document id="${d.id}" name="${safeName}">\n${safeContent}\n</attached_document>`,
           };
         });
         history[lastUserIndex] = {

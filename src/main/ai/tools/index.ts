@@ -388,9 +388,9 @@ export function createTools(
     }),
 
     EditDocument: tool({
-      description: 'Edit the content of an existing document in the project. Use this when the user asks you to make changes to a document that was attached to the conversation. Provide the complete new markdown content for the document.',
+      description: 'Edit the content of an existing document in the project. Use this when the user asks you to make changes to a document that was attached to the conversation, regardless of which model originally created it. Provide the complete new markdown content for the document.',
       inputSchema: z.object({
-        document_id: z.string().describe('The UUID of the document to edit. Must be one of the documents attached to this conversation.'),
+        document_id: z.string().describe('The UUID of the document to edit. Take it from the `id` attribute of the matching <attached_document id="..." name="..."> block in the user message.'),
         content: z.string().describe('The complete new markdown content for the document.'),
       }),
       execute: async ({ document_id, content }) => {
