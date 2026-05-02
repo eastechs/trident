@@ -71,6 +71,15 @@ function toolLabel(toolName: string): string {
     return toolName.replace(/([A-Z])/g, ' $1').trim();
 }
 
+// Attached documents are prepended to the user message server-side as text
+// parts wrapped in <attached_document>…</attached_document>. The model needs
+// to see them; the user doesn't — they already know what they attached.
+const ATTACHED_DOC_RE = /<attached_document name="[^"]*">[\s\S]*?<\/attached_document>\n?/g;
+
+function cleanText(text: string): string {
+    return text.replace(ATTACHED_DOC_RE, '');
+}
+
 const FALLBACK_MODELS: ModelInfo[] = [
     { id: 'claude-opus-4-7', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Opus 4.7' },
     { id: 'claude-sonnet-4-6', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Sonnet 4.6' },
@@ -415,9 +424,11 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                                 <MessageContent className={hasPendingImageConfig ? 'w-full max-w-full' : undefined}>
                                     {message.parts.map((part, i) => {
                                         if (part.type === 'text') {
+                                            const cleaned = cleanText(part.text);
+                                            if (!cleaned.trim()) return null;
                                             return (
                                                 <MessageResponse key={`${message.id}-${i}`}>
-                                                    {part.text}
+                                                    {cleaned}
                                                 </MessageResponse>
                                             );
                                         }
@@ -488,8 +499,16 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                                             );
                                         }
 
-                                        // Render tool calls via the Tool component (status badge: Running / Completed / Error)
+                                        // Render tool calls only while running. Once a tool call
+                                        // resolves (output / error / denied), it's noise — hide it.
                                         if (isToolUIPart(part)) {
+                                            if (
+                                                part.state === 'output-available'
+                                                || part.state === 'output-error'
+                                                || part.state === 'output-denied'
+                                            ) {
+                                                return null;
+                                            }
                                             const toolName = getToolName(part);
                                             return (
                                                 <Tool key={`${message.id}-${i}`}>
