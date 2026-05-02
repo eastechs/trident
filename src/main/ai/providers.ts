@@ -51,17 +51,26 @@ export function resolveModel(modelId: string): LanguageModel {
 /**
  * Per-provider options applied to every chat call.
  *
- *   - Anthropic: extended thinking with adaptive budget + summarized display.
+ *   - Anthropic: extended thinking with adaptive budget + summarized display;
+ *                contextManagement.clear_tool_uses_20250919 drops old tool-use
+ *                blocks when input tokens exceed 100k, keeping the last 20 so
+ *                long sessions don't blow past the model's context window.
  *   - OpenAI:    high reasoning effort + auto reasoning summaries; truncation
  *                'auto' so the Responses API drops oldest turns instead of
- *                failing when the prompt nears the model's context limit.
+ *                failing when the prompt nears the model's context limit;
+ *                promptCacheRetention '24h' (max) for stickier auto-caching;
+ *                promptCacheKey scoped per project so requests in the same
+ *                project route to the same cache instance.
  *   - Gemini:    thinkingConfig 'high' with summaries, mirroring the other
  *                providers' reasoning configuration.
  *
  * Applied by provider (not by model name prefix) so every OpenAI model
  * receives reasoning options, not just the ones starting with "o".
  */
-export function getProviderOptions(modelId: string): ProviderOptions {
+export function getProviderOptions(
+  modelId: string,
+  context?: { projectId?: string },
+): ProviderOptions {
   const provider = resolveProviderName(modelId);
 
   if (provider === 'anthropic') {
@@ -70,6 +79,15 @@ export function getProviderOptions(modelId: string): ProviderOptions {
         thinking: { type: 'adaptive', display: 'summarized' },
         effort: 'high',
         sendReasoning: true,
+        contextManagement: {
+          edits: [
+            {
+              type: 'clear_tool_uses_20250919',
+              trigger: { type: 'input_tokens', value: 100_000 },
+              keep: { type: 'tool_uses', value: 20 },
+            },
+          ],
+        },
       },
     };
   }
@@ -80,6 +98,8 @@ export function getProviderOptions(modelId: string): ProviderOptions {
         reasoningEffort: 'high',
         reasoningSummary: 'auto',
         truncation: 'auto',
+        promptCacheRetention: '24h',
+        ...(context?.projectId ? { promptCacheKey: context.projectId } : {}),
       },
     };
   }

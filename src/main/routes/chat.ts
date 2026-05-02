@@ -94,26 +94,48 @@ router.post('/', async (req: ProjectRequest, res) => {
     }
   }
 
-  const tools = WebSearch ? { ...baseTools, WebSearch } : baseTools;
+  const allTools = WebSearch ? { ...baseTools, WebSearch } : baseTools;
   const systemPrompt = loadInstructions();
+
+  // Anthropic caches up to four breakpoints; mark the system prompt and the
+  // last tool definition so the entire stable prefix (system + tools) becomes
+  // a cache hit on every subsequent turn within the 1h TTL window. Cache
+  // markers on non-Anthropic providers are silently ignored.
+  const tools: ToolSet = (() => {
+    if (provider !== 'anthropic') return allTools;
+    const entries = Object.entries(allTools);
+    if (entries.length === 0) return allTools;
+    const [lastKey, lastTool] = entries[entries.length - 1];
+    const existingAnthropic = (lastTool.providerOptions?.anthropic as Record<string, unknown> | undefined) ?? {};
+    return {
+      ...allTools,
+      [lastKey]: {
+        ...lastTool,
+        providerOptions: {
+          ...lastTool.providerOptions,
+          anthropic: {
+            ...existingAnthropic,
+            cacheControl: { type: 'ephemeral', ttl: '1h' },
+          },
+        },
+      },
+    };
+  })();
 
   try {
     const convertedMessages = await convertToModelMessages(history, { tools });
 
     // Pass the system prompt as a message rather than the top-level `system`
-    // string so we can attach providerOptions to it. For Anthropic, marking
-    // it with cacheControl turns the (stable) system prompt into a prompt
-    // cache hit on every subsequent turn — ~10x cheaper on those tokens.
-    // Other providers ignore the cacheControl marker; OpenAI caches stable
-    // prefixes automatically and Gemini needs an explicit cachedContent
-    // reference (which we don't use).
+    // string so we can attach providerOptions to it. For Anthropic this marks
+    // the first cache breakpoint (the second is on the last tool above). The
+    // 1h TTL is the max Anthropic offers and survives short user breaks.
     const modelMessages = [
       {
         role: 'system' as const,
         content: systemPrompt,
         ...(provider === 'anthropic' && {
           providerOptions: {
-            anthropic: { cacheControl: { type: 'ephemeral' as const } },
+            anthropic: { cacheControl: { type: 'ephemeral' as const, ttl: '1h' as const } },
           },
         }),
       },
@@ -125,7 +147,7 @@ router.post('/', async (req: ProjectRequest, res) => {
       messages: modelMessages,
       tools,
       stopWhen: stepCountIs(25),
-      providerOptions: getProviderOptions(model_id),
+      providerOptions: getProviderOptions(model_id, { projectId }),
     });
 
     // Pipe the UI message stream directly to the Express response.
