@@ -154,6 +154,16 @@ router.post('/', async (req: ProjectRequest, res) => {
     };
   })();
 
+  // Tie the LLM call's lifetime to the HTTP connection: when the client
+  // aborts the fetch (e.g. user clicks the stop button, which calls
+  // useChat's stop()), the socket closes and we abort streamText. Without
+  // this the provider keeps generating tokens we'd just discard, racking
+  // up cost.
+  const abortController = new AbortController();
+  req.on('close', () => {
+    if (!res.writableEnded) abortController.abort();
+  });
+
   try {
     // Redact <attached_document> content from prior turns before sending to
     // the model — only the most recent user message keeps the full content.
@@ -208,6 +218,7 @@ router.post('/', async (req: ProjectRequest, res) => {
       tools,
       stopWhen: stepCountIs(25),
       providerOptions: getProviderOptions(model_id, { projectId, effort }),
+      abortSignal: abortController.signal,
     });
 
     // Per-request accumulator for Anthropic's per-step cache_creation count
@@ -255,7 +266,7 @@ router.post('/', async (req: ProjectRequest, res) => {
         }
         return undefined;
       },
-      onFinish: async ({ messages: allMessages, responseMessage }) => {
+      onFinish: async ({ messages: allMessages, responseMessage, isAborted }) => {
         try {
           const [maxOrder] = await db
             .select({ max: sql<number>`COALESCE(MAX(order_index), -1)` })
@@ -310,13 +321,16 @@ router.post('/', async (req: ProjectRequest, res) => {
               .where(eq(conversations.id, conversation_id));
           }
 
-          // Show notification with model ID as title and first 3 lines of response as body
-          const assistantText = responseMessage.parts
-            ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-            .map((p) => p.text)
-            .join('\n') ?? '';
-          const preview = assistantText.split('\n').slice(0, 3).join('\n');
-          showNotification(modelLabel(model_id), preview || 'Agent response complete');
+          // Skip the "response complete" desktop notification when the user
+          // clicked stop — the run didn't finish, it was cancelled.
+          if (!isAborted) {
+            const assistantText = responseMessage.parts
+              ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+              .map((p) => p.text)
+              .join('\n') ?? '';
+            const preview = assistantText.split('\n').slice(0, 3).join('\n');
+            showNotification(modelLabel(model_id), preview || 'Agent response complete');
+          }
         } catch (err) {
           console.error('Error persisting messages:', err);
         }

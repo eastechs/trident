@@ -229,7 +229,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
 
     const [messagesLoaded, setMessagesLoaded] = useState(false);
 
-    const { messages, setMessages, sendMessage, status } = useChat({
+    const { messages, setMessages, sendMessage, stop, status } = useChat({
         id: conversationId,
         transport: new DefaultChatTransport({
             api: `/api/projects/${projectId}/chat`,
@@ -344,12 +344,21 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
             .catch(() => {});
     }, []);
 
+    // Set when the user clicks the stop button so the streaming→ready
+    // transition that follows doesn't trigger the "response complete" chime.
+    const userStoppedRef = useRef(false);
+    const handleStop = useCallback(() => {
+        userStoppedRef.current = true;
+        stop();
+    }, [stop]);
+
     const prevStatusRef = useRef(status);
     useEffect(() => {
         if (prevStatusRef.current === 'streaming' && status === 'ready') {
-            if (chimeEnabledRef.current) {
+            if (chimeEnabledRef.current && !userStoppedRef.current) {
                 new Audio(agentChimeUrl).play().catch(() => {});
             }
+            userStoppedRef.current = false;
             onStreamingComplete?.();
         }
 
@@ -818,7 +827,11 @@ return 1;
                                     </TooltipProvider>
                                 </PopoverContent>
                             </Popover>
-                            <PromptInputSubmit disabled={isStreaming || questionsLocked} />
+                            <PromptInputSubmit
+                                status={status}
+                                onStop={handleStop}
+                                disabled={questionsLocked}
+                            />
                         </div>
                     </PromptInputFooter>
                 </PromptInput>

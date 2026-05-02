@@ -56,6 +56,14 @@ function relPosix(root: string, full: string): string {
   return path.relative(root, full).split(path.sep).join('/');
 }
 
+// Throw a DOMException-shaped abort error so the AI SDK marks the tool call
+// as aborted (matches what fetch/AbortController throws natively).
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+}
+
 function resolveWithinRoot(root: string, relative: string): string {
   const realRoot = fs.realpathSync(root);
   const resolved = path.resolve(realRoot, relative);
@@ -147,12 +155,15 @@ function scanFileForMatches(
   rel: string,
   query: string,
   matches: Array<{ path: string; line: number; text: string }>,
+  signal: AbortSignal | undefined,
 ): Promise<boolean> {
   return new Promise((resolve) => {
     const stream = fs.createReadStream(full, { encoding: 'utf-8' });
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
     let lineNum = 0;
     let cappedOut = false;
+    const onAbort = () => { rl.close(); };
+    signal?.addEventListener('abort', onAbort, { once: true });
     rl.on('line', (line) => {
       lineNum++;
       if (line.includes(query)) {
@@ -163,9 +174,15 @@ function scanFileForMatches(
         }
       }
     });
-    rl.on('close', () => resolve(cappedOut));
-    rl.on('error', () => resolve(false));
-    stream.on('error', () => { rl.close(); resolve(false); });
+    rl.on('close', () => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve(cappedOut);
+    });
+    rl.on('error', () => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve(false);
+    });
+    stream.on('error', () => { rl.close(); });
   });
 }
 
@@ -176,7 +193,8 @@ function buildWorkspaceTools(filesystemRoot: string) {
       inputSchema: z.object({
         path: z.string().default('.').describe('Path relative to the workspace root. Use "." for the root.'),
       }),
-      execute: async ({ path: relPath }) => {
+      execute: async ({ path: relPath }, { abortSignal }) => {
+        throwIfAborted(abortSignal);
         try {
           const resolved = resolveWithinRoot(filesystemRoot, relPath);
           const stat = fs.statSync(resolved);
@@ -202,7 +220,8 @@ function buildWorkspaceTools(filesystemRoot: string) {
       inputSchema: z.object({
         path: z.string().describe('Path relative to the workspace root.'),
       }),
-      execute: async ({ path: relPath }) => {
+      execute: async ({ path: relPath }, { abortSignal }) => {
+        throwIfAborted(abortSignal);
         try {
           const resolved = resolveWithinRoot(filesystemRoot, relPath);
           const stat = fs.statSync(resolved);
@@ -232,12 +251,14 @@ function buildWorkspaceTools(filesystemRoot: string) {
         query: z.string().describe('The literal substring to search for. Case-sensitive.'),
         path: z.string().default('.').describe('Sub-path to limit the search; defaults to "." (entire workspace).'),
       }),
-      execute: async ({ query, path: relPath }) => {
+      execute: async ({ query, path: relPath }, { abortSignal }) => {
+        throwIfAborted(abortSignal);
         try {
           const startResolved = resolveWithinRoot(filesystemRoot, relPath);
           const matches: Array<{ path: string; line: number; text: string }> = [];
 
           const walk = async (dir: string, stack: IgStack): Promise<boolean> => {
+            throwIfAborted(abortSignal);
             if (matches.length >= SEARCH_MAX_RESULTS) return true;
             let entries: fs.Dirent[];
             try { entries = await fs.promises.readdir(dir, { withFileTypes: true }); } catch { return false; }
@@ -253,6 +274,7 @@ function buildWorkspaceTools(filesystemRoot: string) {
             }
 
             for (const entry of entries) {
+              throwIfAborted(abortSignal);
               if (matches.length >= SEARCH_MAX_RESULTS) return true;
               const full = path.join(dir, entry.name);
               if (isIgnoredByStack(filesystemRoot, currentStack, full, entry.isDirectory())) continue;
@@ -261,7 +283,7 @@ function buildWorkspaceTools(filesystemRoot: string) {
               } else if (entry.isFile()) {
                 const fullStat = await fs.promises.stat(full).catch(() => null);
                 if (!fullStat || fullStat.size > SEARCH_FILE_MAX_BYTES) continue;
-                if (await scanFileForMatches(full, relPosix(filesystemRoot, full), query, matches)) return true;
+                if (await scanFileForMatches(full, relPosix(filesystemRoot, full), query, matches, abortSignal)) return true;
               }
             }
             return false;
@@ -276,6 +298,7 @@ function buildWorkspaceTools(filesystemRoot: string) {
             ...(matches.length >= SEARCH_MAX_RESULTS ? { truncated: true } : {}),
           };
         } catch (err) {
+          if ((err as Error).name === 'AbortError') throw err;
           return { status: 'error', message: (err as Error).message };
         }
       },
@@ -342,7 +365,8 @@ export function createTools(
       inputSchema: z.object({
         query: z.string().describe('The search term to match against document names.'),
       }),
-      execute: async ({ query }) => {
+      execute: async ({ query }, { abortSignal }) => {
+        throwIfAborted(abortSignal);
         const results = await db
           .select({ id: documents.id, name: documents.name })
           .from(documents)
@@ -368,7 +392,8 @@ export function createTools(
       inputSchema: z.object({
         document_id: z.string().describe('The UUID of the document to read.'),
       }),
-      execute: async ({ document_id }) => {
+      execute: async ({ document_id }, { abortSignal }) => {
+        throwIfAborted(abortSignal);
         const [doc] = await db
           .select()
           .from(documents)
@@ -393,7 +418,8 @@ export function createTools(
         document_id: z.string().describe('The UUID of the document to edit. Take it from the `id` attribute of the matching <attached_document id="..." name="..."> block in the user message.'),
         content: z.string().describe('The complete new markdown content for the document.'),
       }),
-      execute: async ({ document_id, content }) => {
+      execute: async ({ document_id, content }, { abortSignal }) => {
+        throwIfAborted(abortSignal);
         const [doc] = await db
           .select()
           .from(documents)
@@ -430,7 +456,8 @@ export function createTools(
         document_id: z.string().describe('The UUID of the document to rename.'),
         name: z.string().describe('The new name for the document (without file extension). Use a natural, human-readable title with normal spacing and capitalization (e.g. "Chuck Norris Tribute") — not kebab-case, snake_case, camelCase, or PascalCase.'),
       }),
-      execute: async ({ document_id, name: newName }) => {
+      execute: async ({ document_id, name: newName }, { abortSignal }) => {
+        throwIfAborted(abortSignal);
         const [doc] = await db
           .select()
           .from(documents)
@@ -479,7 +506,8 @@ export function createTools(
         name: z.string().describe('The name for the new document (without file extension). Use a natural, human-readable title with normal spacing and capitalization (e.g. "Chuck Norris Tribute", "Solar System Outline") — not kebab-case, snake_case, camelCase, or PascalCase.'),
         content: z.string().describe('The initial markdown content for the new document.'),
       }),
-      execute: async ({ name, content }) => {
+      execute: async ({ name, content }, { abortSignal }) => {
+        throwIfAborted(abortSignal);
         const createdBy = modelId || 'ai';
         const directory = modelId || 'user';
         const dirPath = `${projectPath}/documents/${directory}`;
@@ -539,7 +567,8 @@ export function createTools(
         size: z.string().optional().describe('The aspect ratio for the image (e.g. 1:1, 3:2, 2:3, 16:9).'),
         quality: z.string().optional().describe('The quality or resolution setting (e.g. low, medium, high for OpenAI; 1K, 2K, 4K for Gemini).'),
       }),
-      execute: async ({ prompt, name, model, size, quality }) => {
+      execute: async ({ prompt, name, model, size, quality }, { abortSignal }) => {
+        throwIfAborted(abortSignal);
         try {
           const isGemini = model.startsWith('gemini-');
           let imageModel;
@@ -558,7 +587,7 @@ export function createTools(
             imageModel = openai.image(model);
           }
 
-          const genOptions: Record<string, unknown> = { model: imageModel, prompt };
+          const genOptions: Record<string, unknown> = { model: imageModel, prompt, abortSignal };
           if (size) {
             if (isGemini) {
               // Gemini supports aspectRatio directly (e.g. '16:9', '3:2').
@@ -605,6 +634,7 @@ export function createTools(
             prompt,
           };
         } catch (err) {
+          if ((err as Error).name === 'AbortError') throw err;
           return {
             status: 'error',
             message: `Failed to generate image: ${(err as Error).message}`,
