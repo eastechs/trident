@@ -622,7 +622,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                     <PromptInputFooter>
                         <PromptInputTools>
                             {isModelLocked ? (
-                                <PromptInputButton disabled className="opacity-60 cursor-default">
+                                <PromptInputButton disabled className="text-xs opacity-60 cursor-default">
                                     {selectedModelData?.providerSlug && (
                                         <ModelSelectorLogo provider={selectedModelData.providerSlug} />
                                     )}
@@ -636,7 +636,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                                 open={modelSelectorOpen}
                             >
                                 <ModelSelectorTrigger asChild>
-                                    <PromptInputButton>
+                                    <PromptInputButton className="text-xs">
                                         {selectedModelData?.providerSlug && (
                                             <ModelSelectorLogo
                                                 provider={
