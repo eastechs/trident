@@ -98,11 +98,30 @@ router.post('/', async (req: ProjectRequest, res) => {
   const systemPrompt = loadInstructions();
 
   try {
-    const modelMessages = await convertToModelMessages(history, { tools });
+    const convertedMessages = await convertToModelMessages(history, { tools });
+
+    // Pass the system prompt as a message rather than the top-level `system`
+    // string so we can attach providerOptions to it. For Anthropic, marking
+    // it with cacheControl turns the (stable) system prompt into a prompt
+    // cache hit on every subsequent turn — ~10x cheaper on those tokens.
+    // Other providers ignore the cacheControl marker; OpenAI caches stable
+    // prefixes automatically and Gemini needs an explicit cachedContent
+    // reference (which we don't use).
+    const modelMessages = [
+      {
+        role: 'system' as const,
+        content: systemPrompt,
+        ...(provider === 'anthropic' && {
+          providerOptions: {
+            anthropic: { cacheControl: { type: 'ephemeral' as const } },
+          },
+        }),
+      },
+      ...convertedMessages,
+    ];
 
     const result = streamText({
       model,
-      system: systemPrompt,
       messages: modelMessages,
       tools,
       stopWhen: stepCountIs(25),

@@ -49,12 +49,14 @@ export function resolveModel(modelId: string): LanguageModel {
 }
 
 /**
- * Per-provider options for the DocumentCollaborator agent.
+ * Per-provider options applied to every chat call.
  *
- * Matches Laravel's DocumentCollaborator::providerOptions():
- *   - Anthropic: thinking (enabled, 10k budget tokens)
- *   - OpenAI:    reasoning (effort=high, summary=auto)
- *   - Gemini:    no options
+ *   - Anthropic: extended thinking with adaptive budget + summarized display.
+ *   - OpenAI:    high reasoning effort + auto reasoning summaries; truncation
+ *                'auto' so the Responses API drops oldest turns instead of
+ *                failing when the prompt nears the model's context limit.
+ *   - Gemini:    thinkingConfig 'high' with summaries, mirroring the other
+ *                providers' reasoning configuration.
  *
  * Applied by provider (not by model name prefix) so every OpenAI model
  * receives reasoning options, not just the ones starting with "o".
@@ -77,6 +79,18 @@ export function getProviderOptions(modelId: string): ProviderOptions {
       openai: {
         reasoningEffort: 'high',
         reasoningSummary: 'auto',
+        truncation: 'auto',
+      },
+    };
+  }
+
+  if (provider === 'gemini') {
+    return {
+      google: {
+        thinkingConfig: {
+          thinkingLevel: 'high',
+          includeThoughts: true,
+        },
       },
     };
   }
