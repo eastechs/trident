@@ -38,8 +38,11 @@ router.post('/', async (req: ProjectRequest, res) => {
     return;
   }
 
-  // Load document attachments if provided (only the requested IDs)
-  let systemSuffix = '';
+  // Attached documents are prepended to the last user message as text parts
+  // wrapped in <attached_document> delimiters. This persists naturally in
+  // message history (so future turns still see what the user attached) and
+  // works on every provider since text parts are universal — no file-part
+  // media-type juggling.
   if (document_ids?.length) {
     const attachedDocs = await db
       .select({ id: documents.id, name: documents.name, content: documents.content })
@@ -47,8 +50,21 @@ router.post('/', async (req: ProjectRequest, res) => {
       .where(and(eq(documents.projectId, projectId), inArray(documents.id, document_ids)));
 
     if (attachedDocs.length > 0) {
-      systemSuffix = '\n\n## Attached Documents\n\n' +
-        attachedDocs.map((d) => `### ${d.name}\n${d.content}`).join('\n\n');
+      let lastUserIndex = -1;
+      for (let i = history.length - 1; i >= 0; i--) {
+        if (history[i].role === 'user') { lastUserIndex = i; break; }
+      }
+      if (lastUserIndex >= 0) {
+        const lastUser = history[lastUserIndex];
+        const docParts = attachedDocs.map((d) => ({
+          type: 'text' as const,
+          text: `<attached_document name="${d.name}">\n${d.content ?? ''}\n</attached_document>`,
+        }));
+        history[lastUserIndex] = {
+          ...lastUser,
+          parts: [...docParts, ...lastUser.parts],
+        };
+      }
     }
   }
 
@@ -79,7 +95,7 @@ router.post('/', async (req: ProjectRequest, res) => {
   }
 
   const tools = WebSearch ? { ...baseTools, WebSearch } : baseTools;
-  const systemPrompt = loadInstructions() + systemSuffix;
+  const systemPrompt = loadInstructions();
 
   try {
     const modelMessages = await convertToModelMessages(history, { tools });
