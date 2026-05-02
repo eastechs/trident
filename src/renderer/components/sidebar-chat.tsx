@@ -631,7 +631,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                     <PromptInputFooter>
                         <PromptInputTools>
                             {isModelLocked ? (
-                                <PromptInputButton disabled className="text-xs opacity-60 cursor-default">
+                                <PromptInputButton disabled className="h-7 gap-1 px-2 text-xs opacity-60 cursor-default">
                                     {selectedModelData?.providerSlug && (
                                         <ModelSelectorLogo provider={selectedModelData.providerSlug} />
                                     )}
@@ -645,7 +645,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                                 open={modelSelectorOpen}
                             >
                                 <ModelSelectorTrigger asChild>
-                                    <PromptInputButton className="text-xs">
+                                    <PromptInputButton className="h-7 gap-1 px-2 text-xs">
                                         {selectedModelData?.providerSlug && (
                                             <ModelSelectorLogo
                                                 provider={
@@ -709,7 +709,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                             <Select value={effort} onValueChange={(v) => handleEffortChange(v as EffortLevel)}>
                                 <SelectTrigger
                                     size="sm"
-                                    className="h-7 w-auto gap-1 border-transparent bg-transparent px-2 text-xs font-medium text-muted-foreground shadow-none hover:bg-neutral-50 focus:ring-0 dark:hover:bg-neutral-800"
+                                    className="h-7 w-auto gap-1 border-transparent bg-transparent px-2 text-xs font-medium text-muted-foreground shadow-none hover:bg-neutral-50 focus:ring-0 dark:hover:bg-neutral-800 [&>svg]:hidden"
                                 >
                                     <SelectValue />
                                 </SelectTrigger>
@@ -728,7 +728,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                                     usage={contextUsage}
                                     modelId={model}
                                 >
-                                    <ContextTrigger />
+                                    <ContextTrigger className="h-7 gap-1 px-2 text-xs font-medium" />
                                     <ContextContent>
                                         <ContextContentHeader />
                                         <ContextContentBody>
