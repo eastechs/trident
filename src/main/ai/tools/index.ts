@@ -47,6 +47,7 @@ const SEARCH_MAX_RESULTS = 20;
 // a real .gitignore exists it takes over and these are not used.
 const DEFAULT_IGNORES = [
   'node_modules', 'dist', 'build', '.next', '__pycache__', '.cache', '.turbo',
+  '.DS_Store',
 ];
 
 function loadGitignore(root: string): Ignore {
