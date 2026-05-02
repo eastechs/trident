@@ -155,7 +155,35 @@ router.post('/', async (req: ProjectRequest, res) => {
   })();
 
   try {
-    const convertedMessages = await convertToModelMessages(history, { tools });
+    // Redact <attached_document> content from prior turns before sending to
+    // the model — only the most recent user message keeps the full content.
+    // The DB still holds the unredacted history (we pass `history` as
+    // originalMessages below), so reloads and the Edit tool's id targeting
+    // both still work. The agent can call ReadDocument(id) if it actually
+    // needs an older turn's content.
+    const lastUserIdx = (() => {
+      for (let i = history.length - 1; i >= 0; i--) {
+        if (history[i].role === 'user') return i;
+      }
+      return -1;
+    })();
+    const ATTACHED_DOC_TAG_RE = /<attached_document\b([^>]*)>[\s\S]*?<\/attached_document>/g;
+    const redactedHistory = history.map((msg, i) => {
+      if (i === lastUserIdx) return msg;
+      return {
+        ...msg,
+        parts: msg.parts.map((part) => {
+          if (part.type !== 'text') return part;
+          const replaced = part.text.replace(
+            ATTACHED_DOC_TAG_RE,
+            '<attached_document$1>[content omitted from earlier turn — call ReadDocument with the id above if you need it]</attached_document>',
+          );
+          return replaced === part.text ? part : { ...part, text: replaced };
+        }),
+      };
+    });
+
+    const convertedMessages = await convertToModelMessages(redactedHistory, { tools });
 
     // Pass the system prompt as a message rather than the top-level `system`
     // string so we can attach providerOptions to it. For Anthropic this marks
