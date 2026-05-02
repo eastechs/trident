@@ -4,6 +4,7 @@ import { eq, and, ilike } from 'drizzle-orm';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import ignore, { type Ignore } from 'ignore';
 import { getDb } from '../../database.js';
 import { documents, images } from '../../db/schema.js';
 import { getApiKey } from '../../settings.js';
@@ -42,9 +43,30 @@ function aspectFromSize(size: string): `${number}:${number}` {
 const READ_FILE_MAX_BYTES = 100 * 1024;
 const SEARCH_FILE_MAX_BYTES = 512 * 1024;
 const SEARCH_MAX_RESULTS = 20;
-const SKIP_DIRS = new Set([
-  'node_modules', '.git', 'dist', 'build', '.next', '__pycache__', '.cache', '.turbo',
-]);
+// Sensible defaults applied only when the workspace has no .gitignore. Once
+// a real .gitignore exists it takes over and these are not used.
+const DEFAULT_IGNORES = [
+  'node_modules', 'dist', 'build', '.next', '__pycache__', '.cache', '.turbo',
+];
+
+function loadGitignore(root: string): Ignore {
+  // Layer order matters: defaults first, then the user's .gitignore so that
+  // any negations (e.g. `!node_modules/some-pkg/`) in the project's gitignore
+  // can re-include paths that our defaults would otherwise block.
+  const ig = ignore().add('.git').add(DEFAULT_IGNORES);
+  try {
+    const content = fs.readFileSync(path.join(root, '.gitignore'), 'utf-8');
+    ig.add(content);
+  } catch {
+    // No .gitignore — defaults already applied above.
+  }
+  return ig;
+}
+
+// gitignore semantics use POSIX-style paths regardless of OS.
+function relPosix(root: string, full: string): string {
+  return path.relative(root, full).split(path.sep).join('/');
+}
 
 function resolveWithinRoot(root: string, relative: string): string {
   const realRoot = fs.realpathSync(root);
@@ -64,9 +86,13 @@ function resolveWithinRoot(root: string, relative: string): string {
 }
 
 function buildWorkspaceTools(filesystemRoot: string) {
+  // Read .gitignore once per createTools() call. Each new chat request
+  // rebuilds tools, so updates to .gitignore are picked up on the next turn.
+  const ig = loadGitignore(filesystemRoot);
+
   return {
     ListDirectory: tool({
-      description: 'List the entries (files and directories) inside a directory in the local workspace. Hidden entries (names starting with ".") are skipped. Path is relative to the workspace root; use "." for the root itself.',
+      description: 'List the entries (files and directories) inside a directory in the local workspace. Entries matched by .gitignore are skipped (or a sensible default list when no .gitignore exists). Path is relative to the workspace root; use "." for the root.',
       inputSchema: z.object({
         path: z.string().default('.').describe('Path relative to the workspace root. Use "." for the root.'),
       }),
@@ -78,7 +104,12 @@ function buildWorkspaceTools(filesystemRoot: string) {
             return { status: 'error', message: `Path "${relPath}" is not a directory.` };
           }
           const entries = fs.readdirSync(resolved, { withFileTypes: true })
-            .filter((e) => !e.name.startsWith('.'))
+            .filter((e) => {
+              const rel = relPosix(filesystemRoot, path.join(resolved, e.name));
+              // gitignore needs a trailing slash for directory-only patterns
+              // to match correctly on a directory's own name.
+              return !ig.ignores(e.isDirectory() ? `${rel}/` : rel);
+            })
             .map((e) => ({
               name: e.name,
               type: e.isDirectory() ? 'directory' : (e.isFile() ? 'file' : 'other'),
@@ -120,7 +151,7 @@ function buildWorkspaceTools(filesystemRoot: string) {
     }),
 
     SearchFiles: tool({
-      description: 'Search for a literal substring across files in the local workspace. Case-sensitive. Returns up to 20 matches. Skips hidden entries and heavy directories like node_modules / .git / dist / build. Path is relative to the workspace root; defaults to the entire workspace.',
+      description: 'Search for a literal substring across files in the local workspace. Case-sensitive. Returns up to 20 matches. Honors .gitignore (or a sensible default skip list when no .gitignore exists). Path is relative to the workspace root; defaults to the entire workspace.',
       inputSchema: z.object({
         query: z.string().describe('The literal substring to search for. Case-sensitive.'),
         path: z.string().default('.').describe('Sub-path to limit the search; defaults to "." (entire workspace).'),
@@ -136,9 +167,9 @@ function buildWorkspaceTools(filesystemRoot: string) {
             try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
             for (const entry of entries) {
               if (matches.length >= SEARCH_MAX_RESULTS) return;
-              if (entry.name.startsWith('.')) continue;
-              if (entry.isDirectory() && SKIP_DIRS.has(entry.name)) continue;
               const full = path.join(dir, entry.name);
+              const rel = relPosix(filesystemRoot, full);
+              if (ig.ignores(entry.isDirectory() ? `${rel}/` : rel)) continue;
               if (entry.isDirectory()) {
                 walk(full);
               } else if (entry.isFile()) {
@@ -151,7 +182,7 @@ function buildWorkspaceTools(filesystemRoot: string) {
                 for (let i = 0; i < lines.length; i++) {
                   if (lines[i].includes(query)) {
                     matches.push({
-                      path: path.relative(filesystemRoot, full),
+                      path: rel,
                       line: i + 1,
                       text: lines[i].trim().slice(0, 200),
                     });
