@@ -10,6 +10,8 @@ type ConversationRequest = Request<{ projectId: string; conversationId: string }
 
 type ConversationRow = typeof conversations.$inferSelect;
 
+const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'max']);
+
 function serializeConversation(
   c: ConversationRow,
   messageCount = 0,
@@ -20,6 +22,7 @@ function serializeConversation(
     title: c.title,
     side: c.side,
     model: c.model,
+    effort: c.effort,
     created_at: c.createdAt,
     updated_at: c.updatedAt,
     message_count: messageCount,
@@ -69,12 +72,19 @@ router.post('/', async (req: ProjectRequest, res) => {
 
 router.patch('/:conversationId', async (req: ConversationRequest, res) => {
   const db = getDb();
-  const { title, side, model } = req.body;
+  const { title, side, model, effort } = req.body;
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (title !== undefined) updates.title = title;
   if (side !== undefined) updates.side = side;
   if (model !== undefined) updates.model = model;
+  if (effort !== undefined) {
+    if (!VALID_EFFORTS.has(effort)) {
+      res.status(422).json({ error: `effort must be one of: ${Array.from(VALID_EFFORTS).join(', ')}` });
+      return;
+    }
+    updates.effort = effort;
+  }
 
   const [updated] = await db
     .update(conversations)

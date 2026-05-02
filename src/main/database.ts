@@ -71,9 +71,13 @@ async function runMigrations() {
       title TEXT NOT NULL DEFAULT 'New Chat',
       side TEXT,
       model TEXT,
+      effort TEXT NOT NULL DEFAULT 'medium',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Backfill the effort column on existing databases.
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS effort TEXT NOT NULL DEFAULT 'medium';
 
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,

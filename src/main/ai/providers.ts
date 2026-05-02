@@ -3,7 +3,10 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
-import { getApiKey, getModelEffort, type EffortLevel } from '../settings.js';
+import { getApiKey } from '../settings.js';
+
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
+export const DEFAULT_EFFORT: EffortLevel = 'medium';
 
 export type ProviderName = 'anthropic' | 'openai' | 'gemini';
 
@@ -67,8 +70,8 @@ function effortToGemini(level: EffortLevel): 'low' | 'medium' | 'high' {
 }
 
 /**
- * Per-provider options applied to every chat call. The reasoning dial is
- * picked up per model from settings (defaults to 'high' if unset).
+ * Per-provider options applied to every chat call. Effort comes from the
+ * conversation (sticky once dialed; defaults to 'medium' on a new chat).
  *
  *   - Anthropic: extended thinking with adaptive budget + summarized display;
  *                contextManagement.clear_tool_uses_20250919 drops old tool-use
@@ -80,14 +83,14 @@ function effortToGemini(level: EffortLevel): 'low' | 'medium' | 'high' {
  *                (max) for stickier auto-caching; promptCacheKey scoped per
  *                project so requests in the same project route to the same
  *                cache instance.
- *   - Gemini:    thinkingConfig with summaries, level dialed per model.
+ *   - Gemini:    thinkingConfig with summaries, level dialed per conversation.
  */
 export function getProviderOptions(
   modelId: string,
-  context?: { projectId?: string },
+  context?: { projectId?: string; effort?: EffortLevel },
 ): ProviderOptions {
   const provider = resolveProviderName(modelId);
-  const effort = getModelEffort(modelId);
+  const effort = context?.effort ?? DEFAULT_EFFORT;
 
   if (provider === 'anthropic') {
     return {

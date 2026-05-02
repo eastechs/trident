@@ -25,9 +25,13 @@ router.post('/', async (req: ProjectRequest, res) => {
     return;
   }
 
-  // Load project
+  // Load project + conversation (we need conversation.effort).
   const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
   if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+
+  const [conversation] = await db.select().from(conversations).where(eq(conversations.id, conversation_id));
+  if (!conversation) { res.status(404).json({ error: 'Conversation not found' }); return; }
+  const effort = conversation.effort as 'low' | 'medium' | 'high' | 'max';
 
   // The client (useChat) sends the full UIMessage[] including the new user message.
   // Use that directly; the DB history would miss the new message.
@@ -155,7 +159,7 @@ router.post('/', async (req: ProjectRequest, res) => {
       messages: modelMessages,
       tools,
       stopWhen: stepCountIs(25),
-      providerOptions: getProviderOptions(model_id, { projectId }),
+      providerOptions: getProviderOptions(model_id, { projectId, effort }),
     });
 
     // Pipe the UI message stream directly to the Express response.
@@ -166,6 +170,25 @@ router.post('/', async (req: ProjectRequest, res) => {
       sendReasoning: true,
       originalMessages: history,
       generateMessageId: generateId,
+      // Attach token usage to assistant messages on finish so the client can
+      // render the usage widget. Without this the AI SDK doesn't ship usage
+      // data through the UI stream and `metadata.usage` stays undefined.
+      messageMetadata: ({ part }) => {
+        if (part.type === 'finish') {
+          const u = part.totalUsage;
+          return {
+            model: model_id,
+            usage: {
+              prompt_tokens: u.inputTokens,
+              completion_tokens: u.outputTokens,
+              cache_read_input_tokens: u.inputTokenDetails?.cacheReadTokens,
+              cache_write_input_tokens: u.inputTokenDetails?.cacheWriteTokens,
+              reasoning_tokens: u.outputTokenDetails?.reasoningTokens,
+            },
+          };
+        }
+        return undefined;
+      },
       onFinish: async ({ messages: allMessages, responseMessage }) => {
         try {
           const [maxOrder] = await db
@@ -187,15 +210,20 @@ router.post('/', async (req: ProjectRequest, res) => {
                 conversationId: conversation_id,
                 role: msg.role,
                 parts: msg.parts as unknown as Record<string, unknown>,
-                metadata: { model: model_id },
+                // Assistant messages have usage attached via messageMetadata.
+                // User messages don't, so fall back to recording the model.
+                metadata: (msg.metadata as Record<string, unknown> | undefined) ?? { model: model_id },
                 orderIndex: nextIndex++,
               });
             } else if (msg.id === responseMessage.id) {
               // The response message may extend an existing assistant message
-              // (isContinuation). Update parts to the latest state.
+              // (isContinuation). Update parts + metadata to the latest state.
               await db
                 .update(messages)
-                .set({ parts: msg.parts as unknown as Record<string, unknown> })
+                .set({
+                  parts: msg.parts as unknown as Record<string, unknown>,
+                  metadata: (msg.metadata as Record<string, unknown> | undefined) ?? { model: model_id },
+                })
                 .where(eq(messages.id, msg.id));
             }
           }

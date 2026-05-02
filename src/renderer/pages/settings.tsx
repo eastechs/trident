@@ -4,7 +4,6 @@ import { api_get, api_post, api_put, api_patch, api_delete, isApiError } from '@
 import {
     BellIcon,
     BotIcon,
-    BrainIcon,
     CheckIcon,
     EyeIcon,
     EyeOffIcon,
@@ -21,35 +20,12 @@ import { MilkdownEditorWrapper } from '@/components/editor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import appIcon from '../../images/app-icon.png';
-
-type EffortLevel = 'low' | 'medium' | 'high' | 'max';
-const DEFAULT_EFFORT: EffortLevel = 'high';
-const EFFORT_OPTIONS: Array<{ value: EffortLevel; label: string }> = [
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
-    { value: 'max', label: 'Maximum' },
-];
-
-interface ModelInfo {
-    id: string;
-    provider: 'Anthropic' | 'OpenAI' | 'Gemini';
-    providerSlug: 'anthropic' | 'openai' | 'google';
-    name: string;
-}
 
 export default function Settings() {
     useDocumentTitle('Settings');
@@ -76,13 +52,9 @@ export default function Settings() {
     // Side menu state — initial section can come from a ?section= query param
     // (e.g. /settings?section=providers from the missing-keys alert).
     const [searchParams] = useSearchParams();
-    const initialSection = (['preferences', 'providers', 'models', 'agents'] as const)
+    const initialSection = (['preferences', 'providers', 'agents'] as const)
         .find((s) => s === searchParams.get('section')) ?? 'preferences';
-    const [activeSection, setActiveSection] = useState<'preferences' | 'providers' | 'models' | 'agents'>(initialSection);
-
-    // Models section state
-    const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
-    const [modelEfforts, setModelEfforts] = useState<Record<string, EffortLevel>>({});
+    const [activeSection, setActiveSection] = useState<'preferences' | 'providers' | 'agents'>(initialSection);
 
     // Agent instructions state
     const [selectedAgent, setSelectedAgent] = useState<'collaborator'>('collaborator');
@@ -124,44 +96,6 @@ export default function Settings() {
             .catch(() => {});
     }, []);
 
-    // Fetch available models + saved effort levels for the Models section.
-    // Both are needed at once so each row knows its current setting.
-    useEffect(() => {
-        if (activeSection !== 'models') return;
-        Promise.all([
-            api_get<ModelInfo[]>('/api/settings/models').catch(() => [] as ModelInfo[]),
-            api_get<Record<string, EffortLevel>>('/api/settings/model-effort').catch(() => ({} as Record<string, EffortLevel>)),
-        ]).then(([models, efforts]) => {
-            setAvailableModels(models);
-            setModelEfforts(efforts);
-        });
-    }, [activeSection]);
-
-    const handleEffortChange = useCallback(async (modelId: string, level: EffortLevel) => {
-        // Optimistic update — revert if the request fails.
-        const prev = modelEfforts[modelId];
-        setModelEfforts((current) => ({ ...current, [modelId]: level }));
-        try {
-            if (level === DEFAULT_EFFORT) {
-                await api_delete(`/api/settings/model-effort/${encodeURIComponent(modelId)}`);
-                setModelEfforts((current) => {
-                    const next = { ...current };
-                    delete next[modelId];
-                    return next;
-                });
-            } else {
-                await api_put('/api/settings/model-effort', { modelId, level });
-            }
-        } catch (err) {
-            console.error('Failed to update model effort:', err);
-            setModelEfforts((current) => {
-                const next = { ...current };
-                if (prev === undefined) delete next[modelId];
-                else next[modelId] = prev;
-                return next;
-            });
-        }
-    }, [modelEfforts]);
 
     const handleSaveKeys = async () => {
         if (!anthropicKey.trim() && !openaiKey.trim() && !geminiKey.trim()) {
@@ -386,17 +320,6 @@ export default function Settings() {
                         >
                             <KeyRoundIcon className="size-4" />
                             Providers
-                        </button>
-                        <button
-                            onClick={() => setActiveSection('models')}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                                activeSection === 'models'
-                                    ? 'border-l-2 border-primary bg-white font-medium text-foreground dark:bg-neutral-900'
-                                    : 'border-l-2 border-transparent text-muted-foreground hover:text-foreground'
-                            }`}
-                        >
-                            <BrainIcon className="size-4" />
-                            Models
                         </button>
                         <button
                             onClick={() => setActiveSection('agents')}
@@ -748,58 +671,6 @@ export default function Settings() {
                                                 </span>
                                             )}
                                         </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Models: Per-model reasoning effort */}
-                        {activeSection === 'models' && (
-                            <div className="space-y-12">
-                                <div className="grid grid-cols-1 gap-x-8 gap-y-10 border-b border-border pb-12 md:grid-cols-3">
-                                    <div>
-                                        <h2 className="text-base/7 font-semibold text-foreground">Reasoning Effort</h2>
-                                        <p className="mt-1 text-sm/6 text-muted-foreground">
-                                            Set how hard each model thinks before responding. Higher effort uses more tokens but produces better answers on complex tasks. Default is High.
-                                        </p>
-                                    </div>
-
-                                    <div className="max-w-2xl space-y-3 md:col-span-2">
-                                        {availableModels.length === 0 ? (
-                                            <p className="text-sm text-muted-foreground">
-                                                No models available. Configure an API key in Providers to see models here.
-                                            </p>
-                                        ) : (
-                                            availableModels.map((model) => (
-                                                <div
-                                                    key={model.id}
-                                                    className="flex items-center justify-between gap-4 rounded-md border border-border bg-white p-3 dark:bg-neutral-900"
-                                                >
-                                                    <div className="flex min-w-0 items-center gap-3">
-                                                        <ModelSelectorLogo provider={model.providerSlug} className="size-5 shrink-0" />
-                                                        <div className="min-w-0">
-                                                            <div className="truncate text-sm font-medium text-foreground">{model.name}</div>
-                                                            <div className="truncate text-xs text-muted-foreground">{model.id}</div>
-                                                        </div>
-                                                    </div>
-                                                    <Select
-                                                        value={modelEfforts[model.id] ?? DEFAULT_EFFORT}
-                                                        onValueChange={(v) => handleEffortChange(model.id, v as EffortLevel)}
-                                                    >
-                                                        <SelectTrigger className="w-36 shrink-0">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {EFFORT_OPTIONS.map((opt) => (
-                                                                <SelectItem key={opt.value} value={opt.value}>
-                                                                    {opt.label}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            ))
-                                        )}
                                     </div>
                                 </div>
                             </div>

@@ -23,11 +23,14 @@ export interface ImageData {
     created_by: string | null;
 }
 
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
+
 export interface ConversationData {
     id: string;
     title: string;
     side: string | null;
     model: string | null;
+    effort: EffortLevel;
     updated_at: string;
     message_count: number;
 }

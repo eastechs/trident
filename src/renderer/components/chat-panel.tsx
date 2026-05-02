@@ -246,6 +246,8 @@ export function ChatPanel({
                             documents={documents}
                             defaultModel={defaultModel}
                             lockedModel={activeConversation?.model ?? null}
+                            initialEffort={activeConversation?.effort ?? 'medium'}
+                            onEffortChange={(effort) => onConversationUpdated(activeConversationId, { effort })}
                             side={side}
                             initialPrompt={activeConversationId === autoCreatedId ? initialPrompt : undefined}
                             onDocumentEdited={onDocumentEdited}

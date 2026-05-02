@@ -60,12 +60,26 @@ import {
 } from '@/components/ai-elements/reasoning';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { DocumentData, ModelInfo } from '@/types/api';
+import type { DocumentData, EffortLevel, ModelInfo } from '@/types/api';
+
+const EFFORT_OPTIONS: Array<{ value: EffortLevel; label: string }> = [
+    { value: 'low', label: 'Low' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'high', label: 'High' },
+    { value: 'max', label: 'Max' },
+];
 
 function toolLabel(toolName: string): string {
     return toolName.replace(/([A-Z])/g, ' $1').trim();
@@ -114,6 +128,8 @@ interface SidebarChatProps {
     documents: DocumentData[];
     defaultModel?: string;
     lockedModel?: string | null;
+    initialEffort?: EffortLevel;
+    onEffortChange?: (effort: EffortLevel) => void;
     side?: 'left' | 'right';
     conversationVersion?: number;
     initialPrompt?: string;
@@ -127,7 +143,7 @@ interface SidebarChatProps {
     onStreamingComplete?: () => void;
 }
 
-export function SidebarChat({ projectId, conversationId, documents, defaultModel, lockedModel, side, conversationVersion = 0, initialPrompt, onDocumentEdited, onDocumentCreated, onImageCreated, onStreamingComplete }: SidebarChatProps) {
+export function SidebarChat({ projectId, conversationId, documents, defaultModel, lockedModel, initialEffort = 'medium', onEffortChange, side, conversationVersion = 0, initialPrompt, onDocumentEdited, onDocumentCreated, onImageCreated, onStreamingComplete }: SidebarChatProps) {
     const [availableModels, setAvailableModels] = useState<ModelInfo[]>(FALLBACK_MODELS);
     const [modelsLoaded, setModelsLoaded] = useState(false);
 
@@ -164,8 +180,29 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
     const modelRef = useRef(model);
     modelRef.current = model;
     const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
+    const [effort, setEffort] = useState<EffortLevel>(initialEffort);
     const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(new Set());
     const [attachmentSelectorOpen, setAttachmentSelectorOpen] = useState(false);
+
+    // Sync effort if the parent's initialEffort changes (e.g. switching
+    // conversations within the same panel). Only re-syncs when conversationId
+    // changes — local edits still win during a conversation.
+    useEffect(() => {
+        setEffort(initialEffort);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [conversationId]);
+
+    const handleEffortChange = useCallback((next: EffortLevel) => {
+        const prev = effort;
+        setEffort(next);
+        onEffortChange?.(next);
+        api_patch(`/api/projects/${projectId}/conversations/${conversationId}`, { effort: next })
+            .catch((err) => {
+                console.error('Failed to update conversation effort:', err);
+                setEffort(prev);
+                onEffortChange?.(prev);
+            });
+    }, [effort, projectId, conversationId, onEffortChange]);
     const answeredQuestionsRef = useRef<Map<string, Array<{ question: string; answer: string }>>>(new Map());
     const [conversationUsage, setConversationUsage] = useState<UsageData>({});
 
@@ -660,6 +697,21 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                                 </ModelSelectorContent>
                             </ModelSelector>
                             )}
+                            <Select value={effort} onValueChange={(v) => handleEffortChange(v as EffortLevel)}>
+                                <SelectTrigger
+                                    size="sm"
+                                    className="h-7 w-auto gap-1 border-transparent bg-transparent px-2 text-xs font-medium text-muted-foreground shadow-none hover:bg-neutral-50 focus:ring-0 dark:hover:bg-neutral-800"
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent align="start">
+                                    {EFFORT_OPTIONS.map((opt) => (
+                                        <SelectItem key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                             {usedTokens > 0 && (
                                 <Context
                                     maxTokens={maxTokens}

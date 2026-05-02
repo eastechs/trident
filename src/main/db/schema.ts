@@ -56,6 +56,10 @@ export const conversations = pgTable('conversations', {
   title: text('title').default('New Chat').notNull(),
   side: text('side'), // 'left' | 'right'
   model: text('model'), // model ID used in this conversation
+  // Reasoning effort for this conversation. Sticky once changed: default
+  // 'medium' on creation, the user can dial it via the prompt input dropdown
+  // and the new value persists for follow-up messages until they change it.
+  effort: text('effort').notNull().default('medium'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
