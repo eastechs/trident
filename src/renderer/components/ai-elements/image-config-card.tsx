@@ -73,15 +73,34 @@ const imageModels: ImageModel[] = [
     },
 ];
 
-interface ImageConfigCardProps {
-    onSubmit: (answers: Array<{ question: string; answer: string }>) => void;
-    submitted?: boolean;
+export interface ImageGenerationResult {
+    image_id: string;
+    image_name: string;
+    mime_type: string;
+    prompt: string;
 }
 
-export function ImageConfigCard({ onSubmit, submitted }: ImageConfigCardProps) {
+interface ImageConfigCardProps {
+    projectId: string;
+    prompt: string;
+    name: string;
+    onGenerated: (result: ImageGenerationResult) => void;
+    onCancel: () => void;
+}
+
+export function ImageConfigCard({
+    projectId,
+    prompt,
+    name,
+    onGenerated,
+    onCancel,
+}: ImageConfigCardProps) {
     const [selectedModelId, setSelectedModelId] = useState<string>(imageModels[0].id);
     const [selectedDimension, setSelectedDimension] = useState<string>('1:1');
     const [selectedQuality, setSelectedQuality] = useState<string>(imageModels[0].qualityOptions[0].value);
+    const [editableName, setEditableName] = useState<string>(name);
+    const [generating, setGenerating] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const selectedModel = imageModels.find((m) => m.id === selectedModelId) ?? imageModels[0];
 
@@ -96,24 +115,68 @@ export function ImageConfigCard({ onSubmit, submitted }: ImageConfigCardProps) {
         }
     }, [selectedDimension]);
 
-    const handleSubmit = useCallback(() => {
-        onSubmit([
-            { question: 'Image Model', answer: selectedModelId },
-            { question: 'Dimensions', answer: selectedDimension },
-            { question: selectedModel.qualityLabel, answer: selectedQuality },
-        ]);
-    }, [onSubmit, selectedModelId, selectedDimension, selectedQuality, selectedModel]);
+    const handleSubmit = useCallback(async () => {
+        const trimmedName = editableName.trim() || name;
+        setGenerating(true);
+        setError(null);
 
-    if (submitted) {
-        return null;
-    }
+        try {
+            const response = await fetch(`/api/projects/${projectId}/images/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt,
+                    name: trimmedName,
+                    model: selectedModelId,
+                    size: selectedDimension,
+                    quality: selectedQuality,
+                }),
+            });
+
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                const message = (body && typeof body.error === 'string')
+                    ? body.error
+                    : `Generation failed (${response.status})`;
+                setError(message);
+                setGenerating(false);
+                return;
+            }
+
+            const result = (await response.json()) as ImageGenerationResult;
+            onGenerated(result);
+            // Don't reset generating — the card unmounts on the next state update.
+        } catch (err) {
+            const message = (err as Error).message || 'Network error';
+            setError(message);
+            setGenerating(false);
+        }
+    }, [editableName, name, prompt, projectId, selectedModelId, selectedDimension, selectedQuality, onGenerated]);
 
     return (
         <div className="not-prose w-full rounded-xl border border-border bg-card p-5">
-            <div className="mb-4">
+            <div className="mb-4 flex items-center justify-between">
                 <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                     Image Generation
                 </span>
+            </div>
+
+            {/* Prompt (read-only) */}
+            <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Prompt</label>
+                <p className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-foreground">{prompt}</p>
+            </div>
+
+            {/* Name (editable) */}
+            <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Name</label>
+                <input
+                    type="text"
+                    value={editableName}
+                    onChange={(e) => setEditableName(e.target.value)}
+                    disabled={generating}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20 disabled:opacity-60"
+                />
             </div>
 
             {/* Model Selector */}
@@ -127,8 +190,9 @@ export function ImageConfigCard({ onSubmit, submitted }: ImageConfigCardProps) {
                                 key={model.id}
                                 type="button"
                                 onClick={() => handleModelChange(model.id)}
+                                disabled={generating}
                                 className={cn(
-                                    'flex items-center gap-3 rounded-lg border p-3 text-left transition-colors',
+                                    'flex items-center gap-3 rounded-lg border p-3 text-left transition-colors disabled:opacity-60',
                                     isSelected
                                         ? 'border-green-500 bg-green-500/5 dark:border-green-400 dark:bg-green-400/5'
                                         : 'border-border hover:border-muted-foreground/30 hover:bg-accent/50',
@@ -171,8 +235,9 @@ export function ImageConfigCard({ onSubmit, submitted }: ImageConfigCardProps) {
                             key={dim}
                             type="button"
                             onClick={() => setSelectedDimension(dim)}
+                            disabled={generating}
                             className={cn(
-                                'rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
+                                'rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60',
                                 dim === selectedDimension
                                     ? 'border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-400/10 dark:text-green-300'
                                     : 'border-border text-muted-foreground hover:border-muted-foreground/30 hover:bg-accent/50',
@@ -195,8 +260,9 @@ export function ImageConfigCard({ onSubmit, submitted }: ImageConfigCardProps) {
                                 key={opt.value}
                                 type="button"
                                 onClick={() => setSelectedQuality(opt.value)}
+                                disabled={generating}
                                 className={cn(
-                                    'rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
+                                    'rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60',
                                     isSelected
                                         ? 'border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-400/10 dark:text-green-300'
                                         : 'border-border text-muted-foreground hover:border-muted-foreground/30 hover:bg-accent/50',
@@ -209,14 +275,29 @@ export function ImageConfigCard({ onSubmit, submitted }: ImageConfigCardProps) {
                 </div>
             </div>
 
-            {/* Submit */}
-            <div className="flex justify-end">
+            {error && (
+                <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                    {error}
+                </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2">
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    disabled={generating}
+                    className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent disabled:opacity-60"
+                >
+                    Cancel
+                </button>
                 <button
                     type="button"
                     onClick={handleSubmit}
-                    className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                    disabled={generating}
+                    className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
                 >
-                    Generate
+                    {generating ? 'Generating…' : 'Generate'}
                 </button>
             </div>
         </div>

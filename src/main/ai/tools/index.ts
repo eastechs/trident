@@ -1,4 +1,4 @@
-import { tool, experimental_generateImage as generateImageFn } from 'ai';
+import { tool } from 'ai';
 import { z } from 'zod';
 import { eq, and, ilike } from 'drizzle-orm';
 import fs from 'fs';
@@ -7,31 +7,7 @@ import path from 'path';
 import readline from 'readline';
 import ignore, { type Ignore } from 'ignore';
 import { getDb } from '../../database.js';
-import { documents, images } from '../../db/schema.js';
-import { getApiKey } from '../../settings.js';
-
-// OpenAI image models (gpt-image-1, gpt-image-1.5) accept size in "WxH" format
-// and only support specific resolutions. Map common aspect ratios to those.
-function sizeFromAspect(aspect: string): `${number}x${number}` {
-  switch (aspect) {
-    case '1:1': return '1024x1024';
-    case '3:2': return '1536x1024';
-    case '2:3': return '1024x1536';
-    case '16:9': return '1536x1024';
-    case '9:16': return '1024x1536';
-    default: return '1024x1024';
-  }
-}
-
-// Reverse lookup for Gemini where we've been given a "WxH" string.
-function aspectFromSize(size: string): `${number}:${number}` {
-  const [w, h] = size.split('x').map(Number);
-  if (!w || !h) return '1:1';
-  // Return a simple form; Gemini accepts e.g. "16:9", "3:2", etc.
-  const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
-  const d = gcd(w, h);
-  return `${w / d}:${h / d}` as `${number}:${number}`;
-}
+import { documents } from '../../db/schema.js';
 
 // ─── Workspace tools ─────────────────────────────────────────
 //
@@ -309,8 +285,8 @@ function buildWorkspaceTools(filesystemRoot: string) {
 /**
  * Creates all tools for the DocumentCollaborator agent, scoped to a project.
  *
- * Always-present (8): AskQuestions, ConfigureImageGeneration, SearchDocuments,
- *   ReadDocument, EditDocument, RenameDocument, CreateDocument, GenerateImage
+ * Always-present (7): AskQuestions, SearchDocuments, ReadDocument,
+ *   EditDocument, RenameDocument, CreateDocument, GenerateImage
  *
  * Workspace tools (3, only when filesystemRoot is set): ListDirectory,
  *   ReadFile, SearchFiles — scoped to the project's local working directory.
@@ -347,16 +323,6 @@ export function createTools(
         status: 'pending',
         message: 'Questions have been presented to the user. STOP here and wait for their answers before continuing.',
         questions,
-      }),
-    }),
-
-    ConfigureImageGeneration: tool({
-      description: 'Present image generation configuration options to the user before calling GenerateImage. The user will select their preferred model, aspect ratio, and quality. Use this exactly once before any image generation task. After the user responds, call GenerateImage with their selections.',
-      inputSchema: z.object({}),
-      execute: async () => ({
-        status: 'pending',
-        type: 'image_config',
-        message: 'Image generation options presented to the user. Wait for their selections.',
       }),
     }),
 
@@ -558,89 +524,32 @@ export function createTools(
       },
     }),
 
+    // Client-side tool. The agent provides the prompt and name; the chat UI
+    // renders an image-generation card where the user picks model, aspect
+    // ratio, and quality. The card POSTs to /images/generate (which actually
+    // runs the provider call) and then fulfills this tool call via
+    // addToolOutput, so the agent never has to re-emit the user's choices.
+    // No execute => the AI SDK pauses the stream after this call's input is
+    // emitted and waits for the client to provide an output.
     GenerateImage: tool({
-      description: 'Generate an image using an AI image model and save it to the project. Use this after the user has selected their preferred image model and settings via ConfigureImageGeneration.',
+      description: 'Request an image to be generated and saved to the project. The chat UI will render a card for the user to choose model, aspect ratio, and quality, then submit the generation request. Provide only the prompt and a descriptive name.',
       inputSchema: z.object({
         prompt: z.string().describe('The image generation prompt describing what to create.'),
         name: z.string().describe('A name for the image (without file extension). Use a natural, descriptive, human-readable title with normal spacing and capitalization — not kebab-case, snake_case, camelCase, or PascalCase.'),
-        model: z.string().describe('The image model ID to use (e.g. gpt-image-1.5, gemini-3.1-flash-image-preview).'),
-        size: z.string().optional().describe('The aspect ratio for the image (e.g. 1:1, 3:2, 2:3, 16:9).'),
-        quality: z.string().optional().describe('The quality or resolution setting (e.g. low, medium, high for OpenAI; 1K, 2K, 4K for Gemini).'),
       }),
-      execute: async ({ prompt, name, model, size, quality }, { abortSignal }) => {
-        throwIfAborted(abortSignal);
-        try {
-          const isGemini = model.startsWith('gemini-');
-          let imageModel;
-
-          if (isGemini) {
-            const key = getApiKey('gemini');
-            if (!key) return { status: 'error', message: 'Gemini API key not configured' };
-            const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
-            const google = createGoogleGenerativeAI({ apiKey: key });
-            imageModel = google.image(model);
-          } else {
-            const key = getApiKey('openai');
-            if (!key) return { status: 'error', message: 'OpenAI API key not configured' };
-            const { createOpenAI } = await import('@ai-sdk/openai');
-            const openai = createOpenAI({ apiKey: key });
-            imageModel = openai.image(model);
-          }
-
-          const genOptions: Record<string, unknown> = { model: imageModel, prompt, abortSignal };
-          if (size) {
-            if (isGemini) {
-              // Gemini supports aspectRatio directly (e.g. '16:9', '3:2').
-              genOptions.aspectRatio = size.includes(':') ? size : aspectFromSize(size);
-            } else {
-              // OpenAI image models (gpt-image-1/1.5) need size as WxH.
-              // Map aspect ratios to the model's supported resolutions.
-              genOptions.size = size.includes(':') ? sizeFromAspect(size) : size;
-            }
-          }
-          if (quality) {
-            genOptions.providerOptions = isGemini
-              ? { google: { quality } }
-              : { openai: { quality } };
-          }
-
-          const result = await generateImageFn(genOptions as Parameters<typeof generateImageFn>[0]);
-          const generatedImage = result.image;
-          const mime = generatedImage.mediaType ?? 'image/png';
-          const extension = mime === 'image/jpeg' ? 'jpg' : mime === 'image/webp' ? 'webp' : 'png';
-
-          const dirPath = `${projectPath}/images`;
-          const imagePath = `${dirPath}/${name}.${extension}`;
-          const fullDir = path.join(os.homedir(), dirPath);
-          const fullPath = path.join(os.homedir(), imagePath);
-
-          fs.mkdirSync(fullDir, { recursive: true });
-          fs.writeFileSync(fullPath, generatedImage.uint8Array);
-
-          const [image] = await db.insert(images).values({
-            projectId,
-            name,
-            path: imagePath,
-            mimeType: mime,
-            createdBy: model,
-            metadata: { prompt, size, quality, model },
-          }).returning();
-
-          return {
-            status: 'success',
-            image_id: image.id,
-            image_name: image.name,
-            mime_type: mime,
-            prompt,
-          };
-        } catch (err) {
-          if ((err as Error).name === 'AbortError') throw err;
-          return {
-            status: 'error',
-            message: `Failed to generate image: ${(err as Error).message}`,
-          };
-        }
-      },
+      outputSchema: z.union([
+        z.object({
+          status: z.literal('success'),
+          image_id: z.string(),
+          image_name: z.string(),
+          mime_type: z.string(),
+          prompt: z.string(),
+        }),
+        z.object({
+          status: z.literal('cancelled'),
+          message: z.string().optional(),
+        }),
+      ]),
     }),
     ...workspaceTools,
   };

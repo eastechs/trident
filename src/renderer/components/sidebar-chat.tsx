@@ -1,6 +1,11 @@
 import { useChat } from '@ai-sdk/react';
 import { Link } from 'react-router-dom';
-import { DefaultChatTransport, isToolUIPart, getToolName } from 'ai';
+import {
+    DefaultChatTransport,
+    isToolUIPart,
+    getToolName,
+    lastAssistantMessageIsCompleteWithToolCalls,
+} from 'ai';
 import type { UIMessage } from 'ai';
 import { api_get, api_post, api_put, api_patch, api_delete } from '@/lib/api';
 import { CheckIcon, FileTextIcon, PlusIcon } from 'lucide-react';
@@ -229,7 +234,7 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
 
     const [messagesLoaded, setMessagesLoaded] = useState(false);
 
-    const { messages, setMessages, sendMessage, stop, status } = useChat({
+    const { messages, setMessages, sendMessage, stop, status, addToolOutput } = useChat({
         id: conversationId,
         transport: new DefaultChatTransport({
             api: `/api/projects/${projectId}/chat`,
@@ -247,6 +252,11 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                 };
             },
         }),
+        // After the user submits the image-config card, addToolOutput fulfills
+        // the pending GenerateImage call client-side. This helper detects that
+        // and triggers the next agent turn automatically so the assistant can
+        // acknowledge the generated image.
+        sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
         onFinish({ message }) {
             if (message.role !== 'assistant') {
                 return;
@@ -275,9 +285,9 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                         );
                     }
                 }
-                if (toolName === 'GenerateImage' && output?.image_id) {
-                    onImageCreated?.(output.image_id as string, (output.image_name as string) ?? '');
-                }
+                // GenerateImage is now a client-side tool; the image-config
+                // card calls onImageCreated directly when the server endpoint
+                // returns. Nothing to do here for it.
             }
         },
     });
@@ -392,7 +402,9 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
         setSelectedDocumentIds(new Set());
     }, [sendMessage, selectedDocumentIds]);
 
-    // Check if there's an unanswered AskQuestions or ConfigureImageGeneration tool call
+    // Lock the input while the user has an unfulfilled prompt: an
+    // unanswered AskQuestions or a pending GenerateImage call awaiting
+    // submission from the image-config card.
     const questionsLocked = useMemo(() => {
         for (let i = messages.length - 1; i >= 0; i--) {
             const msg = messages[i];
@@ -408,7 +420,17 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
 
                 const toolName = getToolName(part);
 
-                if (toolName !== 'AskQuestions' && toolName !== 'ConfigureImageGeneration') {
+                if (toolName === 'GenerateImage') {
+                    // Client-side tool — locked while awaiting input from the
+                    // image-config card. Once addToolOutput is called the
+                    // state moves to output-available/error and we unlock.
+                    if (part.state === 'input-available' || part.state === 'input-streaming') {
+                        return true;
+                    }
+                    continue;
+                }
+
+                if (toolName !== 'AskQuestions') {
                     continue;
                 }
 
@@ -456,9 +478,8 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                         const hasFollowingUserMessage = messages.slice(messageIndex + 1).some(m => m.role === 'user');
                         const hasPendingImageConfig = message.parts.some((p) =>
                             isToolUIPart(p)
-                            && getToolName(p) === 'ConfigureImageGeneration'
-                            && !answeredQuestionsRef.current.has(p.toolCallId)
-                            && !hasFollowingUserMessage,
+                            && getToolName(p) === 'GenerateImage'
+                            && p.state === 'input-available',
                         );
 
                         return (
@@ -533,14 +554,48 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
                                             }
                                         }
 
-                                        if (isToolUIPart(part) && getToolName(part) === 'ConfigureImageGeneration') {
-                                            const isSubmitted = answeredQuestionsRef.current.has(part.toolCallId) || hasFollowingUserMessage;
-
+                                        if (isToolUIPart(part) && getToolName(part) === 'GenerateImage') {
+                                            // Render the config card while input is ready and the
+                                            // user hasn't fulfilled it yet. Once addToolOutput
+                                            // resolves the call, state moves to output-available
+                                            // and the default "hide resolved tool calls" rule
+                                            // below kicks in.
+                                            if (part.state !== 'input-available') {
+                                                return null;
+                                            }
+                                            const input = part.input as { prompt?: string; name?: string } | undefined;
+                                            const promptText = input?.prompt ?? '';
+                                            const nameText = input?.name ?? 'Image';
                                             return (
                                                 <ImageConfigCard
                                                     key={`${message.id}-${i}`}
-                                                    onSubmit={(answers) => handleQuestionsSubmit(part.toolCallId, answers)}
-                                                    submitted={isSubmitted}
+                                                    projectId={projectId}
+                                                    prompt={promptText}
+                                                    name={nameText}
+                                                    onGenerated={(result) => {
+                                                        addToolOutput({
+                                                            tool: 'GenerateImage',
+                                                            toolCallId: part.toolCallId,
+                                                            output: {
+                                                                status: 'success',
+                                                                image_id: result.image_id,
+                                                                image_name: result.image_name,
+                                                                mime_type: result.mime_type,
+                                                                prompt: result.prompt,
+                                                            },
+                                                        });
+                                                        onImageCreated?.(result.image_id, result.image_name);
+                                                    }}
+                                                    onCancel={() => {
+                                                        addToolOutput({
+                                                            tool: 'GenerateImage',
+                                                            toolCallId: part.toolCallId,
+                                                            output: {
+                                                                status: 'cancelled',
+                                                                message: 'User cancelled image generation',
+                                                            },
+                                                        });
+                                                    }}
                                                 />
                                             );
                                         }
@@ -830,7 +885,7 @@ return 1;
                             <PromptInputSubmit
                                 status={status}
                                 onStop={handleStop}
-                                disabled={questionsLocked}
+                                disabled={!isStreaming && questionsLocked}
                             />
                         </div>
                     </PromptInputFooter>

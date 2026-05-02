@@ -302,6 +302,15 @@ router.post('/', async (req: ProjectRequest, res) => {
                   metadata: (msg.metadata as Record<string, unknown> | undefined) ?? { model: model_id },
                 })
                 .where(eq(messages.id, msg.id));
+            } else {
+              // Existing prior message — its parts may have changed
+              // client-side since we last saved (e.g. a client-side tool call
+              // got fulfilled via addToolOutput between turns). Re-write
+              // parts so the tool result persists for future reloads.
+              await db
+                .update(messages)
+                .set({ parts: msg.parts as unknown as Record<string, unknown> })
+                .where(eq(messages.id, msg.id));
             }
           }
 
