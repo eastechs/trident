@@ -6,6 +6,7 @@ import {
   setApiKey,
   deleteApiKey,
   getConfiguredProviders,
+  isApiKeyEncryptionAvailable,
 } from '../settings.js';
 
 const router = Router();
@@ -84,6 +85,18 @@ router.put('/api-keys', async (req, res) => {
     res.status(422).json({
       errors: { anthropic_key: ['At least one API key is required.'] },
     });
+    return;
+  }
+
+  if (!isApiKeyEncryptionAvailable()) {
+    const message =
+      'Cannot securely store API keys: the OS keychain is not available. ' +
+      'On Linux, install and unlock gnome-keyring or kwallet, then restart Trident.';
+    const errors: Record<string, string[]> = {};
+    for (const provider of Object.keys(keys)) {
+      errors[`${provider}_key`] = [message];
+    }
+    res.status(422).json({ errors });
     return;
   }
 

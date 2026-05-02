@@ -68,6 +68,10 @@ export function setSetting<K extends keyof SettingsSchema>(key: K, value: Settin
 
 // ─── Encrypted API keys ────────────────────────────────────
 
+export function isApiKeyEncryptionAvailable(): boolean {
+  return safeStorage.isEncryptionAvailable();
+}
+
 export function getApiKey(provider: 'anthropic' | 'openai' | 'gemini'): string | undefined {
   const encrypted = store().get('apiKeys')[provider];
   if (!encrypted) return undefined;
@@ -81,6 +85,12 @@ export function getApiKey(provider: 'anthropic' | 'openai' | 'gemini'): string |
 }
 
 export function setApiKey(provider: 'anthropic' | 'openai' | 'gemini', key: string): void {
+  // Without an OS-level keyring, safeStorage on Linux falls back to writing a
+  // "v10"-prefixed plaintext buffer. Refuse rather than persist a key that
+  // would land on disk effectively unencrypted.
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('OS keychain encryption is not available; refusing to store API key.');
+  }
   const encrypted = safeStorage.encryptString(key).toString('base64');
   const keys = store().get('apiKeys');
   keys[provider] = encrypted;
