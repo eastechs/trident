@@ -3,7 +3,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
-import { getApiKey } from '../settings.js';
+import { getApiKey, getModelEffort, type EffortLevel } from '../settings.js';
 
 export type ProviderName = 'anthropic' | 'openai' | 'gemini';
 
@@ -49,35 +49,51 @@ export function resolveModel(modelId: string): LanguageModel {
 }
 
 /**
- * Per-provider options applied to every chat call.
+ * Map our unified effort level to each provider's native value range.
+ *
+ * Provider native ranges:
+ *   - Anthropic:  low | medium | high | xhigh | max
+ *   - OpenAI:     low | medium | high | xhigh   (no 'max')
+ *   - Gemini:     low | medium | high           (no 'xhigh' or 'max')
+ *
+ * 'max' clamps down where unsupported.
+ */
+function effortToOpenAI(level: EffortLevel): 'low' | 'medium' | 'high' | 'xhigh' {
+  return level === 'max' ? 'xhigh' : level;
+}
+
+function effortToGemini(level: EffortLevel): 'low' | 'medium' | 'high' {
+  return level === 'max' ? 'high' : level;
+}
+
+/**
+ * Per-provider options applied to every chat call. The reasoning dial is
+ * picked up per model from settings (defaults to 'high' if unset).
  *
  *   - Anthropic: extended thinking with adaptive budget + summarized display;
  *                contextManagement.clear_tool_uses_20250919 drops old tool-use
  *                blocks when input tokens exceed 100k, keeping the last 20 so
  *                long sessions don't blow past the model's context window.
- *   - OpenAI:    high reasoning effort + auto reasoning summaries; truncation
- *                'auto' so the Responses API drops oldest turns instead of
- *                failing when the prompt nears the model's context limit;
- *                promptCacheRetention '24h' (max) for stickier auto-caching;
- *                promptCacheKey scoped per project so requests in the same
- *                project route to the same cache instance.
- *   - Gemini:    thinkingConfig 'high' with summaries, mirroring the other
- *                providers' reasoning configuration.
- *
- * Applied by provider (not by model name prefix) so every OpenAI model
- * receives reasoning options, not just the ones starting with "o".
+ *   - OpenAI:    auto reasoning summaries; truncation 'auto' so the Responses
+ *                API drops oldest turns instead of failing when the prompt
+ *                nears the model's context limit; promptCacheRetention '24h'
+ *                (max) for stickier auto-caching; promptCacheKey scoped per
+ *                project so requests in the same project route to the same
+ *                cache instance.
+ *   - Gemini:    thinkingConfig with summaries, level dialed per model.
  */
 export function getProviderOptions(
   modelId: string,
   context?: { projectId?: string },
 ): ProviderOptions {
   const provider = resolveProviderName(modelId);
+  const effort = getModelEffort(modelId);
 
   if (provider === 'anthropic') {
     return {
       anthropic: {
         thinking: { type: 'adaptive', display: 'summarized' },
-        effort: 'high',
+        effort,
         sendReasoning: true,
         contextManagement: {
           edits: [
@@ -95,7 +111,7 @@ export function getProviderOptions(
   if (provider === 'openai') {
     return {
       openai: {
-        reasoningEffort: 'high',
+        reasoningEffort: effortToOpenAI(effort),
         reasoningSummary: 'auto',
         truncation: 'auto',
         promptCacheRetention: '24h',
@@ -108,7 +124,7 @@ export function getProviderOptions(
     return {
       google: {
         thinkingConfig: {
-          thinkingLevel: 'high',
+          thinkingLevel: effortToGemini(effort),
           includeThoughts: true,
         },
       },

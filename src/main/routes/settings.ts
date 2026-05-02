@@ -6,7 +6,13 @@ import {
   setApiKey,
   deleteApiKey,
   getConfiguredProviders,
+  getAllModelEfforts,
+  setModelEffort,
+  resetModelEffort,
+  type EffortLevel,
 } from '../settings.js';
+
+const VALID_EFFORTS: readonly EffortLevel[] = ['low', 'medium', 'high', 'max'] as const;
 
 const router = Router();
 
@@ -129,6 +135,31 @@ router.delete('/api-keys', async (req, res) => {
 router.get('/models', async (_req, res) => {
   const { fetchAvailableModels } = await import('../ai/model-registry.js');
   res.json(await fetchAvailableModels());
+});
+
+// ─── Per-model reasoning effort ────────────────────────────
+
+router.get('/model-effort', (_req, res) => {
+  res.json(getAllModelEfforts());
+});
+
+router.put('/model-effort', (req, res) => {
+  const { modelId, level } = req.body as { modelId?: string; level?: string };
+  if (!modelId || typeof modelId !== 'string') {
+    res.status(422).json({ error: 'modelId is required' });
+    return;
+  }
+  if (!level || !VALID_EFFORTS.includes(level as EffortLevel)) {
+    res.status(422).json({ error: `level must be one of: ${VALID_EFFORTS.join(', ')}` });
+    return;
+  }
+  setModelEffort(modelId, level as EffortLevel);
+  res.json({ success: true });
+});
+
+router.delete('/model-effort/:modelId', (req, res) => {
+  resetModelEffort(req.params.modelId);
+  res.json({ success: true });
 });
 
 // ─── Agent instructions ────────────────────────────────────

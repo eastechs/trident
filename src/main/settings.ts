@@ -1,5 +1,8 @@
 import { safeStorage } from 'electron';
 
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
+export const DEFAULT_EFFORT: EffortLevel = 'high';
+
 interface SettingsSchema {
   autosave: boolean;
   notifications: boolean;
@@ -12,6 +15,7 @@ interface SettingsSchema {
     openai?: string;
     gemini?: string;
   };
+  modelEffort: Record<string, EffortLevel>;
 }
 
 const DEFAULTS: SettingsSchema = {
@@ -22,6 +26,7 @@ const DEFAULTS: SettingsSchema = {
   onboardingCompleted: false,
   projectTourCompleted: false,
   apiKeys: {},
+  modelEffort: {},
 };
 
 type StoreLike = {
@@ -100,4 +105,25 @@ export function getConfiguredProviders(): { anthropic: boolean; openai: boolean;
     openai: !!keys.openai,
     gemini: !!keys.gemini,
   };
+}
+
+// ─── Per-model reasoning effort ────────────────────────────
+
+export function getModelEffort(modelId: string): EffortLevel {
+  return (store().get('modelEffort') ?? {})[modelId] ?? DEFAULT_EFFORT;
+}
+
+export function setModelEffort(modelId: string, level: EffortLevel): void {
+  const current = store().get('modelEffort') ?? {};
+  store().set('modelEffort', { ...current, [modelId]: level });
+}
+
+export function resetModelEffort(modelId: string): void {
+  const current = { ...(store().get('modelEffort') ?? {}) };
+  delete current[modelId];
+  store().set('modelEffort', current);
+}
+
+export function getAllModelEfforts(): Record<string, EffortLevel> {
+  return store().get('modelEffort') ?? {};
 }
