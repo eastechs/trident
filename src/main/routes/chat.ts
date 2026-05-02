@@ -3,7 +3,7 @@ import { streamText, generateText, convertToModelMessages, stepCountIs, generate
 import { eq, asc, sql, inArray, and } from 'drizzle-orm';
 import { getDb } from '../database.js';
 import { conversations, messages, documents, projects } from '../db/schema.js';
-import { resolveModel, getProviderOptions, modelLabel } from '../ai/providers.js';
+import { resolveModel, getProviderOptions, modelLabel, isEffortLevel, DEFAULT_EFFORT } from '../ai/providers.js';
 import { loadInstructions } from '../ai/instructions.js';
 import { createTools } from '../ai/tools/index.js';
 import { showNotification } from '../native/notifications.js';
@@ -31,7 +31,9 @@ router.post('/', async (req: ProjectRequest, res) => {
 
   const [conversation] = await db.select().from(conversations).where(eq(conversations.id, conversation_id));
   if (!conversation) { res.status(404).json({ error: 'Conversation not found' }); return; }
-  const effort = conversation.effort as 'low' | 'medium' | 'high' | 'max';
+  // Validate at read time — column is plain text with no DB-level CHECK,
+  // and downstream provider mappers rely on the value being a known level.
+  const effort = isEffortLevel(conversation.effort) ? conversation.effort : DEFAULT_EFFORT;
 
   // The client (useChat) sends the full UIMessage[] including the new user message.
   // Use that directly; the DB history would miss the new message.
@@ -60,10 +62,24 @@ router.post('/', async (req: ProjectRequest, res) => {
       }
       if (lastUserIndex >= 0) {
         const lastUser = history[lastUserIndex];
-        const docParts = attachedDocs.map((d) => ({
-          type: 'text' as const,
-          text: `<attached_document name="${d.name}">\n${d.content ?? ''}\n</attached_document>`,
-        }));
+        const docParts = attachedDocs.map((d) => {
+          // Escape XML-special characters in the name attribute so a doc
+          // titled e.g. `Bob's "Notes" <draft>` doesn't break the delimiter.
+          const safeName = (d.name ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+          // Disarm any literal closing tag inside the content so it doesn't
+          // visually terminate the block early to the model. We zero-width-
+          // space the `</` so the model still sees the text but the pattern
+          // doesn't match the delimiter.
+          const safeContent = (d.content ?? '').replace(/<\/attached_document>/g, '<​/attached_document>');
+          return {
+            type: 'text' as const,
+            text: `<attached_document name="${safeName}">\n${safeContent}\n</attached_document>`,
+          };
+        });
         history[lastUserIndex] = {
           ...lastUser,
           parts: [...docParts, ...lastUser.parts],
@@ -162,6 +178,10 @@ router.post('/', async (req: ProjectRequest, res) => {
       providerOptions: getProviderOptions(model_id, { projectId, effort }),
     });
 
+    // Per-request accumulator for Anthropic's per-step cache_creation count
+    // (see messageMetadata below).
+    let anthropicCacheWrites = 0;
+
     // Pipe the UI message stream directly to the Express response.
     // This hands lifecycle to the AI SDK so onFinish reliably runs before
     // the response closes, avoiding a race where the last assistant message
@@ -173,7 +193,20 @@ router.post('/', async (req: ProjectRequest, res) => {
       // Attach token usage to assistant messages on finish so the client can
       // render the usage widget. Without this the AI SDK doesn't ship usage
       // data through the UI stream and `metadata.usage` stays undefined.
+      //
+      // Anthropic doesn't populate the standard inputTokenDetails.cacheWriteTokens;
+      // they expose cacheCreationInputTokens via providerMetadata on each
+      // finish-step. Accumulate it across steps so the widget shows accurate
+      // cache-write counts for Claude conversations too.
       messageMetadata: ({ part }) => {
+        if (part.type === 'finish-step') {
+          const anthropicMeta = part.providerMetadata?.anthropic as
+            | { cacheCreationInputTokens?: number }
+            | undefined;
+          const writes = anthropicMeta?.cacheCreationInputTokens;
+          if (typeof writes === 'number') anthropicCacheWrites += writes;
+          return undefined;
+        }
         if (part.type === 'finish') {
           const u = part.totalUsage;
           return {
@@ -182,7 +215,8 @@ router.post('/', async (req: ProjectRequest, res) => {
               prompt_tokens: u.inputTokens,
               completion_tokens: u.outputTokens,
               cache_read_input_tokens: u.inputTokenDetails?.cacheReadTokens,
-              cache_write_input_tokens: u.inputTokenDetails?.cacheWriteTokens,
+              cache_write_input_tokens: u.inputTokenDetails?.cacheWriteTokens
+                ?? (anthropicCacheWrites > 0 ? anthropicCacheWrites : undefined),
               reasoning_tokens: u.outputTokenDetails?.reasoningTokens,
             },
           };

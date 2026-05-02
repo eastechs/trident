@@ -4,6 +4,7 @@ import { eq, and, ilike } from 'drizzle-orm';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import readline from 'readline';
 import ignore, { type Ignore } from 'ignore';
 import { getDb } from '../../database.js';
 import { documents, images } from '../../db/schema.js';
@@ -50,20 +51,6 @@ const DEFAULT_IGNORES = [
   '.DS_Store',
 ];
 
-function loadGitignore(root: string): Ignore {
-  // Layer order matters: defaults first, then the user's .gitignore so that
-  // any negations (e.g. `!node_modules/some-pkg/`) in the project's gitignore
-  // can re-include paths that our defaults would otherwise block.
-  const ig = ignore().add('.git').add(DEFAULT_IGNORES);
-  try {
-    const content = fs.readFileSync(path.join(root, '.gitignore'), 'utf-8');
-    ig.add(content);
-  } catch {
-    // No .gitignore — defaults already applied above.
-  }
-  return ig;
-}
-
 // gitignore semantics use POSIX-style paths regardless of OS.
 function relPosix(root: string, full: string): string {
   return path.relative(root, full).split(path.sep).join('/');
@@ -86,14 +73,106 @@ function resolveWithinRoot(root: string, relative: string): string {
   return realResolved;
 }
 
-function buildWorkspaceTools(filesystemRoot: string) {
-  // Read .gitignore once per createTools() call. Each new chat request
-  // rebuilds tools, so updates to .gitignore are picked up on the next turn.
-  const ig = loadGitignore(filesystemRoot);
+// ─── Hierarchical .gitignore handling ────────────────────────
+//
+// Each .gitignore file applies to its own directory and below, with patterns
+// relative to that directory. Honoring nested gitignores means we maintain a
+// stack of (base, Ignore) entries while traversing — a path is ignored if any
+// stack entry says so.
+//
+// Memoized by file path + mtime so the per-request, per-directory reads
+// don't actually hit disk on each turn for files that haven't changed.
 
+interface IgStackEntry { base: string; ig: Ignore; }
+type IgStack = ReadonlyArray<IgStackEntry>;
+
+const gitignoreCache = new Map<string, { mtime: number; ig: Ignore }>();
+
+function loadDirGitignore(dir: string): Ignore | null {
+  const filePath = path.join(dir, '.gitignore');
+  let stat: fs.Stats;
+  try { stat = fs.statSync(filePath); } catch { return null; }
+  const cached = gitignoreCache.get(filePath);
+  if (cached && cached.mtime === stat.mtimeMs) return cached.ig;
+  let content: string;
+  try { content = fs.readFileSync(filePath, 'utf-8'); } catch { return null; }
+  const ig = ignore().add(content);
+  gitignoreCache.set(filePath, { mtime: stat.mtimeMs, ig });
+  return ig;
+}
+
+// Built-in always-on ignore — `.git` plus the sensible defaults. Constructed
+// once per process; the `ignore` instances are immutable after creation.
+const DEFAULT_IG: Ignore = ignore().add('.git').add(DEFAULT_IGNORES);
+
+function isIgnoredByStack(root: string, stack: IgStack, fullPath: string, isDir: boolean): boolean {
+  // Built-in defaults check (relative to root).
+  const rootRel = relPosix(root, fullPath);
+  if (rootRel && DEFAULT_IG.ignores(isDir ? `${rootRel}/` : rootRel)) return true;
+  // Then each .gitignore in the stack — patterns are relative to its own base.
+  for (const { base, ig } of stack) {
+    const rel = path.relative(base, fullPath);
+    if (rel === '' || rel.startsWith('..')) continue;
+    const posix = rel.split(path.sep).join('/');
+    if (ig.ignores(isDir ? `${posix}/` : posix)) return true;
+  }
+  return false;
+}
+
+// Build the gitignore stack for a starting directory by walking from root
+// down, picking up each .gitignore on the way. The starting directory's own
+// gitignore is included.
+function buildAncestorStack(root: string, dir: string): IgStack {
+  const stack: IgStackEntry[] = [];
+  const rootGi = loadDirGitignore(root);
+  if (rootGi) stack.push({ base: root, ig: rootGi });
+  if (dir === root) return stack;
+  const rel = path.relative(root, dir);
+  const segments = rel.split(path.sep).filter(Boolean);
+  let current = root;
+  for (const seg of segments) {
+    current = path.join(current, seg);
+    const gi = loadDirGitignore(current);
+    if (gi) stack.push({ base: current, ig: gi });
+  }
+  return stack;
+}
+
+// Stream a file line-by-line looking for literal query matches. Bounded
+// memory regardless of file size (the SEARCH_FILE_MAX_BYTES gate is still
+// applied by the caller from the dirent stat). Returns true when the global
+// SEARCH_MAX_RESULTS cap is hit so the walker can stop.
+function scanFileForMatches(
+  full: string,
+  rel: string,
+  query: string,
+  matches: Array<{ path: string; line: number; text: string }>,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const stream = fs.createReadStream(full, { encoding: 'utf-8' });
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+    let lineNum = 0;
+    let cappedOut = false;
+    rl.on('line', (line) => {
+      lineNum++;
+      if (line.includes(query)) {
+        matches.push({ path: rel, line: lineNum, text: line.trim().slice(0, 200) });
+        if (matches.length >= SEARCH_MAX_RESULTS) {
+          cappedOut = true;
+          rl.close();
+        }
+      }
+    });
+    rl.on('close', () => resolve(cappedOut));
+    rl.on('error', () => resolve(false));
+    stream.on('error', () => { rl.close(); resolve(false); });
+  });
+}
+
+function buildWorkspaceTools(filesystemRoot: string) {
   return {
     ListDirectory: tool({
-      description: 'List the entries (files and directories) inside a directory in the local workspace. Entries matched by .gitignore are skipped (or a sensible default list when no .gitignore exists). Path is relative to the workspace root; use "." for the root.',
+      description: 'List the entries (files and directories) inside a directory in the local workspace. Entries matched by .gitignore (root or any ancestor) are skipped, plus a built-in skip list for common build artifacts. Path is relative to the workspace root; use "." for the root.',
       inputSchema: z.object({
         path: z.string().default('.').describe('Path relative to the workspace root. Use "." for the root.'),
       }),
@@ -104,13 +183,9 @@ function buildWorkspaceTools(filesystemRoot: string) {
           if (!stat.isDirectory()) {
             return { status: 'error', message: `Path "${relPath}" is not a directory.` };
           }
+          const stack = buildAncestorStack(filesystemRoot, resolved);
           const entries = fs.readdirSync(resolved, { withFileTypes: true })
-            .filter((e) => {
-              const rel = relPosix(filesystemRoot, path.join(resolved, e.name));
-              // gitignore needs a trailing slash for directory-only patterns
-              // to match correctly on a directory's own name.
-              return !ig.ignores(e.isDirectory() ? `${rel}/` : rel);
-            })
+            .filter((e) => !isIgnoredByStack(filesystemRoot, stack, path.join(resolved, e.name), e.isDirectory()))
             .map((e) => ({
               name: e.name,
               type: e.isDirectory() ? 'directory' : (e.isFile() ? 'file' : 'other'),
@@ -152,7 +227,7 @@ function buildWorkspaceTools(filesystemRoot: string) {
     }),
 
     SearchFiles: tool({
-      description: 'Search for a literal substring across files in the local workspace. Case-sensitive. Returns up to 20 matches. Honors .gitignore (or a sensible default skip list when no .gitignore exists). Path is relative to the workspace root; defaults to the entire workspace.',
+      description: 'Search for a literal substring across files in the local workspace. Case-sensitive. Returns up to 20 matches. Honors .gitignore at every directory level plus a built-in skip list for common build artifacts. Path is relative to the workspace root; defaults to the entire workspace.',
       inputSchema: z.object({
         query: z.string().describe('The literal substring to search for. Case-sensitive.'),
         path: z.string().default('.').describe('Sub-path to limit the search; defaults to "." (entire workspace).'),
@@ -162,39 +237,37 @@ function buildWorkspaceTools(filesystemRoot: string) {
           const startResolved = resolveWithinRoot(filesystemRoot, relPath);
           const matches: Array<{ path: string; line: number; text: string }> = [];
 
-          const walk = (dir: string): void => {
-            if (matches.length >= SEARCH_MAX_RESULTS) return;
+          const walk = async (dir: string, stack: IgStack): Promise<boolean> => {
+            if (matches.length >= SEARCH_MAX_RESULTS) return true;
             let entries: fs.Dirent[];
-            try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+            try { entries = await fs.promises.readdir(dir, { withFileTypes: true }); } catch { return false; }
+
+            // If this directory has its own .gitignore and isn't already
+            // represented in the stack (the start dir's gitignore is added
+            // by buildAncestorStack), push a new frame for the subtree.
+            let currentStack = stack;
+            const top = stack[stack.length - 1];
+            if (!top || top.base !== dir) {
+              const localGi = loadDirGitignore(dir);
+              if (localGi) currentStack = [...stack, { base: dir, ig: localGi }];
+            }
+
             for (const entry of entries) {
-              if (matches.length >= SEARCH_MAX_RESULTS) return;
+              if (matches.length >= SEARCH_MAX_RESULTS) return true;
               const full = path.join(dir, entry.name);
-              const rel = relPosix(filesystemRoot, full);
-              if (ig.ignores(entry.isDirectory() ? `${rel}/` : rel)) continue;
+              if (isIgnoredByStack(filesystemRoot, currentStack, full, entry.isDirectory())) continue;
               if (entry.isDirectory()) {
-                walk(full);
+                if (await walk(full, currentStack)) return true;
               } else if (entry.isFile()) {
-                let stat: fs.Stats;
-                try { stat = fs.statSync(full); } catch { continue; }
-                if (stat.size > SEARCH_FILE_MAX_BYTES) continue;
-                let content: string;
-                try { content = fs.readFileSync(full, 'utf-8'); } catch { continue; }
-                const lines = content.split('\n');
-                for (let i = 0; i < lines.length; i++) {
-                  if (lines[i].includes(query)) {
-                    matches.push({
-                      path: rel,
-                      line: i + 1,
-                      text: lines[i].trim().slice(0, 200),
-                    });
-                    if (matches.length >= SEARCH_MAX_RESULTS) return;
-                  }
-                }
+                const fullStat = await fs.promises.stat(full).catch(() => null);
+                if (!fullStat || fullStat.size > SEARCH_FILE_MAX_BYTES) continue;
+                if (await scanFileForMatches(full, relPosix(filesystemRoot, full), query, matches)) return true;
               }
             }
+            return false;
           };
 
-          walk(startResolved);
+          await walk(startResolved, buildAncestorStack(filesystemRoot, startResolved));
           return {
             status: 'success',
             query,

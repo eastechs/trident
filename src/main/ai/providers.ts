@@ -5,8 +5,13 @@ import type { LanguageModel } from 'ai';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import { getApiKey } from '../settings.js';
 
-export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
+export const EFFORT_LEVELS = ['low', 'medium', 'high', 'max'] as const;
+export type EffortLevel = typeof EFFORT_LEVELS[number];
 export const DEFAULT_EFFORT: EffortLevel = 'medium';
+
+export function isEffortLevel(value: unknown): value is EffortLevel {
+  return typeof value === 'string' && (EFFORT_LEVELS as readonly string[]).includes(value);
+}
 
 export type ProviderName = 'anthropic' | 'openai' | 'gemini';
 

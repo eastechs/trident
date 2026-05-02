@@ -184,20 +184,19 @@ export function SidebarChat({ projectId, conversationId, documents, defaultModel
     const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(new Set());
     const [attachmentSelectorOpen, setAttachmentSelectorOpen] = useState(false);
 
-    // Sync effort if the parent's initialEffort changes (e.g. switching
-    // conversations within the same panel). Only re-syncs when conversationId
-    // changes — local edits still win during a conversation.
-    useEffect(() => {
-        setEffort(initialEffort);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [conversationId]);
+    // Sequence counter so an older in-flight effort PATCH that fails can't
+    // revert past a newer click. Only the most recent request's failure may
+    // roll the optimistic update back.
+    const effortReqSeqRef = useRef(0);
 
     const handleEffortChange = useCallback((next: EffortLevel) => {
         const prev = effort;
+        const seq = ++effortReqSeqRef.current;
         setEffort(next);
         onEffortChange?.(next);
         api_patch(`/api/projects/${projectId}/conversations/${conversationId}`, { effort: next })
             .catch((err) => {
+                if (seq !== effortReqSeqRef.current) return;
                 console.error('Failed to update conversation effort:', err);
                 setEffort(prev);
                 onEffortChange?.(prev);

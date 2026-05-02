@@ -1,7 +1,8 @@
 import { Router, type Request } from 'express';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { getDb } from '../database.js';
 import { conversations, messages } from '../db/schema.js';
+import { isEffortLevel, EFFORT_LEVELS } from '../ai/providers.js';
 
 const router = Router({ mergeParams: true });
 
@@ -9,8 +10,6 @@ type ProjectRequest = Request<{ projectId: string }>;
 type ConversationRequest = Request<{ projectId: string; conversationId: string }>;
 
 type ConversationRow = typeof conversations.$inferSelect;
-
-const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'max']);
 
 function serializeConversation(
   c: ConversationRow,
@@ -39,17 +38,26 @@ router.get('/', async (req: ProjectRequest, res) => {
     .where(eq(conversations.projectId, req.params.projectId))
     .orderBy(desc(conversations.updatedAt));
 
-  const result = await Promise.all(
-    projectConversations.map(async (conv) => {
-      const [count] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(messages)
-        .where(eq(messages.conversationId, conv.id));
-      return serializeConversation(conv, count?.count ?? 0);
-    }),
-  );
+  if (projectConversations.length === 0) {
+    res.json([]);
+    return;
+  }
 
-  res.json(result);
+  // Single GROUP BY query for message counts instead of one per conversation.
+  const counts = await db
+    .select({
+      conversationId: messages.conversationId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(messages)
+    .where(inArray(messages.conversationId, projectConversations.map((c) => c.id)))
+    .groupBy(messages.conversationId);
+
+  const countByConv = new Map(counts.map((c) => [c.conversationId, c.count]));
+
+  res.json(projectConversations.map((conv) =>
+    serializeConversation(conv, countByConv.get(conv.id) ?? 0),
+  ));
 });
 
 // ─── Store ─────────────────────────────────────────────────
@@ -79,8 +87,8 @@ router.patch('/:conversationId', async (req: ConversationRequest, res) => {
   if (side !== undefined) updates.side = side;
   if (model !== undefined) updates.model = model;
   if (effort !== undefined) {
-    if (!VALID_EFFORTS.has(effort)) {
-      res.status(422).json({ error: `effort must be one of: ${Array.from(VALID_EFFORTS).join(', ')}` });
+    if (!isEffortLevel(effort)) {
+      res.status(422).json({ error: `effort must be one of: ${EFFORT_LEVELS.join(', ')}` });
       return;
     }
     updates.effort = effort;
