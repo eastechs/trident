@@ -3,7 +3,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from 
 import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';
 import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { api_get, api_post, api_put, api_patch, api_delete } from '@/lib/api';
 import {
@@ -345,6 +345,28 @@ function ProjectView({ project, documents, images, conversations, shouldShowTour
             setRightActiveId(id);
         }
     }, []);
+
+    // Notification deep-link: app.tsx navigates here with router state when
+    // the user clicks a system notification. If the target conversation isn't
+    // already loaded in either panel, swap it into the left panel; otherwise
+    // bringing the window to the foreground is enough. The router state is
+    // cleared after we read it so a subsequent reload doesn't re-trigger.
+    const location = useLocation();
+    const navigate = useNavigate();
+    const focusConversationId = (location.state as { focusConversationId?: string } | null)?.focusConversationId ?? null;
+    const [leftRequestedId, setLeftRequestedId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!focusConversationId) return;
+        const alreadyLoaded =
+            leftActiveId === focusConversationId || rightActiveId === focusConversationId;
+        if (!alreadyLoaded) {
+            setLeftRequestedId(focusConversationId);
+            const panel = leftPanelRef.current;
+            if (panel?.isCollapsed()) panel.resize('25%');
+        }
+        navigate(location.pathname + location.search, { replace: true, state: null });
+    }, [focusConversationId, leftActiveId, rightActiveId, navigate, location.pathname, location.search, leftPanelRef]);
 
     const editorRefs = useRef<Record<string, EditorHandle | null>>({});
     const autosaveTimerRef = useRef<Record<string, NodeJS.Timeout>>({});
@@ -966,6 +988,7 @@ return;
                                 documents={localDocuments}
                                 defaultModel="claude-opus-4-7"
                                 initialPrompt={initialPromptRef.current}
+                                requestedActiveId={leftRequestedId}
                                 onConversationCreated={handleConversationCreated}
                                 onConversationUpdated={handleConversationUpdated}
                                 onConversationDeleted={handleConversationDeleted}

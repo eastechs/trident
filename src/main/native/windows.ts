@@ -6,6 +6,19 @@ const SERVER_PORT = 19274;
 
 const secondaryWindows = new Map<string, BrowserWindow>();
 
+// Single-instance pointer to the primary window so anything in the main
+// process (notifications, deep-link handlers, etc.) can focus or dispatch
+// to it without re-importing the index module.
+let mainWindow: BrowserWindow | null = null;
+
+export function setMainWindow(win: BrowserWindow | null): void {
+  mainWindow = win;
+}
+
+export function getMainWindow(): BrowserWindow | null {
+  return mainWindow;
+}
+
 function baseUrl(): string {
   return isDev ? 'http://localhost:5173' : `http://localhost:${SERVER_PORT}`;
 }

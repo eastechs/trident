@@ -329,7 +329,10 @@ router.post('/', async (req: ProjectRequest, res) => {
               .map((p) => p.text)
               .join('\n') ?? '';
             const preview = assistantText.split('\n').slice(0, 3).join('\n');
-            showNotification(modelLabel(model_id), preview || 'Agent response complete');
+            showNotification(modelLabel(model_id), preview || 'Agent response complete', {
+              projectId,
+              conversationId: conversation_id,
+            });
           }
         } catch (err) {
           console.error('Error persisting messages:', err);

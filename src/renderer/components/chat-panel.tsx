@@ -23,6 +23,10 @@ interface ChatPanelProps {
     documents: DocumentData[];
     defaultModel?: string;
     initialPrompt?: string;
+    // When set, force the panel to open this conversation (the chat tab) on
+    // the next change. Used by the notification deep-link flow to swap the
+    // left panel to the conversation that fired the notification.
+    requestedActiveId?: string | null;
     onConversationCreated: (conversation: ConversationData) => void;
     onConversationUpdated: (id: string, updates: Partial<ConversationData>) => void;
     onConversationDeleted: (id: string) => void;
@@ -78,6 +82,7 @@ export function ChatPanel({
     documents,
     defaultModel,
     initialPrompt,
+    requestedActiveId,
     onConversationCreated,
     onConversationUpdated,
     onConversationDeleted,
@@ -124,6 +129,18 @@ export function ChatPanel({
     useEffect(() => {
         onActiveIdChanged(side, activeConversationId);
     }, [activeConversationId, side, onActiveIdChanged]);
+
+    // Honor an externally requested active conversation (notification
+    // deep-link). Track the last id we applied so a manual switch doesn't
+    // get reverted when this effect re-runs.
+    const lastAppliedRequestRef = useRef<string | null | undefined>(undefined);
+    useEffect(() => {
+        if (requestedActiveId && requestedActiveId !== lastAppliedRequestRef.current) {
+            lastAppliedRequestRef.current = requestedActiveId;
+            setActiveConversationId(requestedActiveId);
+            setActiveTab('chat');
+        }
+    }, [requestedActiveId]);
 
     // Persist state changes to localStorage
     useEffect(() => {

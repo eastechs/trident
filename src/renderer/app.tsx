@@ -1,6 +1,6 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { createRoot } from 'react-dom/client';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import './css/app.css';
 
 const Main = lazy(() => import('./pages/main'));
@@ -12,10 +12,33 @@ const Onboarding = lazy(() => import('./pages/onboarding'));
 const Documentation = lazy(() => import('./pages/documentation'));
 const About = lazy(() => import('./pages/about'));
 
+// Subscribes to deep-link events from the main process. When the user
+// clicks a system notification, navigate to the target project and stash
+// the target conversation in router state so the project page can route
+// it to the correct chat panel on mount.
+function NotificationNavigator() {
+    const navigate = useNavigate();
+    const navigateRef = useRef(navigate);
+    navigateRef.current = navigate;
+
+    useEffect(() => {
+        const api = window.electronAPI;
+        if (!api?.onNotificationNavigate) return;
+        api.onNotificationNavigate((target) => {
+            navigateRef.current(`/projects/${target.projectId}`, {
+                state: { focusConversationId: target.conversationId },
+            });
+        });
+    }, []);
+
+    return null;
+}
+
 const root = createRoot(document.getElementById('app')!);
 
 root.render(
     <BrowserRouter>
+        <NotificationNavigator />
         <Suspense fallback={null}>
             <Routes>
                 <Route path="/" element={<Main />} />

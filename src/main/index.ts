@@ -8,7 +8,7 @@ import { buildMenu } from './native/menus.js';
 import { initDatabase } from './database.js';
 import { initSettings } from './settings.js';
 import { selectDirectory } from './native/dialogs.js';
-import { openDocumentationWindow } from './native/windows.js';
+import { openDocumentationWindow, setMainWindow } from './native/windows.js';
 import { appIconPath } from './native/app-icon.js';
 
 app.setName('Trident');
@@ -48,6 +48,7 @@ async function createWindow() {
     },
   });
 
+  setMainWindow(mainWindow);
   Menu.setApplicationMenu(buildMenu(mainWindow));
 
   const url = isDev ? 'http://localhost:5173' : `http://localhost:${SERVER_PORT}`;
@@ -58,6 +59,7 @@ async function createWindow() {
   }
 
   mainWindow.on('closed', () => {
+    setMainWindow(null);
     mainWindow = null;
   });
 }
