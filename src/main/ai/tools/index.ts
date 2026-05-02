@@ -31,18 +31,172 @@ function aspectFromSize(size: string): `${number}:${number}` {
   return `${w / d}:${h / d}` as `${number}:${number}`;
 }
 
+// ─── Workspace tools ─────────────────────────────────────────
+//
+// When a project has a local filesystem root, the agent gets ListDirectory /
+// ReadFile / SearchFiles for exploring that directory. All paths are treated
+// as relative to the workspace root and validated to prevent traversal
+// outside it (absolute paths, parent-directory traversal, and symlink
+// escapes are rejected via realpath comparison).
+
+const READ_FILE_MAX_BYTES = 100 * 1024;
+const SEARCH_FILE_MAX_BYTES = 512 * 1024;
+const SEARCH_MAX_RESULTS = 20;
+const SKIP_DIRS = new Set([
+  'node_modules', '.git', 'dist', 'build', '.next', '__pycache__', '.cache', '.turbo',
+]);
+
+function resolveWithinRoot(root: string, relative: string): string {
+  const realRoot = fs.realpathSync(root);
+  const resolved = path.resolve(realRoot, relative);
+  let realResolved: string;
+  try {
+    realResolved = fs.realpathSync(resolved);
+  } catch {
+    // Path may not exist yet (e.g. before a write); fall back to the
+    // pre-symlink-resolution path. The startsWith check below still applies.
+    realResolved = resolved;
+  }
+  if (realResolved !== realRoot && !realResolved.startsWith(realRoot + path.sep)) {
+    throw new Error(`Path "${relative}" escapes workspace root`);
+  }
+  return realResolved;
+}
+
+function buildWorkspaceTools(filesystemRoot: string) {
+  return {
+    ListDirectory: tool({
+      description: 'List the entries (files and directories) inside a directory in the local workspace. Hidden entries (names starting with ".") are skipped. Path is relative to the workspace root; use "." for the root itself.',
+      inputSchema: z.object({
+        path: z.string().default('.').describe('Path relative to the workspace root. Use "." for the root.'),
+      }),
+      execute: async ({ path: relPath }) => {
+        try {
+          const resolved = resolveWithinRoot(filesystemRoot, relPath);
+          const stat = fs.statSync(resolved);
+          if (!stat.isDirectory()) {
+            return { status: 'error', message: `Path "${relPath}" is not a directory.` };
+          }
+          const entries = fs.readdirSync(resolved, { withFileTypes: true })
+            .filter((e) => !e.name.startsWith('.'))
+            .map((e) => ({
+              name: e.name,
+              type: e.isDirectory() ? 'directory' : (e.isFile() ? 'file' : 'other'),
+            }));
+          return { status: 'success', path: relPath, entries };
+        } catch (err) {
+          return { status: 'error', message: (err as Error).message };
+        }
+      },
+    }),
+
+    ReadFile: tool({
+      description: 'Read the contents of a text file in the local workspace. Returns up to 100 KB; larger files are truncated. Path is relative to the workspace root.',
+      inputSchema: z.object({
+        path: z.string().describe('Path relative to the workspace root.'),
+      }),
+      execute: async ({ path: relPath }) => {
+        try {
+          const resolved = resolveWithinRoot(filesystemRoot, relPath);
+          const stat = fs.statSync(resolved);
+          if (!stat.isFile()) {
+            return { status: 'error', message: `Path "${relPath}" is not a file.` };
+          }
+          const buf = fs.readFileSync(resolved);
+          const truncated = buf.length > READ_FILE_MAX_BYTES;
+          const content = (truncated ? buf.subarray(0, READ_FILE_MAX_BYTES) : buf).toString('utf-8');
+          const line_count = content.split('\n').length;
+          return {
+            status: 'success',
+            path: relPath,
+            content,
+            line_count,
+            ...(truncated ? { truncated_bytes: buf.length - READ_FILE_MAX_BYTES } : {}),
+          };
+        } catch (err) {
+          return { status: 'error', message: (err as Error).message };
+        }
+      },
+    }),
+
+    SearchFiles: tool({
+      description: 'Search for a literal substring across files in the local workspace. Case-sensitive. Returns up to 20 matches. Skips hidden entries and heavy directories like node_modules / .git / dist / build. Path is relative to the workspace root; defaults to the entire workspace.',
+      inputSchema: z.object({
+        query: z.string().describe('The literal substring to search for. Case-sensitive.'),
+        path: z.string().default('.').describe('Sub-path to limit the search; defaults to "." (entire workspace).'),
+      }),
+      execute: async ({ query, path: relPath }) => {
+        try {
+          const startResolved = resolveWithinRoot(filesystemRoot, relPath);
+          const matches: Array<{ path: string; line: number; text: string }> = [];
+
+          const walk = (dir: string): void => {
+            if (matches.length >= SEARCH_MAX_RESULTS) return;
+            let entries: fs.Dirent[];
+            try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+            for (const entry of entries) {
+              if (matches.length >= SEARCH_MAX_RESULTS) return;
+              if (entry.name.startsWith('.')) continue;
+              if (entry.isDirectory() && SKIP_DIRS.has(entry.name)) continue;
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                walk(full);
+              } else if (entry.isFile()) {
+                let stat: fs.Stats;
+                try { stat = fs.statSync(full); } catch { continue; }
+                if (stat.size > SEARCH_FILE_MAX_BYTES) continue;
+                let content: string;
+                try { content = fs.readFileSync(full, 'utf-8'); } catch { continue; }
+                const lines = content.split('\n');
+                for (let i = 0; i < lines.length; i++) {
+                  if (lines[i].includes(query)) {
+                    matches.push({
+                      path: path.relative(filesystemRoot, full),
+                      line: i + 1,
+                      text: lines[i].trim().slice(0, 200),
+                    });
+                    if (matches.length >= SEARCH_MAX_RESULTS) return;
+                  }
+                }
+              }
+            }
+          };
+
+          walk(startResolved);
+          return {
+            status: 'success',
+            query,
+            path: relPath,
+            results: matches,
+            ...(matches.length >= SEARCH_MAX_RESULTS ? { truncated: true } : {}),
+          };
+        } catch (err) {
+          return { status: 'error', message: (err as Error).message };
+        }
+      },
+    }),
+  };
+}
+
 /**
- * Creates all tools for the DocumentCollaborator agent,
- * scoped to a specific project.
+ * Creates all tools for the DocumentCollaborator agent, scoped to a project.
  *
- * Matches the Laravel DocumentCollaborator's 8-tool set exactly:
- *   AskQuestions, ConfigureImageGeneration, SearchDocuments, ReadDocument,
- *   EditDocument, RenameDocument, CreateDocument, GenerateImage
+ * Always-present (8): AskQuestions, ConfigureImageGeneration, SearchDocuments,
+ *   ReadDocument, EditDocument, RenameDocument, CreateDocument, GenerateImage
+ *
+ * Workspace tools (3, only when filesystemRoot is set): ListDirectory,
+ *   ReadFile, SearchFiles — scoped to the project's local working directory.
  */
-export function createTools(projectId: string, projectPath: string, modelId: string) {
+export function createTools(
+  projectId: string,
+  projectPath: string,
+  modelId: string,
+  filesystemRoot: string | null,
+) {
   const db = getDb();
   // Laravel: `$directory = $this->modelId ?: 'user'`
   const agentDirectory = modelId || 'user';
+  const workspaceTools = filesystemRoot ? buildWorkspaceTools(filesystemRoot) : {};
 
   function buildFrontmatter(docId: string, name: string, createdBy: string, lastEditedBy: string): string {
     const now = new Date().toISOString();
@@ -353,5 +507,6 @@ export function createTools(projectId: string, projectPath: string, modelId: str
         }
       },
     }),
+    ...workspaceTools,
   };
 }

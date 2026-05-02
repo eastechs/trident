@@ -70,7 +70,7 @@ router.post('/', async (req: ProjectRequest, res) => {
 
   // Resolve model and create tools
   const model = resolveModel(model_id);
-  const baseTools = createTools(projectId, project.path, model_id);
+  const baseTools = createTools(projectId, project.path, model_id, project.filesystemRoot);
 
   // Add a provider-native web search tool so the agent can look up current info.
   const provider = model_id.startsWith('claude-')
@@ -95,7 +95,15 @@ router.post('/', async (req: ProjectRequest, res) => {
   }
 
   const allTools = WebSearch ? { ...baseTools, WebSearch } : baseTools;
-  const systemPrompt = loadInstructions();
+
+  // The workspace pointer goes in the system prompt: it tells the agent the
+  // project has a local working directory and points it at the workspace
+  // tools. Without this, the agent doesn't know the tools exist or what root
+  // they're scoped to.
+  let systemPrompt = loadInstructions();
+  if (project.filesystemRoot) {
+    systemPrompt += `\n\n## Local Workspace\n\nThis project has a local working directory at:\n\`${project.filesystemRoot}\`\n\nUse ListDirectory, ReadFile, and SearchFiles to explore it. Paths passed to those tools are relative to the workspace root above. Use them whenever the user references their project code or asks you to investigate the codebase.`;
+  }
 
   // Anthropic caches up to four breakpoints; mark the system prompt and the
   // last tool definition so the entire stable prefix (system + tools) becomes
