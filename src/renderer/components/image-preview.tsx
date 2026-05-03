@@ -308,7 +308,7 @@ function MetadataPill({
     if (!value) return null;
     return (
         <div className="flex flex-col gap-0.5 px-2.5 py-1">
-            <span className="text-[10px] font-medium tracking-wide text-neutral-500 uppercase dark:text-neutral-500">
+            <span className="text-xs text-neutral-400 dark:text-neutral-500">
                 {label}
             </span>
             <span
@@ -320,12 +320,18 @@ function MetadataPill({
     );
 }
 
-function MetadataPanel({ image }: { image: ImageData }) {
+function MetadataPanel({
+    image,
+    defaultOpen,
+}: {
+    image: ImageData;
+    defaultOpen: boolean;
+}) {
     const meta: ImageMetadata = image.metadata ?? {};
     const aspect = aspectInfo(meta.size);
     const provider = imageProviderFor(meta.model);
     const [copied, setCopied] = useState(false);
-    const [open, setOpen] = useState(true);
+    const [open, setOpen] = useState(defaultOpen);
 
     const copyPrompt = useCallback(
         (e: React.MouseEvent) => {
@@ -361,7 +367,7 @@ function MetadataPanel({ image }: { image: ImageData }) {
                     type="button"
                     className="group flex w-full items-center justify-between border-b border-border px-4 py-2 text-left transition-colors hover:bg-neutral-50/60 dark:hover:bg-neutral-900/40"
                 >
-                    <span className="text-[11px] font-semibold tracking-wider text-neutral-500 uppercase dark:text-neutral-500">
+                    <span className="text-xs text-neutral-400 dark:text-neutral-500">
                         Generation details
                     </span>
                     <ChevronDownIcon className="size-4 text-neutral-400 transition-transform duration-200 group-data-[state=closed]:-rotate-90 dark:text-neutral-500" />
@@ -372,7 +378,7 @@ function MetadataPanel({ image }: { image: ImageData }) {
                     {meta.prompt ? (
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between gap-2">
-                                <span className="text-[10px] font-medium tracking-wide text-neutral-500 uppercase dark:text-neutral-500">
+                                <span className="text-xs text-neutral-400 dark:text-neutral-500">
                                     Prompt
                                 </span>
                                 <Button
@@ -432,9 +438,14 @@ function MetadataPanel({ image }: { image: ImageData }) {
 export function ImagePreview({
     image,
     projectId,
+    defaultDetailsOpen = true,
 }: {
     image: ImageData;
     projectId: string;
+    // Whether the generation-details drawer starts expanded. The gallery
+    // surfaces details prominently (true), the project's chat view defers
+    // to the image itself and starts collapsed (false).
+    defaultDetailsOpen?: boolean;
 }) {
     return (
         <TooltipProvider>
@@ -443,7 +454,7 @@ export function ImagePreview({
                 alt={image.name}
                 resetKey={image.id}
             />
-            <MetadataPanel image={image} />
+            <MetadataPanel image={image} defaultOpen={defaultDetailsOpen} />
         </TooltipProvider>
     );
 }

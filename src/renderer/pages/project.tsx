@@ -1572,6 +1572,7 @@ function ProjectView({
                             <ImagePreview
                               image={img}
                               projectId={project.id}
+                              defaultDetailsOpen={false}
                             />
                           ) : null;
                         })()
