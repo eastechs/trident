@@ -1,4 +1,4 @@
-import { eq, sql, cosineDistance } from 'drizzle-orm';
+import { eq, and, sql, cosineDistance } from 'drizzle-orm';
 import { embed, embedMany } from 'ai';
 import { getDb } from '../database.js';
 import { documents, documentChunks, projects } from '../db/schema.js';
@@ -185,7 +185,7 @@ export async function embedDocument(documentId: string): Promise<void> {
 export async function searchProject(
   projectId: string,
   query: string,
-  opts: { topK?: number } = {},
+  opts: { topK?: number; directory?: string } = {},
 ): Promise<SearchResult[]> {
   const topK = opts.topK ?? 10;
   if (topK <= 0) return [];
@@ -203,6 +203,13 @@ export async function searchProject(
   const similarity = sql<number>`1 - (${distance})`;
   const limit = topK * 5;
 
+  // Optional directory filter so the agent can scope to its own bucket
+  // (e.g. `claude-opus-4-7`) while the project-wide UI search omits it
+  // and sees every document.
+  const where = opts.directory
+    ? and(eq(documents.projectId, projectId), eq(documents.directory, opts.directory))
+    : eq(documents.projectId, projectId);
+
   const rows = await db
     .select({
       documentId: documentChunks.documentId,
@@ -213,7 +220,7 @@ export async function searchProject(
     })
     .from(documentChunks)
     .innerJoin(documents, eq(documents.id, documentChunks.documentId))
-    .where(eq(documents.projectId, projectId))
+    .where(where)
     .orderBy(distance)
     .limit(limit);
 

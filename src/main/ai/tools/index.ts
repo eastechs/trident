@@ -300,8 +300,6 @@ export function createTools(
   filesystemRoot: string | null,
 ) {
   const db = getDb();
-  // Laravel: `$directory = $this->modelId ?: 'user'`
-  const agentDirectory = modelId || 'user';
   const workspaceTools = filesystemRoot ? buildWorkspaceTools(filesystemRoot) : {};
 
   function buildFrontmatter(docId: string, name: string, createdBy: string, lastEditedBy: string): string {
@@ -329,12 +327,21 @@ export function createTools(
     }),
 
     SearchDocuments: tool({
-      description: 'Search for documents in the project. Matches by name and (when an OpenAI key is configured) by content meaning. Use this when the user references a document by name or topic that is not attached to the conversation. Returns matching documents with content snippets.',
+      description: 'Search for documents you previously created in this project. Matches by name and (when an OpenAI key is configured) by content meaning. Returns only documents in your own bucket — to work with a user-authored doc, the user must attach it to the conversation. Use this when the user references one of your prior documents by name or topic that is not attached.',
       inputSchema: z.object({
         query: z.string().describe('A name fragment or topic phrase. Both literal name matches and meaning-based matches are searched.'),
       }),
       execute: async ({ query }, { abortSignal }) => {
         throwIfAborted(abortSignal);
+
+        // Both paths are scoped to the agent's own directory bucket so a
+        // model never surfaces another model's or the user's documents in
+        // search; user docs reach the agent only via explicit attachment.
+        // Without a modelId there is no own-bucket to search, so return
+        // empty rather than falling back to user docs.
+        if (!modelId) {
+          return { status: 'success', documents: [], message: 'No documents found matching that query.' };
+        }
 
         // Prefer semantic search when an OpenAI key is configured and the
         // project allows embeddings. Falls through to ILIKE on any failure.
@@ -345,7 +352,10 @@ export function createTools(
             .where(eq(projects.id, projectId));
           if (project?.embeddingsEnabled) {
             try {
-              const semantic = await searchProject(projectId, query, { topK: 10 });
+              const semantic = await searchProject(projectId, query, {
+                topK: 10,
+                directory: modelId,
+              });
               if (semantic.length === 0) {
                 return { status: 'success', documents: [], message: 'No documents found matching that query.' };
               }
@@ -365,13 +375,12 @@ export function createTools(
           }
         }
 
-        // Name-match fallback. Searches all docs in the project (matching the
-        // embedding scope), not just the agent's own directory bucket.
         const results = await db
           .select({ id: documents.id, name: documents.name })
           .from(documents)
           .where(and(
             eq(documents.projectId, projectId),
+            eq(documents.directory, modelId),
             ilike(documents.name, `%${query}%`),
           ));
 
