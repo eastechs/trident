@@ -2,7 +2,6 @@ import { useSearchParams } from 'react-router-dom';
 import type { CSSProperties } from 'react';
 
 import { useDocumentTitle } from '@/hooks/use-document-title';
-import { ModelSelectorLogo } from '@/components/ai-elements/model-selector';
 import appIcon from '../../images/app-icon.png';
 
 const dragStyle = { WebkitAppRegion: 'drag' } as unknown as CSSProperties;
@@ -51,14 +50,9 @@ export default function About() {
                 </div>
 
                 <div className="mt-auto flex flex-col items-center gap-4">
-                    <div className="flex items-center gap-6 text-neutral-500 dark:text-neutral-400">
-                        <ModelSelectorLogo provider="anthropic" className="size-[18px]" />
-                        <ModelSelectorLogo provider="openai" className="size-[18px]" />
-                        <ModelSelectorLogo provider="gemini" className="size-[18px]" />
-                    </div>
-                    <p className="text-[10.5px] text-muted-foreground/75">
+                    {/* <p className="text-[10.5px] text-muted-foreground/75">
                         © {year} Eastechs
-                    </p>
+                    </p> */}
                 </div>
             </div>
         </div>

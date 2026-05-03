@@ -70,7 +70,7 @@ export function openAboutWindow(): void {
 
   const win = new BrowserWindow({
     width: 380,
-    height: 520,
+    height: 420,
     title: 'About Trident',
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 12, y: 12 },
