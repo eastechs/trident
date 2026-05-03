@@ -24,20 +24,10 @@ export function resolveProviderName(modelId: string): ProviderName {
   return "openai";
 }
 
-const MODEL_LABELS: Record<string, string> = {
-  "claude-opus-4-7": "Opus 4.7",
-  "claude-sonnet-4-6": "Sonnet 4.6",
-  "claude-haiku-4-5": "Haiku 4.5",
-  "gpt-5.5": "GPT-5.5",
-  "gpt-5-mini": "GPT-5 Mini",
-  "gpt-5-nano": "GPT-5 Nano",
-  "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
-  "gemini-3-flash-preview": "Gemini 3 Flash Preview",
-};
-
-export function modelLabel(modelId: string): string {
-  return MODEL_LABELS[modelId] ?? modelId;
-}
+// Re-exported so existing callers keep importing from one place. The
+// underlying lookup lives in model-registry where the live cache of
+// API-returned model names already exists.
+export { displayNameFor as modelLabel } from "./model-registry.js";
 
 export function resolveModel(modelId: string): LanguageModel {
   const provider = resolveProviderName(modelId);

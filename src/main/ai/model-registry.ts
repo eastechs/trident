@@ -63,6 +63,22 @@ export function invalidateModelCache(provider?: ProviderKey): void {
   }
 }
 
+// Sync display-name lookup. Used anywhere a human-readable model name is
+// needed without going async (e.g. notification titles). Prefers a name from
+// the in-memory registry cache (which mirrors what the dropdown shows), then
+// falls back to a derivation from the model id, and finally returns the raw
+// id if nothing else matches.
+export function displayNameFor(modelId: string): string {
+  for (const cached of cache.values()) {
+    const m = cached.models.find((x) => x.id === modelId);
+    if (m) return m.name;
+  }
+  if (modelId.startsWith('claude-')) return deriveAnthropicName(modelId);
+  if (modelId.startsWith('gemini-')) return deriveGeminiName(modelId);
+  if (/^(gpt-|o\d)/.test(modelId)) return deriveOpenAIName(modelId);
+  return modelId;
+}
+
 async function fetchForProvider(provider: ProviderKey): Promise<ModelInfo[]> {
   const key = getApiKey(provider);
   if (!key) return [];
