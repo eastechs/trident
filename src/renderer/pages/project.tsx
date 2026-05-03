@@ -45,6 +45,7 @@ import type {
 import type { EditorHandle } from "@/components/editor";
 import { MilkdownEditorWrapper } from "@/components/editor";
 import { HelpSidebarButton } from "@/components/help-sidebar-button";
+import { ImagePreview } from "@/components/image-preview";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
 import { ProjectTour } from "@/components/project-tour";
 import {
@@ -1557,18 +1558,23 @@ function ProjectView({
                       key={tab.id}
                       className={
                         tab.id === activeTabId
-                          ? "flex flex-1 flex-col"
+                          ? tab.type === "image"
+                            ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                            : "flex flex-1 flex-col"
                           : "hidden"
                       }
                     >
                       {tab.type === "image" ? (
-                        <div className="flex flex-1 items-center justify-center overflow-hidden bg-neutral-50 p-8 dark:bg-neutral-950">
-                          <img
-                            src={`/api/projects/${project.id}/images/${tab.id}`}
-                            alt={tab.title}
-                            className="max-h-full max-w-full object-contain"
-                          />
-                        </div>
+                        (() => {
+                          const img = localImages.find((i) => i.id === tab.id);
+
+                          return img ? (
+                            <ImagePreview
+                              image={img}
+                              projectId={project.id}
+                            />
+                          ) : null;
+                        })()
                       ) : tabContent[tab.id] !== undefined ? (
                         <MilkdownEditorWrapper
                           key={editorKeys[tab.id] ?? 0}
