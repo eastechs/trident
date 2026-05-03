@@ -6,7 +6,7 @@ import path from 'path';
 import { createServer } from './server.js';
 import { buildMenu } from './native/menus.js';
 import { initDatabase } from './database.js';
-import { initSettings } from './settings.js';
+import { initSettings, getSetting } from './settings.js';
 import { selectDirectory } from './native/dialogs.js';
 import { openDocumentationWindow, setMainWindow } from './native/windows.js';
 import { appIconPath } from './native/app-icon.js';
@@ -51,8 +51,9 @@ async function createWindow() {
   setMainWindow(mainWindow);
   Menu.setApplicationMenu(buildMenu(mainWindow));
 
-  const url = isDev ? 'http://localhost:5173' : `http://localhost:${SERVER_PORT}`;
-  mainWindow.loadURL(url);
+  const baseUrl = isDev ? 'http://localhost:5173' : `http://localhost:${SERVER_PORT}`;
+  const initialRoute = getSetting('onboardingCompleted') ? '/' : '/onboarding';
+  mainWindow.loadURL(baseUrl + initialRoute);
 
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
