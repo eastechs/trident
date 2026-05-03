@@ -266,17 +266,30 @@ export function SidebarChat({
     [availableModels],
   );
   const [model, setModel] = useState<string>(() => {
-    const preferred = lockedModel ?? defaultModel ?? FALLBACK_MODELS[0].id;
+    // lockedModel is the conversation's authoritative choice — honor it
+    // verbatim, even when FALLBACK_MODELS (the only data we have at first
+    // render) doesn't contain it. Validating membership here would silently
+    // snap a conversation locked to an outside-fallback model (e.g.
+    // gpt-5.4) to FALLBACK_MODELS[0] (claude-opus-4-7), and the catch-up
+    // effect's early-return-on-locked path would never correct it.
+    if (lockedModel) return lockedModel;
+    const preferred = defaultModel ?? FALLBACK_MODELS[0].id;
     return availableModels.some((m) => m.id === preferred)
       ? preferred
       : (availableModels[0]?.id ?? FALLBACK_MODELS[0].id);
   });
 
-  // Once the dynamic list loads, drop to the first available model if the
-  // current selection isn't in it (e.g. fallback id no longer offered).
+  // Once the dynamic list loads, reconcile the selected model. For a locked
+  // conversation we always force the saved model id (in case anything
+  // upstream — initial state, a parent re-render — set state away from it).
+  // For an unlocked one we drop to the first available model when the
+  // current selection isn't in the fetched list.
   useEffect(() => {
     if (!modelsLoaded || availableModels.length === 0) return;
-    if (lockedModel != null) return;
+    if (lockedModel != null) {
+      if (model !== lockedModel) setModel(lockedModel);
+      return;
+    }
     if (!availableModels.some((m) => m.id === model)) {
       setModel(availableModels[0].id);
     }

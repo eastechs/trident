@@ -35,6 +35,15 @@ router.post('/', async (req: ProjectRequest, res) => {
   // and downstream provider mappers rely on the value being a known level.
   const effort = isEffortLevel(conversation.effort) ? conversation.effort : DEFAULT_EFFORT;
 
+  // Honor the conversation's saved model when it's been pinned. The renderer
+  // disables the selector after the first message, so any divergence between
+  // request.model_id and conversation.model on a non-first request is a
+  // renderer-state bug — defending here keeps stray requests from silently
+  // routing to a different model than what the conversation history shows.
+  // First message in a new conversation has model=null, so we trust the
+  // request id then.
+  const effectiveModelId: string = conversation.model || model_id;
+
   // The client (useChat) sends the full UIMessage[] including the new user message.
   // Use that directly; the DB history would miss the new message.
   const history: UIMessage[] = Array.isArray(requestMessages) ? requestMessages : [];
@@ -93,13 +102,13 @@ router.post('/', async (req: ProjectRequest, res) => {
   }
 
   // Resolve model and create tools
-  const model = resolveModel(model_id);
-  const baseTools = createTools(projectId, project.path, model_id, project.filesystemRoot);
+  const model = resolveModel(effectiveModelId);
+  const baseTools = createTools(projectId, project.path, effectiveModelId, project.filesystemRoot);
 
   // Add a provider-native web search tool so the agent can look up current info.
-  const provider = model_id.startsWith('claude-')
+  const provider = effectiveModelId.startsWith('claude-')
     ? 'anthropic'
-    : model_id.startsWith('gemini-')
+    : effectiveModelId.startsWith('gemini-')
       ? 'gemini'
       : 'openai';
 
@@ -217,7 +226,7 @@ router.post('/', async (req: ProjectRequest, res) => {
       messages: modelMessages,
       tools,
       stopWhen: stepCountIs(25),
-      providerOptions: getProviderOptions(model_id, { projectId, effort }),
+      providerOptions: getProviderOptions(effectiveModelId, { projectId, effort }),
       abortSignal: abortController.signal,
     });
 
@@ -253,7 +262,7 @@ router.post('/', async (req: ProjectRequest, res) => {
         if (part.type === 'finish') {
           const u = part.totalUsage;
           return {
-            model: model_id,
+            model: effectiveModelId,
             usage: {
               prompt_tokens: u.inputTokens,
               completion_tokens: u.outputTokens,
@@ -289,7 +298,7 @@ router.post('/', async (req: ProjectRequest, res) => {
                 parts: msg.parts as unknown as Record<string, unknown>,
                 // Assistant messages have usage attached via messageMetadata.
                 // User messages don't, so fall back to recording the model.
-                metadata: (msg.metadata as Record<string, unknown> | undefined) ?? { model: model_id },
+                metadata: (msg.metadata as Record<string, unknown> | undefined) ?? { model: effectiveModelId },
                 orderIndex: nextIndex++,
               });
             } else if (msg.id === responseMessage.id) {
@@ -299,7 +308,7 @@ router.post('/', async (req: ProjectRequest, res) => {
                 .update(messages)
                 .set({
                   parts: msg.parts as unknown as Record<string, unknown>,
-                  metadata: (msg.metadata as Record<string, unknown> | undefined) ?? { model: model_id },
+                  metadata: (msg.metadata as Record<string, unknown> | undefined) ?? { model: effectiveModelId },
                 })
                 .where(eq(messages.id, msg.id));
             } else {
@@ -321,7 +330,7 @@ router.post('/', async (req: ProjectRequest, res) => {
             const title = await generateConversationTitle(firstUserMsg);
             await db
               .update(conversations)
-              .set({ title, model: model_id, side: side ?? conv.side, updatedAt: new Date() })
+              .set({ title, model: effectiveModelId, side: side ?? conv.side, updatedAt: new Date() })
               .where(eq(conversations.id, conversation_id));
           } else {
             await db
@@ -338,7 +347,7 @@ router.post('/', async (req: ProjectRequest, res) => {
               .map((p) => p.text)
               .join('\n') ?? '';
             const preview = assistantText.split('\n').slice(0, 3).join('\n');
-            showNotification(modelLabel(model_id), preview || 'Agent response complete', {
+            showNotification(modelLabel(effectiveModelId), preview || 'Agent response complete', {
               projectId,
               conversationId: conversation_id,
             });
