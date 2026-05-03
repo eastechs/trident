@@ -124,21 +124,27 @@ const PROVIDER_NAMES: Record<ImageProvider, string> = {
 function aspectInfo(size: string | undefined): {
   label: string | undefined;
   cssRatio: string | undefined;
+  ratio: number | undefined;
 } {
-  if (!size) return { label: undefined, cssRatio: undefined };
+  if (!size) return { label: undefined, cssRatio: undefined, ratio: undefined };
   if (size.includes(":")) {
     const [w, h] = size.split(":").map((s) => parseInt(s, 10));
-    if (!w || !h) return { label: size, cssRatio: undefined };
-    return { label: `${w}:${h}`, cssRatio: `${w} / ${h}` };
+    if (!w || !h) return { label: size, cssRatio: undefined, ratio: undefined };
+    return { label: `${w}:${h}`, cssRatio: `${w} / ${h}`, ratio: w / h };
   }
   const m = size.match(/^(\d+)x(\d+)$/i);
-  if (!m) return { label: size, cssRatio: undefined };
+  if (!m) return { label: size, cssRatio: undefined, ratio: undefined };
   const w = parseInt(m[1], 10);
   const h = parseInt(m[2], 10);
   const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
   const g = gcd(w, h);
-  return { label: `${w / g}:${h / g}`, cssRatio: `${w} / ${h}` };
+  return { label: `${w / g}:${h / g}`, cssRatio: `${w} / ${h}`, ratio: w / h };
 }
+
+// Anything wider than ~16:9 (1.78) gets pulled out of the masonry column flow
+// and rendered full-width, since cramming an ultra-wide thumbnail into one of
+// two narrow columns leaves a thin sliver of an image surrounded by dead space.
+const WIDE_RATIO_THRESHOLD = 1.7;
 
 function qualityLabel(q: string | undefined): string | undefined {
   if (!q) return undefined;
@@ -177,7 +183,7 @@ function ImageCard({
     <button
       onClick={onClick}
       data-active={isActive}
-      className="group relative flex flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white text-left transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:border-neutral-800 dark:bg-neutral-950 dark:hover:border-neutral-700 data-[active=true]:border-primary data-[active=true]:shadow-[0_0_0_1px_var(--color-primary)]"
+      className="group relative block w-full overflow-hidden rounded-xl border border-neutral-200 bg-white text-left transition-colors duration-150 ease-out hover:border-neutral-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:border-neutral-800 dark:bg-neutral-950 dark:hover:border-neutral-700 data-[active=true]:border-primary data-[active=true]:shadow-[0_0_0_1px_var(--color-primary)]"
     >
       {/* Thumbnail keeps the image's natural aspect ratio when known so
           portrait/landscape generations don't all look square. */}
@@ -194,7 +200,7 @@ function ImageCard({
         {provider !== "unknown" && (
           <span
             title={PROVIDER_NAMES[provider]}
-            className="absolute top-1.5 left-1.5 flex items-center justify-center rounded-full bg-black/60 p-1.5 backdrop-blur-sm"
+            className="absolute top-1.5 left-1.5 flex translate-y-1 items-center justify-center rounded-full bg-black/60 p-1.5 opacity-0 backdrop-blur-sm transition-[opacity,transform] duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100"
           >
             {/* Chip background is always dark, so the brand SVG (dark by
                 default) needs to be inverted in both light and dark mode —
@@ -203,20 +209,15 @@ function ImageCard({
             <ModelSelectorLogo provider={provider} className="!size-4 invert" />
           </span>
         )}
-      </div>
-      <div className="flex flex-col gap-1 p-2">
-        <span className="truncate text-xs font-medium text-neutral-800 dark:text-neutral-200">
-          {image.name}
-        </span>
         {(aspect.label || quality) && (
-          <div className="flex items-center gap-1 text-[10px] font-medium text-neutral-500 dark:text-neutral-400">
+          <div className="absolute bottom-1.5 left-1.5 flex translate-y-1 items-center gap-1 text-[10px] font-medium text-white opacity-0 transition-[opacity,transform] duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100">
             {aspect.label && (
-              <span className="rounded bg-neutral-100 px-1.5 py-0.5 tabular-nums dark:bg-neutral-900">
+              <span className="rounded bg-black/60 px-1.5 py-0.5 tabular-nums backdrop-blur-sm">
                 {aspect.label}
               </span>
             )}
             {quality && (
-              <span className="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-900">
+              <span className="rounded bg-black/60 px-1.5 py-0.5 backdrop-blur-sm">
                 {quality}
               </span>
             )}
@@ -962,35 +963,45 @@ function GalleryView({
                     <p>No images yet</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {localImages.map((image) => (
-                      <ContextMenu key={image.id}>
-                        <ContextMenuTrigger asChild>
-                          <div>
-                            <ImageCard
-                              image={image}
-                              projectId={project.id}
-                              isActive={image.id === activeTabId}
-                              onClick={() => openImage(image)}
-                            />
-                          </div>
-                        </ContextMenuTrigger>
-                        <ContextMenuContent>
-                          <ContextMenuItem
-                            onSelect={() => startRename(image.id)}
-                          >
-                            Rename
-                          </ContextMenuItem>
-                          <ContextMenuSeparator />
-                          <ContextMenuItem
-                            onSelect={() => setDeletingTabId(image.id)}
-                            className="text-red-600 dark:text-red-400"
-                          >
-                            Delete
-                          </ContextMenuItem>
-                        </ContextMenuContent>
-                      </ContextMenu>
-                    ))}
+                  <div className="columns-2 gap-2.5">
+                    {localImages.map((image) => {
+                      const ratio = aspectInfo(
+                        image.metadata?.size,
+                      ).ratio;
+                      const isWide =
+                        ratio !== undefined && ratio >= WIDE_RATIO_THRESHOLD;
+
+                      return (
+                        <ContextMenu key={image.id}>
+                          <ContextMenuTrigger asChild>
+                            <div
+                              className={`mb-2.5 break-inside-avoid ${isWide ? "[column-span:all]" : ""}`}
+                            >
+                              <ImageCard
+                                image={image}
+                                projectId={project.id}
+                                isActive={image.id === activeTabId}
+                                onClick={() => openImage(image)}
+                              />
+                            </div>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent>
+                            <ContextMenuItem
+                              onSelect={() => startRename(image.id)}
+                            >
+                              Rename
+                            </ContextMenuItem>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem
+                              onSelect={() => setDeletingTabId(image.id)}
+                              className="text-red-600 dark:text-red-400"
+                            >
+                              Delete
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
+                      );
+                    })}
                   </div>
                 )}
               </div>
