@@ -9,6 +9,13 @@ const TOKEN_CAP = 512;
 const SNIPPET_CHARS = 300;
 const RETRY_DELAYS_MS = [250, 500, 1000];
 
+// Minimum cosine similarity (1 - distance) required to surface a chunk.
+// text-embedding-3-small produces ~0.6+ for related content, ~0.3-0.5 for
+// loosely related, and below ~0.3 for unrelated. Without this floor a small
+// project would always return every doc since topK > doc count, and even
+// completely unrelated ones get a non-zero score.
+const MIN_SIMILARITY = 0.3;
+
 export class NoOpenAIKeyError extends Error {
   constructor() { super('no-openai-key'); this.name = 'NoOpenAIKeyError'; }
 }
@@ -205,10 +212,15 @@ export async function searchProject(
 
   // Optional directory filter so the agent can scope to its own bucket
   // (e.g. `claude-opus-4-7`) while the project-wide UI search omits it
-  // and sees every document.
-  const where = opts.directory
-    ? and(eq(documents.projectId, projectId), eq(documents.directory, opts.directory))
-    : eq(documents.projectId, projectId);
+  // and sees every document. The similarity floor is applied at the
+  // database level so noise never makes it into the topK window.
+  const filters = [
+    eq(documents.projectId, projectId),
+    sql`${distance} < ${1 - MIN_SIMILARITY}`,
+  ];
+  if (opts.directory) {
+    filters.push(eq(documents.directory, opts.directory));
+  }
 
   const rows = await db
     .select({
@@ -220,7 +232,7 @@ export async function searchProject(
     })
     .from(documentChunks)
     .innerJoin(documents, eq(documents.id, documentChunks.documentId))
-    .where(where)
+    .where(and(...filters))
     .orderBy(distance)
     .limit(limit);
 
