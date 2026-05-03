@@ -54,9 +54,11 @@ import {
   PromptInputBody,
   PromptInputButton,
   PromptInputFooter,
+  PromptInputProvider,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
+  usePromptInputController,
 } from "@/components/ai-elements/prompt-input";
 import { QuestionsCard } from "@/components/ai-elements/questions-card";
 import {
@@ -162,6 +164,40 @@ const FALLBACK_MODELS: ModelInfo[] = [
 // The real per-model values come from `selectedModelData.pricing.contextWindow`
 // (sourced from LiteLLM at app launch — see src/main/ai/pricing.ts).
 const FALLBACK_CONTEXT_WINDOW = 200_000;
+
+const draftKeyFor = (conversationId: string) =>
+  `trident:conversation:${conversationId}:draft`;
+
+function loadDraft(conversationId: string): string {
+  try {
+    return localStorage.getItem(draftKeyFor(conversationId)) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+// Mounted inside <PromptInputProvider>; reads the live textarea value from
+// the controller and mirrors it to localStorage on every change. Unsent
+// text survives navigation away from the conversation; on submit the
+// controller calls clear() which empties the value, and we erase the
+// localStorage entry in the same effect.
+function DraftPersister({ conversationId }: { conversationId: string }) {
+  const { textInput } = usePromptInputController();
+  useEffect(() => {
+    const key = draftKeyFor(conversationId);
+    try {
+      if (textInput.value) {
+        localStorage.setItem(key, textInput.value);
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch {
+      // localStorage may be unavailable (private browsing, quota); silently
+      // skip — drafts are a nice-to-have, not load-bearing.
+    }
+  }, [conversationId, textInput.value]);
+  return null;
+}
 
 interface UsageData {
   prompt_tokens?: number;
@@ -830,250 +866,258 @@ export function SidebarChat({
           >
             <div className="pointer-events-none absolute -inset-6 rounded-full bg-primary/10 blur-3xl dark:bg-primary/20" />
             <div className="relative">
-              <PromptInput onSubmit={handleSubmit}>
-                <PromptInputBody>
-                  <PromptInputTextarea
-                    placeholder={
-                      questionsLocked
-                        ? "Answer the questions above to continue..."
-                        : "Ask anything..."
-                    }
-                    disabled={questionsLocked}
-                  />
-                </PromptInputBody>
-                <PromptInputFooter>
-                  <PromptInputTools>
-                    {isModelLocked ? (
-                      <PromptInputButton
-                        disabled
-                        className="h-7 gap-1 px-2 text-xs opacity-60 cursor-default"
-                      >
-                        {selectedModelData?.providerSlug && (
-                          <ModelSelectorLogo
-                            provider={selectedModelData.providerSlug}
-                          />
-                        )}
-                        {selectedModelData?.name && (
-                          <ModelSelectorName>
-                            {selectedModelData.name}
-                          </ModelSelectorName>
-                        )}
-                      </PromptInputButton>
-                    ) : (
-                      <ModelSelector
-                        onOpenChange={setModelSelectorOpen}
-                        open={modelSelectorOpen}
-                      >
-                        <ModelSelectorTrigger asChild>
-                          <PromptInputButton className="h-7 gap-1 px-2 text-xs">
-                            {selectedModelData?.providerSlug && (
-                              <ModelSelectorLogo
-                                provider={selectedModelData.providerSlug}
-                              />
-                            )}
-                            {selectedModelData?.name && (
-                              <ModelSelectorName>
-                                {selectedModelData.name}
-                              </ModelSelectorName>
-                            )}
-                          </PromptInputButton>
-                        </ModelSelectorTrigger>
-                        <ModelSelectorContent showCloseButton={false}>
-                          <ModelSelectorInput placeholder="Search models..." />
-                          <ModelSelectorList>
-                            <ModelSelectorEmpty>
-                              No models found.
-                            </ModelSelectorEmpty>
-                            {availableProviders.map((provider) => (
-                              <ModelSelectorGroup
-                                heading={provider}
-                                key={provider}
-                              >
-                                {availableModels
-                                  .filter((m) => m.provider === provider)
-                                  .map((m) => (
-                                    <ModelSelectorItem
-                                      key={m.id}
-                                      onSelect={() => handleModelSelect(m.id)}
-                                      value={m.id}
-                                    >
-                                      <ModelSelectorLogo
-                                        provider={m.providerSlug}
-                                      />
-                                      <ModelSelectorName>
-                                        {m.name}
-                                      </ModelSelectorName>
-                                      {model === m.id ? (
-                                        <CheckIcon className="ml-auto size-4" />
-                                      ) : (
-                                        <div className="ml-auto size-4" />
-                                      )}
-                                    </ModelSelectorItem>
-                                  ))}
-                              </ModelSelectorGroup>
-                            ))}
-                          </ModelSelectorList>
-                        </ModelSelectorContent>
-                      </ModelSelector>
-                    )}
-                    <Select
-                      value={effort}
-                      onValueChange={(v) =>
-                        handleEffortChange(v as EffortLevel)
+              <PromptInputProvider
+                key={conversationId}
+                initialInput={loadDraft(conversationId)}
+              >
+                <DraftPersister conversationId={conversationId} />
+                <PromptInput onSubmit={handleSubmit}>
+                  <PromptInputBody>
+                    <PromptInputTextarea
+                      placeholder={
+                        questionsLocked
+                          ? "Answer the questions above to continue..."
+                          : "Ask anything..."
                       }
-                    >
-                      <SelectTrigger
-                        size="sm"
-                        className="h-7 w-auto gap-1 border-transparent bg-transparent px-2 text-xs font-medium text-muted-foreground shadow-none hover:bg-neutral-50 focus:ring-0 dark:hover:bg-neutral-800 [&>svg]:hidden"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent align="start">
-                        {EFFORT_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {usedTokens > 0 && (
-                      <Context
-                        maxTokens={maxTokens}
-                        usedTokens={usedTokens}
-                        usage={contextUsage}
-                        pricing={selectedModelData?.pricing}
-                      >
-                        <ContextTrigger className="h-7 gap-1 px-2 text-xs font-medium" />
-                        <ContextContent>
-                          <ContextContentHeader />
-                          <ContextContentBody>
-                            <ContextInputUsage />
-                            <ContextOutputUsage />
-                            <ContextReasoningUsage />
-                            <ContextCacheUsage />
-                            <ContextCacheWriteUsage />
-                          </ContextContentBody>
-                          <ContextContentFooter />
-                        </ContextContent>
-                      </Context>
-                    )}
-                  </PromptInputTools>
-                  <div className="flex items-center gap-1">
-                    <Popover
-                      open={attachmentSelectorOpen}
-                      onOpenChange={setAttachmentSelectorOpen}
-                    >
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className="relative flex shrink-0 items-center justify-center rounded p-1.5 text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+                      disabled={questionsLocked}
+                    />
+                  </PromptInputBody>
+                  <PromptInputFooter>
+                    <PromptInputTools>
+                      {isModelLocked ? (
+                        <PromptInputButton
+                          disabled
+                          className="h-7 gap-1 px-2 text-xs opacity-60 cursor-default"
                         >
-                          <PlusIcon className="size-4" />
-                          {selectedDocumentIds.size > 0 && (
-                            <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
-                              {selectedDocumentIds.size}
-                            </span>
+                          {selectedModelData?.providerSlug && (
+                            <ModelSelectorLogo
+                              provider={selectedModelData.providerSlug}
+                            />
                           )}
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent align="end" className="w-64 gap-1 p-2">
-                        <div className="mb-2 flex items-center justify-between px-2">
-                          <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                            Attach Documents
-                          </span>
-                        </div>
-                        <TooltipProvider
-                          delayDuration={300}
-                          skipDelayDuration={0}
+                          {selectedModelData?.name && (
+                            <ModelSelectorName>
+                              {selectedModelData.name}
+                            </ModelSelectorName>
+                          )}
+                        </PromptInputButton>
+                      ) : (
+                        <ModelSelector
+                          onOpenChange={setModelSelectorOpen}
+                          open={modelSelectorOpen}
                         >
-                          <div className="flex max-h-60 flex-col gap-0.5 overflow-y-auto">
-                            {(() => {
-                              const groups = documents.reduce<
-                                Record<string, DocumentData[]>
-                              >((acc, doc) => {
-                                const dir = doc.directory ?? "user";
-                                (acc[dir] ??= []).push(doc);
-
-                                return acc;
-                              }, {});
-                              const sortedDirs = Object.keys(groups).sort(
-                                (a, b) => {
-                                  if (a === "user") {
-                                    return -1;
-                                  }
-
-                                  if (b === "user") {
-                                    return 1;
-                                  }
-
-                                  return a.localeCompare(b);
-                                },
-                              );
-
-                              return sortedDirs.map((dir) => (
-                                <div key={dir}>
-                                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
-                                    {dir === "user" ? "Your Documents" : dir}
-                                  </div>
-                                  {groups[dir].map((doc) => (
-                                    <Tooltip key={doc.id}>
-                                      <TooltipTrigger
-                                        asChild
-                                        onFocus={(e) => e.preventDefault()}
+                          <ModelSelectorTrigger asChild>
+                            <PromptInputButton className="h-7 gap-1 px-2 text-xs">
+                              {selectedModelData?.providerSlug && (
+                                <ModelSelectorLogo
+                                  provider={selectedModelData.providerSlug}
+                                />
+                              )}
+                              {selectedModelData?.name && (
+                                <ModelSelectorName>
+                                  {selectedModelData.name}
+                                </ModelSelectorName>
+                              )}
+                            </PromptInputButton>
+                          </ModelSelectorTrigger>
+                          <ModelSelectorContent showCloseButton={false}>
+                            <ModelSelectorInput placeholder="Search models..." />
+                            <ModelSelectorList>
+                              <ModelSelectorEmpty>
+                                No models found.
+                              </ModelSelectorEmpty>
+                              {availableProviders.map((provider) => (
+                                <ModelSelectorGroup
+                                  heading={provider}
+                                  key={provider}
+                                >
+                                  {availableModels
+                                    .filter((m) => m.provider === provider)
+                                    .map((m) => (
+                                      <ModelSelectorItem
+                                        key={m.id}
+                                        onSelect={() => handleModelSelect(m.id)}
+                                        value={m.id}
                                       >
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleDocument(doc.id)}
-                                          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
-                                            selectedDocumentIds.has(doc.id)
-                                              ? "bg-neutral-50 dark:bg-neutral-900"
-                                              : ""
-                                          }`}
+                                        <ModelSelectorLogo
+                                          provider={m.providerSlug}
+                                        />
+                                        <ModelSelectorName>
+                                          {m.name}
+                                        </ModelSelectorName>
+                                        {model === m.id ? (
+                                          <CheckIcon className="ml-auto size-4" />
+                                        ) : (
+                                          <div className="ml-auto size-4" />
+                                        )}
+                                      </ModelSelectorItem>
+                                    ))}
+                                </ModelSelectorGroup>
+                              ))}
+                            </ModelSelectorList>
+                          </ModelSelectorContent>
+                        </ModelSelector>
+                      )}
+                      <Select
+                        value={effort}
+                        onValueChange={(v) =>
+                          handleEffortChange(v as EffortLevel)
+                        }
+                      >
+                        <SelectTrigger
+                          size="sm"
+                          className="h-7 w-auto gap-1 border-transparent bg-transparent px-2 text-xs font-medium text-muted-foreground shadow-none hover:bg-neutral-50 focus:ring-0 dark:hover:bg-neutral-800 [&>svg]:hidden"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="start">
+                          {EFFORT_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {usedTokens > 0 && (
+                        <Context
+                          maxTokens={maxTokens}
+                          usedTokens={usedTokens}
+                          usage={contextUsage}
+                          pricing={selectedModelData?.pricing}
+                        >
+                          <ContextTrigger className="h-7 gap-1 px-2 text-xs font-medium" />
+                          <ContextContent>
+                            <ContextContentHeader />
+                            <ContextContentBody>
+                              <ContextInputUsage />
+                              <ContextOutputUsage />
+                              <ContextReasoningUsage />
+                              <ContextCacheUsage />
+                              <ContextCacheWriteUsage />
+                            </ContextContentBody>
+                            <ContextContentFooter />
+                          </ContextContent>
+                        </Context>
+                      )}
+                    </PromptInputTools>
+                    <div className="flex items-center gap-1">
+                      <Popover
+                        open={attachmentSelectorOpen}
+                        onOpenChange={setAttachmentSelectorOpen}
+                      >
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="relative flex shrink-0 items-center justify-center rounded p-1.5 text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+                          >
+                            <PlusIcon className="size-4" />
+                            {selectedDocumentIds.size > 0 && (
+                              <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+                                {selectedDocumentIds.size}
+                              </span>
+                            )}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent align="end" className="w-64 gap-1 p-2">
+                          <div className="mb-2 flex items-center justify-between px-2">
+                            <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                              Attach Documents
+                            </span>
+                          </div>
+                          <TooltipProvider
+                            delayDuration={300}
+                            skipDelayDuration={0}
+                          >
+                            <div className="flex max-h-60 flex-col gap-0.5 overflow-y-auto">
+                              {(() => {
+                                const groups = documents.reduce<
+                                  Record<string, DocumentData[]>
+                                >((acc, doc) => {
+                                  const dir = doc.directory ?? "user";
+                                  (acc[dir] ??= []).push(doc);
+
+                                  return acc;
+                                }, {});
+                                const sortedDirs = Object.keys(groups).sort(
+                                  (a, b) => {
+                                    if (a === "user") {
+                                      return -1;
+                                    }
+
+                                    if (b === "user") {
+                                      return 1;
+                                    }
+
+                                    return a.localeCompare(b);
+                                  },
+                                );
+
+                                return sortedDirs.map((dir) => (
+                                  <div key={dir}>
+                                    <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                                      {dir === "user" ? "Your Documents" : dir}
+                                    </div>
+                                    {groups[dir].map((doc) => (
+                                      <Tooltip key={doc.id}>
+                                        <TooltipTrigger
+                                          asChild
+                                          onFocus={(e) => e.preventDefault()}
                                         >
-                                          <div
-                                            className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              toggleDocument(doc.id)
+                                            }
+                                            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
                                               selectedDocumentIds.has(doc.id)
-                                                ? "border-primary bg-primary text-primary-foreground"
-                                                : "border-neutral-300 dark:border-neutral-600"
+                                                ? "bg-neutral-50 dark:bg-neutral-900"
+                                                : ""
                                             }`}
                                           >
-                                            {selectedDocumentIds.has(
-                                              doc.id,
-                                            ) && (
-                                              <CheckIcon className="size-3" />
-                                            )}
-                                          </div>
-                                          <FileTextIcon className="size-4 shrink-0 text-neutral-400" />
-                                          <span className="truncate">
-                                            {doc.name}
-                                          </span>
-                                        </button>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="left">
-                                        {doc.name}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ))}
-                                </div>
-                              ));
-                            })()}
-                            {documents.length === 0 && (
-                              <p className="px-2 py-1.5 text-sm text-neutral-400">
-                                No documents
-                              </p>
-                            )}
-                          </div>
-                        </TooltipProvider>
-                      </PopoverContent>
-                    </Popover>
-                    <PromptInputSubmit
-                      status={status}
-                      onStop={handleStop}
-                      disabled={!isStreaming && questionsLocked}
-                    />
-                  </div>
-                </PromptInputFooter>
-              </PromptInput>
+                                            <div
+                                              className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                                                selectedDocumentIds.has(doc.id)
+                                                  ? "border-primary bg-primary text-primary-foreground"
+                                                  : "border-neutral-300 dark:border-neutral-600"
+                                              }`}
+                                            >
+                                              {selectedDocumentIds.has(
+                                                doc.id,
+                                              ) && (
+                                                <CheckIcon className="size-3" />
+                                              )}
+                                            </div>
+                                            <FileTextIcon className="size-4 shrink-0 text-neutral-400" />
+                                            <span className="truncate">
+                                              {doc.name}
+                                            </span>
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="left">
+                                          {doc.name}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ))}
+                                  </div>
+                                ));
+                              })()}
+                              {documents.length === 0 && (
+                                <p className="px-2 py-1.5 text-sm text-neutral-400">
+                                  No documents
+                                </p>
+                              )}
+                            </div>
+                          </TooltipProvider>
+                        </PopoverContent>
+                      </Popover>
+                      <PromptInputSubmit
+                        status={status}
+                        onStop={handleStop}
+                        disabled={!isStreaming && questionsLocked}
+                      />
+                    </div>
+                  </PromptInputFooter>
+                </PromptInput>
+              </PromptInputProvider>
             </div>
           </div>
         )}
