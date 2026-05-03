@@ -7,7 +7,9 @@ import path from 'path';
 import readline from 'readline';
 import ignore, { type Ignore } from 'ignore';
 import { getDb } from '../../database.js';
-import { documents } from '../../db/schema.js';
+import { documents, projects } from '../../db/schema.js';
+import { getApiKey } from '../../settings.js';
+import { embedDocument, searchProject, NoOpenAIKeyError } from '../embeddings.js';
 
 // ─── Workspace tools ─────────────────────────────────────────
 //
@@ -327,18 +329,49 @@ export function createTools(
     }),
 
     SearchDocuments: tool({
-      description: 'Search for documents in the project by name. Use this when the user references a document by name that is not attached to the conversation. Returns matching document IDs and names.',
+      description: 'Search for documents in the project. Matches by name and (when an OpenAI key is configured) by content meaning. Use this when the user references a document by name or topic that is not attached to the conversation. Returns matching documents with content snippets.',
       inputSchema: z.object({
-        query: z.string().describe('The search term to match against document names.'),
+        query: z.string().describe('A name fragment or topic phrase. Both literal name matches and meaning-based matches are searched.'),
       }),
       execute: async ({ query }, { abortSignal }) => {
         throwIfAborted(abortSignal);
+
+        // Prefer semantic search when an OpenAI key is configured and the
+        // project allows embeddings. Falls through to ILIKE on any failure.
+        if (getApiKey('openai')) {
+          const [project] = await db
+            .select({ embeddingsEnabled: projects.embeddingsEnabled })
+            .from(projects)
+            .where(eq(projects.id, projectId));
+          if (project?.embeddingsEnabled) {
+            try {
+              const semantic = await searchProject(projectId, query, { topK: 10 });
+              if (semantic.length === 0) {
+                return { status: 'success', documents: [], message: 'No documents found matching that query.' };
+              }
+              return {
+                status: 'success',
+                documents: semantic.map((d) => ({
+                  document_id: d.id,
+                  document_name: d.name,
+                  snippet: d.snippet,
+                })),
+              };
+            } catch (err) {
+              if (!(err instanceof NoOpenAIKeyError)) {
+                console.error('[embeddings] Semantic search failed, falling back to name match:', err);
+              }
+            }
+          }
+        }
+
+        // Name-match fallback. Searches all docs in the project (matching the
+        // embedding scope), not just the agent's own directory bucket.
         const results = await db
           .select({ id: documents.id, name: documents.name })
           .from(documents)
           .where(and(
             eq(documents.projectId, projectId),
-            eq(documents.directory, agentDirectory),
             ilike(documents.name, `%${query}%`),
           ));
 
@@ -405,6 +438,10 @@ export function createTools(
         const createdBy = doc.createdBy ?? 'ai';
         const frontMatter = buildFrontmatter(doc.id, doc.name, createdBy, editedBy);
         fs.writeFileSync(path.join(os.homedir(), doc.path), frontMatter + content);
+
+        void embedDocument(doc.id).catch((err) => {
+          console.error(`[embeddings] Failed to embed doc ${doc.id}:`, err);
+        });
 
         return {
           status: 'success',
@@ -511,6 +548,10 @@ export function createTools(
 
         const frontMatter = buildFrontmatter(doc.id, name, createdBy, createdBy);
         fs.writeFileSync(fullPath, frontMatter + content);
+
+        void embedDocument(doc.id).catch((err) => {
+          console.error(`[embeddings] Failed to embed doc ${doc.id}:`, err);
+        });
 
         return {
           status: 'success',

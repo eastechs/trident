@@ -7,6 +7,7 @@ import { shell } from 'electron';
 import { getDb } from '../database.js';
 import { documents } from '../db/schema.js';
 import { getSetting } from '../settings.js';
+import { embedDocument } from '../ai/embeddings.js';
 
 const router = Router({ mergeParams: true });
 
@@ -145,6 +146,12 @@ router.put('/:docId/content', async (req: DocRequest, res) => {
   fs.writeFileSync(path.join(os.homedir(), document.path), frontMatter + content);
 
   res.json({ success: true });
+
+  // Re-embed in the background. The function is a no-op when embeddings are
+  // disabled for the project or no OpenAI key is configured.
+  void embedDocument(document.id).catch((err) => {
+    console.error(`[embeddings] Failed to embed doc ${document.id}:`, err);
+  });
 });
 
 // ─── Destroy ───────────────────────────────────────────────

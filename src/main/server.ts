@@ -7,6 +7,7 @@ import imageRoutes from './routes/images.js';
 import conversationRoutes from './routes/conversations.js';
 import settingsRoutes from './routes/settings.js';
 import chatRoutes from './routes/chat.js';
+import searchRoutes from './routes/search.js';
 
 export async function createServer(port: number): Promise<void> {
   const isDev = !electronApp.isPackaged;
@@ -25,6 +26,7 @@ export async function createServer(port: number): Promise<void> {
   app.use('/api/projects/:projectId/images', imageRoutes);
   app.use('/api/projects/:projectId/conversations', conversationRoutes);
   app.use('/api/projects/:projectId/chat', chatRoutes);
+  app.use('/api/projects/:projectId/search', searchRoutes);
   app.use('/api/settings', settingsRoutes);
 
   app.post('/api/select-directory', async (_req, res) => {

@@ -36,6 +36,7 @@ function serializeProject(p: ProjectRow): Record<string, unknown> {
     path: p.path,
     filesystem_root: p.filesystemRoot,
     initial_prompt: p.initialPrompt,
+    embeddings_enabled: p.embeddingsEnabled,
     created_at: p.createdAt,
     updated_at: p.updatedAt,
   };
@@ -143,6 +144,7 @@ router.get('/:id', async (req, res) => {
       path: project.path,
       filesystem_root: project.filesystemRoot,
       initial_prompt: project.initialPrompt,
+      embeddings_enabled: project.embeddingsEnabled,
       created_at: project.createdAt,
       updated_at: project.updatedAt,
     },
@@ -211,7 +213,7 @@ router.post('/', async (req, res) => {
 
 router.patch('/:id', async (req, res) => {
   const db = getDb();
-  const { name, description, filesystem_root } = req.body;
+  const { name, description, filesystem_root, embeddings_enabled } = req.body;
 
   const [existing] = await db.select().from(projects).where(eq(projects.id, req.params.id));
   if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
@@ -285,6 +287,7 @@ router.patch('/:id', async (req, res) => {
       description: description ?? '',
       filesystemRoot: resolvedRoot,
       path: newProjectPath,
+      ...(typeof embeddings_enabled === 'boolean' ? { embeddingsEnabled: embeddings_enabled } : {}),
       updatedAt: new Date(),
     })
     .where(eq(projects.id, req.params.id))

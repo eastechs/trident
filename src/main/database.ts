@@ -1,4 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
+import { vector } from '@electric-sql/pglite/vector';
 import { drizzle } from 'drizzle-orm/pglite';
 import { app } from 'electron';
 import path from 'path';
@@ -11,7 +12,7 @@ let pglite: PGlite;
 export async function initDatabase() {
   const dataDir = path.join(app.getPath('userData'), 'pglite');
 
-  pglite = new PGlite(dataDir);
+  pglite = new PGlite(dataDir, { extensions: { vector } });
   db = drizzle(pglite, { schema });
 
   await runMigrations(pglite);

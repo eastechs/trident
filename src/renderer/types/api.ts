@@ -1,43 +1,44 @@
 export interface ProjectData {
-    id: string;
-    name: string;
-    description: string | null;
-    filesystem_root: string | null;
-    initial_prompt: string | null;
-    path: string;
-    created_at: string;
-    updated_at: string;
+  id: string;
+  name: string;
+  description: string | null;
+  filesystem_root: string | null;
+  initial_prompt: string | null;
+  embeddings_enabled: boolean;
+  path: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DocumentData {
-    id: string;
-    name: string;
-    created_by: string | null;
-    last_edited_by: string | null;
-    directory: string;
+  id: string;
+  name: string;
+  created_by: string | null;
+  last_edited_by: string | null;
+  directory: string;
 }
 
 export interface ImageData {
-    id: string;
-    name: string;
-    created_by: string | null;
+  id: string;
+  name: string;
+  created_by: string | null;
 }
 
-export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
+export type EffortLevel = "low" | "medium" | "high" | "max";
 
 export interface ConversationData {
-    id: string;
-    title: string;
-    side: string | null;
-    model: string | null;
-    effort: EffortLevel;
-    updated_at: string;
-    message_count: number;
+  id: string;
+  title: string;
+  side: string | null;
+  model: string | null;
+  effort: EffortLevel;
+  updated_at: string;
+  message_count: number;
 }
 
 export interface ModelInfo {
-    id: string;
-    provider: 'Anthropic' | 'OpenAI' | 'Gemini';
-    providerSlug: 'anthropic' | 'openai' | 'google';
-    name: string;
+  id: string;
+  provider: "Anthropic" | "OpenAI" | "Gemini";
+  providerSlug: "anthropic" | "openai" | "google";
+  name: string;
 }

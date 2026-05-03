@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, timestamp, jsonb, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, jsonb, integer, boolean } from 'drizzle-orm/pg-core';
+import { vector } from 'drizzle-orm/pg-core/columns/vector_extension/vector';
 
 // ─── Projects ──────────────────────────────────────────────
 
@@ -9,6 +10,7 @@ export const projects = pgTable('projects', {
   path: text('path').notNull(),
   filesystemRoot: text('filesystem_root'),
   initialPrompt: text('initial_prompt'),
+  embeddingsEnabled: boolean('embeddings_enabled').default(true).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -87,5 +89,26 @@ export const messages = pgTable('messages', {
   parts: jsonb('parts').notNull(), // UIMessage.parts[] — ordered array
   metadata: jsonb('metadata'), // usage stats, model info, etc.
   orderIndex: integer('order_index').notNull(), // explicit ordering within conversation
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ─── Document chunks (vector embeddings) ───────────────────
+//
+// Each row is a heading-aware chunk of a document plus its 1536-dim OpenAI
+// embedding. Re-embedding a document is a delete-then-insert in a single
+// transaction, so chunkIndex is only meaningful within a single embedding pass.
+//
+// FK CASCADE means deleting a doc (or its parent project) wipes its chunks.
+
+export const documentChunks = pgTable('document_chunks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  documentId: uuid('document_id')
+    .notNull()
+    .references(() => documents.id, { onDelete: 'cascade' }),
+  chunkIndex: integer('chunk_index').notNull(),
+  headingPath: jsonb('heading_path').notNull().default([]), // string[]
+  text: text('text').notNull(),
+  tokenCount: integer('token_count').notNull(),
+  embedding: vector('embedding', { dimensions: 1536 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
