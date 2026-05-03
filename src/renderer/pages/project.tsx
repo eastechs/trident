@@ -1026,6 +1026,17 @@ function ProjectView({
     [],
   );
 
+  const handleNewConversationInLeft = useCallback(() => {
+    api_post<ConversationData>(`/api/projects/${project.id}/conversations`)
+      .then((data) => {
+        handleConversationCreated(data);
+        setLeftRequestedId(data.id);
+        const panel = leftPanelRef.current;
+        if (panel?.isCollapsed()) panel.resize("25%");
+      })
+      .catch(console.error);
+  }, [project.id, handleConversationCreated, leftPanelRef]);
+
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
 
@@ -1071,37 +1082,27 @@ function ProjectView({
     }
   }, [rightPanelRef]);
 
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+
   useNativeMenu({
     onNewDocument: addTab,
-    onSave: () => {
-      const active = tabs.find((t) => t.id === activeTabId);
-
-      if (active?.type === "document") {
-        saveDocument(activeTabId);
-      }
-    },
-    onPrint: () => {
-      const active = tabs.find((t) => t.id === activeTabId);
-
-      if (active?.type === "document") {
-        printDocumentContent(active.title);
-      }
-    },
-    onClose: () => {
-      if (activeTabId) {
-        closeTab(activeTabId, {
-          stopPropagation: () => {},
-        } as React.MouseEvent);
-      }
-    },
-    onDelete: () => {
-      if (activeTabId) {
-        deleteTab(activeTabId);
-      }
-    },
+    onNewConversation: handleNewConversationInLeft,
+    onSave:
+      activeTab?.type === "document"
+        ? () => saveDocument(activeTabId)
+        : undefined,
+    onPrint:
+      activeTab?.type === "document"
+        ? () => printDocumentContent(activeTab.title)
+        : undefined,
+    onClose: activeTabId
+      ? () =>
+          closeTab(activeTabId, {
+            stopPropagation: () => {},
+          } as React.MouseEvent)
+      : undefined,
+    onDelete: activeTabId ? () => deleteTab(activeTabId) : undefined,
   });
-
-  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
   return (
     <div className="flex h-screen flex-col">

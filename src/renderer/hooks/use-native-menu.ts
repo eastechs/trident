@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 
 interface NativeMenuActions {
     onNewDocument?: () => void;
+    onNewConversation?: () => void;
     onSave?: () => void;
     onSaveAs?: () => void;
     onExport?: () => void;
@@ -70,6 +71,7 @@ export function printDocumentContent(title: string): void {
 
 const ACTION_MAP: Record<string, keyof NativeMenuActions> = {
     'new-document': 'onNewDocument',
+    'new-conversation': 'onNewConversation',
     save: 'onSave',
     'save-as': 'onSaveAs',
     export: 'onExport',
@@ -101,5 +103,31 @@ export function useNativeMenu(actions: NativeMenuActions): void {
             }
         });
         return unsubscribe;
+    }, []);
+
+    // Derive the set of currently-enabled action ids from which handlers are
+    // defined. Pages omit handlers (or pass undefined) when an action doesn't
+    // apply to the current state — e.g. Save when the active tab is an image.
+    // The sorted-string key keeps the sync effect from re-firing when only
+    // handler identity changed but the enabled set didn't.
+    const enabledKey = Object.entries(ACTION_MAP)
+        .filter(([, handlerKey]) => typeof actions[handlerKey] === 'function')
+        .map(([id]) => id)
+        .sort()
+        .join(',');
+
+    useEffect(() => {
+        const api = window.electronAPI;
+        if (!api?.setMenuEnabled) return;
+        api.setMenuEnabled(enabledKey ? enabledKey.split(',') : []);
+    }, [enabledKey]);
+
+    useEffect(() => {
+        // Reset menu state when the page using this hook unmounts so a route
+        // change doesn't leave stale items enabled. The next page's hook (if
+        // any) will re-enable what it actually supports.
+        return () => {
+            window.electronAPI?.setMenuEnabled?.([]);
+        };
     }, []);
 }

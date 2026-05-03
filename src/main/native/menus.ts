@@ -28,38 +28,59 @@ export function buildMenu(mainWindow: BrowserWindow): Menu {
       label: 'File',
       submenu: [
         {
+          id: 'new-document',
           label: 'New Document',
           accelerator: 'CmdOrCtrl+N',
+          enabled: false,
           click: () => mainWindow.webContents.send('menu-action', 'new-document'),
+        },
+        {
+          id: 'new-conversation',
+          label: 'New Conversation',
+          accelerator: 'CmdOrCtrl+Shift+N',
+          enabled: false,
+          click: () => mainWindow.webContents.send('menu-action', 'new-conversation'),
         },
         { type: 'separator' },
         {
+          id: 'save',
           label: 'Save',
           accelerator: 'CmdOrCtrl+S',
+          enabled: false,
           click: () => mainWindow.webContents.send('menu-action', 'save'),
         },
         {
+          id: 'save-as',
           label: 'Save as',
+          enabled: false,
           click: () => mainWindow.webContents.send('menu-action', 'save-as'),
         },
         { type: 'separator' },
         {
+          id: 'export',
           label: 'Export',
+          enabled: false,
           click: () => mainWindow.webContents.send('menu-action', 'export'),
         },
         {
+          id: 'print',
           label: 'Print',
           accelerator: 'CmdOrCtrl+P',
+          enabled: false,
           click: () => mainWindow.webContents.send('menu-action', 'print'),
         },
         { type: 'separator' },
         {
+          id: 'close',
           label: 'Close',
           accelerator: 'CmdOrCtrl+W',
+          enabled: false,
           click: () => mainWindow.webContents.send('menu-action', 'close'),
         },
         {
+          id: 'delete',
           label: 'Delete',
+          enabled: false,
           click: () => mainWindow.webContents.send('menu-action', 'delete'),
         },
       ],
@@ -79,4 +100,30 @@ export function buildMenu(mainWindow: BrowserWindow): Menu {
   ];
 
   return Menu.buildFromTemplate(template);
+}
+
+const ACTION_MENU_IDS = [
+  'new-document',
+  'new-conversation',
+  'save',
+  'save-as',
+  'export',
+  'print',
+  'close',
+  'delete',
+] as const;
+
+// Flip the `enabled` flag on every action item to match the renderer's
+// declared set. Items not in `enabledIds` are disabled. Called whenever the
+// active page (or its tab/document state) changes so the menu accurately
+// reflects what's currently actionable.
+export function setEnabledMenuActions(enabledIds: string[]): void {
+  const menu = Menu.getApplicationMenu();
+  if (!menu) return;
+
+  const enabled = new Set(enabledIds);
+  for (const id of ACTION_MENU_IDS) {
+    const item = menu.getMenuItemById(id);
+    if (item) item.enabled = enabled.has(id);
+  }
 }

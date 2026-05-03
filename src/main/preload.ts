@@ -23,4 +23,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
   openDocumentation: () => ipcRenderer.invoke('open-documentation'),
+  setMenuEnabled: (actions: string[]) => ipcRenderer.send('menu-set-enabled', actions),
 });

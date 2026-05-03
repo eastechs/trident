@@ -949,15 +949,10 @@ function GalleryView({
           <div className="flex flex-1 overflow-hidden">
             {/* Image grid */}
             <div className="flex w-80 shrink-0 flex-col border-r border-border bg-neutral-50/40 dark:bg-neutral-950/40">
-              <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
-                <div className="flex items-center gap-2">
-                  <ImageIcon className="size-4 text-neutral-400" />
-                  <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                    Gallery
-                  </span>
-                </div>
-                <span className="rounded-full bg-neutral-200/70 px-2 py-0.5 text-[11px] font-medium tabular-nums text-neutral-600 dark:bg-neutral-800/70 dark:text-neutral-400">
-                  {localImages.length}
+              <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                <ImageIcon className="size-5 text-neutral-400" />
+                <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
+                  Gallery
                 </span>
               </div>
               <div className="flex-1 overflow-y-auto p-3">

@@ -9,6 +9,7 @@ declare global {
       ) => () => void;
       selectDirectory: () => Promise<string | null>;
       openDocumentation: () => Promise<void>;
+      setMenuEnabled: (actions: string[]) => void;
     };
   }
 }

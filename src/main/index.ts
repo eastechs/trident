@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { createServer } from './server.js';
-import { buildMenu } from './native/menus.js';
+import { buildMenu, setEnabledMenuActions } from './native/menus.js';
 import { initDatabase } from './database.js';
 import { initSettings, getSetting } from './settings.js';
 import { selectDirectory } from './native/dialogs.js';
@@ -68,6 +68,9 @@ async function createWindow() {
 // IPC handlers
 ipcMain.handle('select-directory', () => selectDirectory());
 ipcMain.handle('open-documentation', () => openDocumentationWindow());
+ipcMain.on('menu-set-enabled', (_event, actions: string[]) => {
+  if (Array.isArray(actions)) setEnabledMenuActions(actions);
+});
 
 function writeTridentMetadata(): void {
   try {

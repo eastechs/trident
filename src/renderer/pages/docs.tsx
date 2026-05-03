@@ -779,38 +779,25 @@ function DocsView({
     }));
   }, [localDocuments]);
 
-  useNativeMenu({
-    onNewDocument: addDocument,
-    onSave: () => {
-      if (activeTabId) {
-        saveDocument(activeTabId);
-      }
-    },
-    onPrint: () => {
-      const tab = tabs.find((t) => t.id === activeTabId);
-
-      if (tab) {
-        printDocumentContent(tab.title);
-      }
-    },
-    onClose: () => {
-      if (activeTabId) {
-        closeTab(activeTabId, {
-          stopPropagation: () => {},
-        } as React.MouseEvent);
-      }
-    },
-    onDelete: () => {
-      if (activeTabId) {
-        setDeletingId(activeTabId);
-      }
-    },
-  });
-
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeDocument = activeTabId
     ? localDocuments.find((d) => d.id === activeTabId)
     : null;
+
+  useNativeMenu({
+    onNewDocument: addDocument,
+    onSave: activeTab ? () => saveDocument(activeTab.id) : undefined,
+    onPrint: activeTab
+      ? () => printDocumentContent(activeTab.title)
+      : undefined,
+    onClose: activeTab
+      ? () =>
+          closeTab(activeTab.id, {
+            stopPropagation: () => {},
+          } as React.MouseEvent)
+      : undefined,
+    onDelete: activeTab ? () => setDeletingId(activeTab.id) : undefined,
+  });
 
   return (
     <div className="flex h-screen flex-col">
