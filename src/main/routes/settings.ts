@@ -141,7 +141,16 @@ router.delete('/api-keys', async (req, res) => {
 
 router.get('/models', async (_req, res) => {
   const { fetchAvailableModels } = await import('../ai/model-registry.js');
-  res.json(await fetchAvailableModels());
+  const { lookupPricing } = await import('../ai/pricing.js');
+  const models = await fetchAvailableModels();
+  // Attach normalized pricing + context-window data per model. Renderer
+  // consumes pricing in the cost widget; falls back to undefined for any
+  // model the LiteLLM snapshot doesn't recognize.
+  const enriched = models.map((m) => ({
+    ...m,
+    pricing: lookupPricing(m.id),
+  }));
+  res.json(enriched);
 });
 
 // ─── Agent instructions ────────────────────────────────────

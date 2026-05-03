@@ -1,35 +1,38 @@
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import type { LanguageModel } from 'ai';
-import type { ProviderOptions } from '@ai-sdk/provider-utils';
-import { getApiKey } from '../settings.js';
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import type { LanguageModel } from "ai";
+import type { ProviderOptions } from "@ai-sdk/provider-utils";
+import { getApiKey } from "../settings.js";
 
-export const EFFORT_LEVELS = ['low', 'medium', 'high', 'max'] as const;
-export type EffortLevel = typeof EFFORT_LEVELS[number];
-export const DEFAULT_EFFORT: EffortLevel = 'medium';
+export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
+export type EffortLevel = (typeof EFFORT_LEVELS)[number];
+export const DEFAULT_EFFORT: EffortLevel = "medium";
 
 export function isEffortLevel(value: unknown): value is EffortLevel {
-  return typeof value === 'string' && (EFFORT_LEVELS as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (EFFORT_LEVELS as readonly string[]).includes(value)
+  );
 }
 
-export type ProviderName = 'anthropic' | 'openai' | 'gemini';
+export type ProviderName = "anthropic" | "openai" | "gemini";
 
 export function resolveProviderName(modelId: string): ProviderName {
-  if (modelId.startsWith('claude-')) return 'anthropic';
-  if (modelId.startsWith('gemini-')) return 'gemini';
-  return 'openai';
+  if (modelId.startsWith("claude-")) return "anthropic";
+  if (modelId.startsWith("gemini-")) return "gemini";
+  return "openai";
 }
 
 const MODEL_LABELS: Record<string, string> = {
-  'claude-opus-4-7': 'Opus 4.7',
-  'claude-sonnet-4-6': 'Sonnet 4.6',
-  'claude-haiku-4-5': 'Haiku 4.5',
-  'gpt-5.5': 'GPT-5.5',
-  'gpt-5.5-mini': 'GPT-5.5 Mini',
-  'gpt-5.5-nano': 'GPT-5.5 Nano',
-  'gemini-3.1-pro-preview': 'Gemini 3.1 Pro Preview',
-  'gemini-3-flash-preview': 'Gemini 3 Flash Preview',
+  "claude-opus-4-7": "Opus 4.7",
+  "claude-sonnet-4-6": "Sonnet 4.6",
+  "claude-haiku-4-5": "Haiku 4.5",
+  "gpt-5.5": "GPT-5.5",
+  "gpt-5-mini": "GPT-5 Mini",
+  "gpt-5-nano": "GPT-5 Nano",
+  "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
+  "gemini-3-flash-preview": "Gemini 3 Flash Preview",
 };
 
 export function modelLabel(modelId: string): string {
@@ -39,39 +42,42 @@ export function modelLabel(modelId: string): string {
 export function resolveModel(modelId: string): LanguageModel {
   const provider = resolveProviderName(modelId);
 
-  if (provider === 'anthropic') {
-    const key = getApiKey('anthropic');
-    if (!key) throw new Error('Anthropic API key not configured');
+  if (provider === "anthropic") {
+    const key = getApiKey("anthropic");
+    if (!key) throw new Error("Anthropic API key not configured");
     return createAnthropic({ apiKey: key })(modelId);
   }
 
-  if (provider === 'gemini') {
-    const key = getApiKey('gemini');
-    if (!key) throw new Error('Gemini API key not configured');
+  if (provider === "gemini") {
+    const key = getApiKey("gemini");
+    if (!key) throw new Error("Gemini API key not configured");
     return createGoogleGenerativeAI({ apiKey: key })(modelId);
   }
 
-  const key = getApiKey('openai');
-  if (!key) throw new Error('OpenAI API key not configured');
+  const key = getApiKey("openai");
+  if (!key) throw new Error("OpenAI API key not configured");
   return createOpenAI({ apiKey: key })(modelId);
 }
 
 /**
  * Map our unified effort level to each provider's native value range.
  *
- * Provider native ranges:
- *   - Anthropic:  low | medium | high | xhigh | max
- *   - OpenAI:     low | medium | high | xhigh   (no 'max')
- *   - Gemini:     low | medium | high           (no 'xhigh' or 'max')
+ * Provider native ranges (verified against installed AI SDK provider zod enums):
+ *   - Anthropic:  low | medium | high | xhigh | max   (full set, passes through)
+ *   - OpenAI:     low | medium | high | xhigh         (no 'max'; clamp down)
+ *   - Gemini:     minimal | low | medium | high       (no 'xhigh' or 'max'; clamp down)
  *
- * 'max' clamps down where unsupported.
+ * 'max' and 'xhigh' clamp to the highest available rung where unsupported.
  */
-function effortToOpenAI(level: EffortLevel): 'low' | 'medium' | 'high' | 'xhigh' {
-  return level === 'max' ? 'xhigh' : level;
+function effortToOpenAI(
+  level: EffortLevel,
+): "low" | "medium" | "high" | "xhigh" {
+  return level === "max" ? "xhigh" : level;
 }
 
-function effortToGemini(level: EffortLevel): 'low' | 'medium' | 'high' {
-  return level === 'max' ? 'high' : level;
+function effortToGemini(level: EffortLevel): "low" | "medium" | "high" {
+  if (level === "max" || level === "xhigh") return "high";
+  return level;
 }
 
 /**
@@ -97,18 +103,18 @@ export function getProviderOptions(
   const provider = resolveProviderName(modelId);
   const effort = context?.effort ?? DEFAULT_EFFORT;
 
-  if (provider === 'anthropic') {
+  if (provider === "anthropic") {
     return {
       anthropic: {
-        thinking: { type: 'adaptive', display: 'summarized' },
+        thinking: { type: "adaptive", display: "summarized" },
         effort,
         sendReasoning: true,
         contextManagement: {
           edits: [
             {
-              type: 'clear_tool_uses_20250919',
-              trigger: { type: 'input_tokens', value: 100_000 },
-              keep: { type: 'tool_uses', value: 20 },
+              type: "clear_tool_uses_20250919",
+              trigger: { type: "input_tokens", value: 100_000 },
+              keep: { type: "tool_uses", value: 20 },
             },
           ],
         },
@@ -116,19 +122,19 @@ export function getProviderOptions(
     };
   }
 
-  if (provider === 'openai') {
+  if (provider === "openai") {
     return {
       openai: {
         reasoningEffort: effortToOpenAI(effort),
-        reasoningSummary: 'auto',
-        truncation: 'auto',
-        promptCacheRetention: '24h',
+        reasoningSummary: "auto",
+        truncation: "auto",
+        promptCacheRetention: "24h",
         ...(context?.projectId ? { promptCacheKey: context.projectId } : {}),
       },
     };
   }
 
-  if (provider === 'gemini') {
+  if (provider === "gemini") {
     return {
       google: {
         thinkingConfig: {

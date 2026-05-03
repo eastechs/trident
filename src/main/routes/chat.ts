@@ -421,7 +421,7 @@ async function generateConversationTitle(firstUserMessage?: UIMessage): Promise<
       const { createOpenAI } = await import('@ai-sdk/openai');
       const openai = createOpenAI({ apiKey: openaiKey });
       const { text } = await generateText({
-        model: openai('gpt-5.5-nano'),
+        model: openai('gpt-5-nano'),
         system: 'Generate a short, descriptive title for a conversation based on the user\'s first message. Max 50 characters. No quotes. Just the title.',
         prompt: userText,
       });

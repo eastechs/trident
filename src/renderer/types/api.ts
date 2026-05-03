@@ -24,7 +24,7 @@ export interface ImageData {
   created_by: string | null;
 }
 
-export type EffortLevel = "low" | "medium" | "high" | "max";
+export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface ConversationData {
   id: string;
@@ -36,9 +36,19 @@ export interface ConversationData {
   message_count: number;
 }
 
+export interface ModelPricing {
+  inputPerMTokens: number;
+  outputPerMTokens: number;
+  cacheReadPerMTokens?: number;
+  cacheWritePerMTokens?: number;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+}
+
 export interface ModelInfo {
   id: string;
   provider: "Anthropic" | "OpenAI" | "Gemini";
   providerSlug: "anthropic" | "openai" | "google";
   name: string;
+  pricing?: ModelPricing;
 }

@@ -9,32 +9,13 @@ import { cn } from "@/lib/utils";
 import type { LanguageModelUsage } from "ai";
 import type { ComponentProps } from "react";
 import { createContext, useContext, useMemo } from "react";
+import type { ModelPricing } from "@/types/api";
 
 const PERCENT_MAX = 100;
 const ICON_RADIUS = 10;
 const ICON_VIEWBOX = 24;
 const ICON_CENTER = 12;
 const ICON_STROKE_WIDTH = 2;
-
-type ModelId = string;
-
-interface ModelPricing {
-  inputPerMTokens: number;
-  outputPerMTokens: number;
-  cacheReadPerMTokens?: number;
-  cacheWritePerMTokens?: number;
-}
-
-const modelPricing: Record<string, ModelPricing> = {
-  'claude-opus-4-7': { inputPerMTokens: 15, outputPerMTokens: 75, cacheReadPerMTokens: 1.5, cacheWritePerMTokens: 18.75 },
-  'claude-sonnet-4-6': { inputPerMTokens: 3, outputPerMTokens: 15, cacheReadPerMTokens: 0.3, cacheWritePerMTokens: 3.75 },
-  'claude-haiku-4-5': { inputPerMTokens: 0.8, outputPerMTokens: 4, cacheReadPerMTokens: 0.08, cacheWritePerMTokens: 1 },
-  'gpt-5.5': { inputPerMTokens: 1.25, outputPerMTokens: 10, cacheReadPerMTokens: 0.13 },
-  'gpt-5.5-mini': { inputPerMTokens: 0.75, outputPerMTokens: 4.5, cacheReadPerMTokens: 0.075 },
-  'gpt-5.5-nano': { inputPerMTokens: 0.2, outputPerMTokens: 1.25, cacheReadPerMTokens: 0.02 },
-  'gemini-3.1-pro-preview': { inputPerMTokens: 1.25, outputPerMTokens: 10 },
-  'gemini-3-flash-preview': { inputPerMTokens: 0.15, outputPerMTokens: 0.6 },
-};
 
 const calcCost = (tokens: number, perMTokens: number) =>
   (tokens / 1_000_000) * perMTokens;
@@ -50,7 +31,9 @@ interface ContextSchema {
   usedTokens: number;
   maxTokens: number;
   usage?: LanguageModelUsage;
-  modelId?: ModelId;
+  // Pricing is sourced from LiteLLM via /api/settings/models and passed in
+  // by the caller. When undefined, cost lines render as token counts only.
+  pricing?: ModelPricing;
 }
 
 const ContextContext = createContext<ContextSchema | null>(null);
@@ -66,8 +49,8 @@ const useContextValue = () => {
 };
 
 const usePricing = () => {
-  const { modelId } = useContextValue();
-  return modelId ? modelPricing[modelId] : undefined;
+  const { pricing } = useContextValue();
+  return pricing;
 };
 
 export type ContextProps = ComponentProps<typeof HoverCard> & ContextSchema;
@@ -76,12 +59,12 @@ export const Context = ({
   usedTokens,
   maxTokens,
   usage,
-  modelId,
+  pricing,
   ...props
 }: ContextProps) => {
   const contextValue = useMemo(
-    () => ({ maxTokens, modelId, usage, usedTokens }),
-    [maxTokens, modelId, usage, usedTokens]
+    () => ({ maxTokens, pricing, usage, usedTokens }),
+    [maxTokens, pricing, usage, usedTokens],
   );
 
   return (
@@ -229,12 +212,30 @@ export const ContextContentFooter = ({
   const { usage } = useContextValue();
   const pricing = usePricing();
 
+  // The AI SDK's `inputTokens` is the GRAND TOTAL: noCache + cacheRead +
+  // cacheWrite. Billing each at the same rate would massively overcount cache
+  // tokens (cache reads are ~10x cheaper, cache writes ~1.25x more expensive).
+  // Subtract the cached portions so each line item gets its own rate.
+  const totalInput = usage?.inputTokens ?? 0;
+  const cacheReadTokens = usage?.inputTokenDetails?.cacheReadTokens ?? 0;
+  const cacheWriteTokens = usage?.inputTokenDetails?.cacheWriteTokens ?? 0;
+  const noCacheInput = Math.max(
+    0,
+    totalInput - cacheReadTokens - cacheWriteTokens,
+  );
+
   let totalCostUSD = 0;
   if (pricing) {
-    totalCostUSD += calcCost(usage?.inputTokens ?? 0, pricing.inputPerMTokens);
-    totalCostUSD += calcCost(usage?.outputTokens ?? 0, pricing.outputPerMTokens);
+    totalCostUSD += calcCost(noCacheInput, pricing.inputPerMTokens);
+    totalCostUSD += calcCost(
+      usage?.outputTokens ?? 0,
+      pricing.outputPerMTokens,
+    );
     if (pricing.cacheReadPerMTokens) {
-      totalCostUSD += calcCost(usage?.cachedInputTokens ?? 0, pricing.cacheReadPerMTokens);
+      totalCostUSD += calcCost(cacheReadTokens, pricing.cacheReadPerMTokens);
+    }
+    if (pricing.cacheWritePerMTokens) {
+      totalCostUSD += calcCost(cacheWriteTokens, pricing.cacheWritePerMTokens);
     }
   }
 
@@ -242,7 +243,7 @@ export const ContextContentFooter = ({
     <div
       className={cn(
         "flex w-full items-center justify-between gap-3 bg-secondary p-3 text-xs",
-        className
+        className,
       )}
       {...props}
     >
@@ -284,18 +285,26 @@ export const ContextInputUsage = ({
 }: ContextInputUsageProps) => {
   const { usage } = useContextValue();
   const pricing = usePricing();
-  const inputTokens = usage?.inputTokens ?? 0;
+  // Show only the non-cached portion of input tokens here; cache reads and
+  // writes have their own rows + line items in the footer total.
+  const totalInput = usage?.inputTokens ?? 0;
+  const cacheReadTokens = usage?.inputTokenDetails?.cacheReadTokens ?? 0;
+  const cacheWriteTokens = usage?.inputTokenDetails?.cacheWriteTokens ?? 0;
+  const noCacheInput = Math.max(
+    0,
+    totalInput - cacheReadTokens - cacheWriteTokens,
+  );
 
   if (children) {
     return children;
   }
 
-  if (!inputTokens) {
+  if (!noCacheInput) {
     return null;
   }
 
   const costText = pricing
-    ? formatUSD(calcCost(inputTokens, pricing.inputPerMTokens))
+    ? formatUSD(calcCost(noCacheInput, pricing.inputPerMTokens))
     : undefined;
 
   return (
@@ -304,7 +313,7 @@ export const ContextInputUsage = ({
       {...props}
     >
       <span className="text-muted-foreground">Input</span>
-      <TokensWithCost costText={costText} tokens={inputTokens} />
+      <TokensWithCost costText={costText} tokens={noCacheInput} />
     </div>
   );
 };
@@ -352,7 +361,11 @@ export const ContextReasoningUsage = ({
 }: ContextReasoningUsageProps) => {
   const { usage } = useContextValue();
   const pricing = usePricing();
-  const reasoningTokens = usage?.reasoningTokens ?? 0;
+  // The renderer's contextUsage shape exposes reasoning under
+  // outputTokenDetails (matching the AI SDK's modern shape). The deprecated
+  // top-level `reasoningTokens` is kept as a fallback for older snapshots.
+  const reasoningTokens =
+    usage?.outputTokenDetails?.reasoningTokens ?? usage?.reasoningTokens ?? 0;
 
   if (children) {
     return children;
@@ -387,7 +400,10 @@ export const ContextCacheUsage = ({
 }: ContextCacheUsageProps) => {
   const { usage } = useContextValue();
   const pricing = usePricing();
-  const cacheTokens = usage?.cachedInputTokens ?? 0;
+  // Read from inputTokenDetails (AI SDK's modern shape). Fall back to the
+  // deprecated top-level `cachedInputTokens` for older snapshots.
+  const cacheTokens =
+    usage?.inputTokenDetails?.cacheReadTokens ?? usage?.cachedInputTokens ?? 0;
 
   if (children) {
     return children;
@@ -406,8 +422,42 @@ export const ContextCacheUsage = ({
       className={cn("flex items-center justify-between text-xs", className)}
       {...props}
     >
-      <span className="text-muted-foreground">Cache</span>
+      <span className="text-muted-foreground">Cache read</span>
       <TokensWithCost costText={costText} tokens={cacheTokens} />
+    </div>
+  );
+};
+
+export type ContextCacheWriteUsageProps = ComponentProps<"div">;
+
+export const ContextCacheWriteUsage = ({
+  className,
+  children,
+  ...props
+}: ContextCacheWriteUsageProps) => {
+  const { usage } = useContextValue();
+  const pricing = usePricing();
+  const cacheWriteTokens = usage?.inputTokenDetails?.cacheWriteTokens ?? 0;
+
+  if (children) {
+    return children;
+  }
+
+  if (!cacheWriteTokens) {
+    return null;
+  }
+
+  const costText = pricing?.cacheWritePerMTokens
+    ? formatUSD(calcCost(cacheWriteTokens, pricing.cacheWritePerMTokens))
+    : undefined;
+
+  return (
+    <div
+      className={cn("flex items-center justify-between text-xs", className)}
+      {...props}
+    >
+      <span className="text-muted-foreground">Cache write</span>
+      <TokensWithCost costText={costText} tokens={cacheWriteTokens} />
     </div>
   );
 };
