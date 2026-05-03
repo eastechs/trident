@@ -338,8 +338,55 @@ function GalleryView({
   onProjectUpdated: (p: ProjectData) => void;
 }) {
   const [localImages, setLocalImages] = useState<ImageData[]>(images);
-  const [tabs, setTabs] = useState<Tab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const storageKey = `trident:project:${project.id}:gallery:tabs`;
+  const [tabs, setTabs] = useState<Tab[]>(() => {
+    const saved = localStorage.getItem(storageKey);
+
+    if (saved) {
+      try {
+        const { openTabs } = JSON.parse(saved) as {
+          openTabs?: Array<{ id: string }>;
+        };
+        const imgMap = new Map(images.map((img) => [img.id, img]));
+
+        return (openTabs ?? [])
+          .filter((t) => imgMap.has(t.id))
+          .map((t) => ({ id: t.id, title: imgMap.get(t.id)!.name }));
+      } catch {
+        /* fall through */
+      }
+    }
+
+    return [];
+  });
+  const [activeTabId, setActiveTabId] = useState<string | null>(() => {
+    const saved = localStorage.getItem(storageKey);
+
+    if (saved) {
+      try {
+        const { openTabs, activeTabId: savedActiveId } = JSON.parse(saved) as {
+          openTabs?: Array<{ id: string }>;
+          activeTabId?: string | null;
+        };
+        const imgIds = new Set(images.map((img) => img.id));
+        const validIds = (openTabs ?? [])
+          .map((t) => t.id)
+          .filter((id) => imgIds.has(id));
+
+        if (savedActiveId && validIds.includes(savedActiveId)) {
+          return savedActiveId;
+        }
+
+        if (validIds.length > 0) {
+          return validIds[0];
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+
+    return null;
+  });
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deletingTabId, setDeletingTabId] = useState<string | null>(null);
@@ -362,6 +409,16 @@ function GalleryView({
       });
     }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        openTabs: tabs.map((t) => ({ id: t.id })),
+        activeTabId,
+      }),
+    );
+  }, [tabs, activeTabId, storageKey]);
 
   const openImage = useCallback(
     (image: { id: string; name: string }) => {
