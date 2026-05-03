@@ -18,10 +18,20 @@ export interface DocumentData {
   directory: string;
 }
 
+export interface ImageMetadata {
+  prompt?: string;
+  size?: string;
+  quality?: string;
+  model?: string;
+}
+
 export interface ImageData {
   id: string;
   name: string;
   created_by: string | null;
+  mime_type?: string;
+  metadata?: ImageMetadata | null;
+  created_at?: string;
 }
 
 export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";

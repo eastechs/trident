@@ -1,12 +1,18 @@
-import { Router } from 'express';
-import { eq, desc, sql, and } from 'drizzle-orm';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { shell } from 'electron';
-import { getDb } from '../database.js';
-import { projects, documents, images, conversations, messages } from '../db/schema.js';
-import { getConfiguredProviders, getSetting } from '../settings.js';
+import { Router } from "express";
+import { eq, desc, sql, and } from "drizzle-orm";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { shell } from "electron";
+import { getDb } from "../database.js";
+import {
+  projects,
+  documents,
+  images,
+  conversations,
+  messages,
+} from "../db/schema.js";
+import { getConfiguredProviders, getSetting } from "../settings.js";
 
 const router = Router();
 
@@ -14,16 +20,18 @@ const router = Router();
 // Preserves the human-readable form (spaces, mixed case) and only strips
 // characters that are unsafe on common filesystems.
 function projectDirName(text: string): string {
-  return text
-    .replace(/[/\\:*?"<>|]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim() || 'Untitled Project';
+  return (
+    text
+      .replace(/[/\\:*?"<>|]/g, "")
+      .replace(/\s+/g, " ")
+      .trim() || "Untitled Project"
+  );
 }
 
 function resolveProvider(modelId: string): string {
-  if (modelId.startsWith('claude-')) return 'anthropic';
-  if (modelId.startsWith('gemini-')) return 'gemini';
-  return 'openai';
+  if (modelId.startsWith("claude-")) return "anthropic";
+  if (modelId.startsWith("gemini-")) return "gemini";
+  return "openai";
 }
 
 type ProjectRow = typeof projects.$inferSelect;
@@ -44,7 +52,7 @@ function serializeProject(p: ProjectRow): Record<string, unknown> {
 
 // ─── List all projects ─────────────────────────────────────
 
-router.get('/', async (_req, res) => {
+router.get("/", async (_req, res) => {
   const db = getDb();
 
   const allProjects = await db
@@ -97,18 +105,37 @@ router.get('/', async (_req, res) => {
 
 // ─── Show project with related data ────────────────────────
 
-router.get('/:id', async (req, res) => {
+router.get("/:id", async (req, res) => {
   const db = getDb();
-  const [project] = await db.select().from(projects).where(eq(projects.id, req.params.id));
-  if (!project) { res.status(404).json({ error: 'Not found' }); return; }
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.id, req.params.id));
+  if (!project) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   const projectDocs = await db
-    .select({ id: documents.id, name: documents.name, createdBy: documents.createdBy, lastEditedBy: documents.lastEditedBy, directory: documents.directory })
+    .select({
+      id: documents.id,
+      name: documents.name,
+      createdBy: documents.createdBy,
+      lastEditedBy: documents.lastEditedBy,
+      directory: documents.directory,
+    })
     .from(documents)
     .where(eq(documents.projectId, project.id));
 
   const projectImages = await db
-    .select({ id: images.id, name: images.name, createdBy: images.createdBy })
+    .select({
+      id: images.id,
+      name: images.name,
+      createdBy: images.createdBy,
+      mimeType: images.mimeType,
+      metadata: images.metadata,
+      createdAt: images.createdAt,
+    })
     .from(images)
     .where(eq(images.projectId, project.id))
     .orderBy(desc(images.createdAt));
@@ -119,22 +146,24 @@ router.get('/:id', async (req, res) => {
     .where(eq(conversations.projectId, project.id))
     .orderBy(desc(conversations.updatedAt));
 
-  const convoPayload = await Promise.all(projectConversations.map(async (c) => {
-    const [count] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(messages)
-      .where(eq(messages.conversationId, c.id));
-    return {
-      id: c.id,
-      project_id: c.projectId,
-      title: c.title,
-      side: c.side,
-      model: c.model,
-      created_at: c.createdAt,
-      updated_at: c.updatedAt,
-      message_count: count?.count ?? 0,
-    };
-  }));
+  const convoPayload = await Promise.all(
+    projectConversations.map(async (c) => {
+      const [count] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(messages)
+        .where(eq(messages.conversationId, c.id));
+      return {
+        id: c.id,
+        project_id: c.projectId,
+        title: c.title,
+        side: c.side,
+        model: c.model,
+        created_at: c.createdAt,
+        updated_at: c.updatedAt,
+        message_count: count?.count ?? 0,
+      };
+    }),
+  );
 
   res.json({
     project: {
@@ -159,16 +188,19 @@ router.get('/:id', async (req, res) => {
       id: i.id,
       name: i.name,
       created_by: i.createdBy,
+      mime_type: i.mimeType,
+      metadata: i.metadata,
+      created_at: i.createdAt,
     })),
     conversations: convoPayload,
     configuredProviders: getConfiguredProviders(),
-    shouldShowTour: !getSetting('projectTourCompleted'),
+    shouldShowTour: !getSetting("projectTourCompleted"),
   });
 });
 
 // ─── Store ─────────────────────────────────────────────────
 
-router.post('/', async (req, res) => {
+router.post("/", async (req, res) => {
   const db = getDb();
   const { name, description, filesystem_root, initial_prompt } = req.body;
 
@@ -176,7 +208,7 @@ router.post('/', async (req, res) => {
   const directoryPath = `Trident/Projects/${dirName}`;
   const fullPath = path.join(os.homedir(), directoryPath);
 
-  fs.mkdirSync(path.join(fullPath, 'documents', 'user'), { recursive: true });
+  fs.mkdirSync(path.join(fullPath, "documents", "user"), { recursive: true });
 
   let resolvedRoot: string | null = null;
   if (filesystem_root) {
@@ -185,25 +217,34 @@ router.post('/', async (req, res) => {
       if (fs.statSync(resolved).isDirectory()) {
         resolvedRoot = resolved;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
-  const [project] = await db.insert(projects).values({
-    name,
-    description: description ?? '',
-    path: directoryPath,
-    filesystemRoot: resolvedRoot,
-    initialPrompt: initial_prompt ?? null,
-  }).returning();
+  const [project] = await db
+    .insert(projects)
+    .values({
+      name,
+      description: description ?? "",
+      path: directoryPath,
+      filesystemRoot: resolvedRoot,
+      initialPrompt: initial_prompt ?? null,
+    })
+    .returning();
 
   fs.writeFileSync(
-    path.join(fullPath, 'project.json'),
-    JSON.stringify({
-      uuid: project.id,
-      name: project.name,
-      description: project.description,
-      path: directoryPath,
-    }, null, 2),
+    path.join(fullPath, "project.json"),
+    JSON.stringify(
+      {
+        uuid: project.id,
+        name: project.name,
+        description: project.description,
+        path: directoryPath,
+      },
+      null,
+      2,
+    ),
   );
 
   res.json(serializeProject(project));
@@ -211,12 +252,18 @@ router.post('/', async (req, res) => {
 
 // ─── Update ────────────────────────────────────────────────
 
-router.patch('/:id', async (req, res) => {
+router.patch("/:id", async (req, res) => {
   const db = getDb();
   const { name, description, filesystem_root, embeddings_enabled } = req.body;
 
-  const [existing] = await db.select().from(projects).where(eq(projects.id, req.params.id));
-  if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
+  const [existing] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.id, req.params.id));
+  if (!existing) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   let resolvedRoot: string | null = null;
   if (filesystem_root) {
@@ -225,17 +272,22 @@ router.patch('/:id', async (req, res) => {
       if (fs.statSync(resolved).isDirectory()) {
         resolvedRoot = resolved;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // If the name changed, rename the project directory and update all paths
   let newProjectPath = existing.path;
   if (name && name !== existing.name) {
-    const oldDirName = existing.path.split('/').pop() ?? '';
+    const oldDirName = existing.path.split("/").pop() ?? "";
     let newDirName = projectDirName(name);
     let candidatePath = `Trident/Projects/${newDirName}`;
     let counter = 2;
-    while (newDirName !== oldDirName && fs.existsSync(path.join(os.homedir(), candidatePath))) {
+    while (
+      newDirName !== oldDirName &&
+      fs.existsSync(path.join(os.homedir(), candidatePath))
+    ) {
       newDirName = `${projectDirName(name)} (${counter})`;
       candidatePath = `Trident/Projects/${newDirName}`;
       counter++;
@@ -250,30 +302,40 @@ router.patch('/:id', async (req, res) => {
           fs.renameSync(oldFullPath, newFullPath);
         }
       } catch (err) {
-        console.error('Failed to rename project directory:', err);
-        res.status(500).json({ error: 'Failed to rename project directory' });
+        console.error("Failed to rename project directory:", err);
+        res.status(500).json({ error: "Failed to rename project directory" });
         return;
       }
 
       newProjectPath = candidatePath;
 
       // Update document and image paths that lived under the old project path
-      const projectDocs = await db.select().from(documents).where(eq(documents.projectId, existing.id));
+      const projectDocs = await db
+        .select()
+        .from(documents)
+        .where(eq(documents.projectId, existing.id));
       for (const doc of projectDocs) {
         if (doc.path.startsWith(existing.path)) {
           await db
             .update(documents)
-            .set({ path: candidatePath + doc.path.substring(existing.path.length) })
+            .set({
+              path: candidatePath + doc.path.substring(existing.path.length),
+            })
             .where(eq(documents.id, doc.id));
         }
       }
 
-      const projectImages = await db.select().from(images).where(eq(images.projectId, existing.id));
+      const projectImages = await db
+        .select()
+        .from(images)
+        .where(eq(images.projectId, existing.id));
       for (const img of projectImages) {
         if (img.path.startsWith(existing.path)) {
           await db
             .update(images)
-            .set({ path: candidatePath + img.path.substring(existing.path.length) })
+            .set({
+              path: candidatePath + img.path.substring(existing.path.length),
+            })
             .where(eq(images.id, img.id));
         }
       }
@@ -284,26 +346,35 @@ router.patch('/:id', async (req, res) => {
     .update(projects)
     .set({
       name,
-      description: description ?? '',
+      description: description ?? "",
       filesystemRoot: resolvedRoot,
       path: newProjectPath,
-      ...(typeof embeddings_enabled === 'boolean' ? { embeddingsEnabled: embeddings_enabled } : {}),
+      ...(typeof embeddings_enabled === "boolean"
+        ? { embeddingsEnabled: embeddings_enabled }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(projects.id, req.params.id))
     .returning();
 
-  if (!updated) { res.status(404).json({ error: 'Not found' }); return; }
+  if (!updated) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   const fullPath = path.join(os.homedir(), updated.path);
   fs.writeFileSync(
-    path.join(fullPath, 'project.json'),
-    JSON.stringify({
-      uuid: updated.id,
-      name: updated.name,
-      description: updated.description,
-      path: updated.path,
-    }, null, 2),
+    path.join(fullPath, "project.json"),
+    JSON.stringify(
+      {
+        uuid: updated.id,
+        name: updated.name,
+        description: updated.description,
+        path: updated.path,
+      },
+      null,
+      2,
+    ),
   );
 
   res.json(serializeProject(updated));
@@ -311,10 +382,16 @@ router.patch('/:id', async (req, res) => {
 
 // ─── Duplicate ─────────────────────────────────────────────
 
-router.post('/:id/duplicate', async (req, res) => {
+router.post("/:id/duplicate", async (req, res) => {
   const db = getDb();
-  const [project] = await db.select().from(projects).where(eq(projects.id, req.params.id));
-  if (!project) { res.status(404).json({ error: 'Not found' }); return; }
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.id, req.params.id));
+  if (!project) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   let newName = `${project.name} Copy`;
   let newDirName = projectDirName(newName);
@@ -332,15 +409,21 @@ router.post('/:id/duplicate', async (req, res) => {
   const destDir = path.join(os.homedir(), newPath);
   fs.cpSync(srcDir, destDir, { recursive: true });
 
-  const [newProject] = await db.insert(projects).values({
-    name: newName,
-    description: project.description,
-    path: newPath,
-    filesystemRoot: project.filesystemRoot,
-    initialPrompt: project.initialPrompt,
-  }).returning();
+  const [newProject] = await db
+    .insert(projects)
+    .values({
+      name: newName,
+      description: project.description,
+      path: newPath,
+      filesystemRoot: project.filesystemRoot,
+      initialPrompt: project.initialPrompt,
+    })
+    .returning();
 
-  const projectDocs = await db.select().from(documents).where(eq(documents.projectId, project.id));
+  const projectDocs = await db
+    .select()
+    .from(documents)
+    .where(eq(documents.projectId, project.id));
   for (const doc of projectDocs) {
     const newDocPath = newPath + doc.path.substring(project.path.length);
     await db.insert(documents).values({
@@ -354,7 +437,10 @@ router.post('/:id/duplicate', async (req, res) => {
     });
   }
 
-  const projectImages = await db.select().from(images).where(eq(images.projectId, project.id));
+  const projectImages = await db
+    .select()
+    .from(images)
+    .where(eq(images.projectId, project.id));
   for (const img of projectImages) {
     const newImgPath = newPath + img.path.substring(project.path.length);
     await db.insert(images).values({
@@ -368,13 +454,17 @@ router.post('/:id/duplicate', async (req, res) => {
   }
 
   fs.writeFileSync(
-    path.join(destDir, 'project.json'),
-    JSON.stringify({
-      uuid: newProject.id,
-      name: newProject.name,
-      description: newProject.description,
-      path: newPath,
-    }, null, 2),
+    path.join(destDir, "project.json"),
+    JSON.stringify(
+      {
+        uuid: newProject.id,
+        name: newProject.name,
+        description: newProject.description,
+        path: newPath,
+      },
+      null,
+      2,
+    ),
   );
 
   res.json(serializeProject(newProject));
@@ -382,14 +472,20 @@ router.post('/:id/duplicate', async (req, res) => {
 
 // ─── Destroy ───────────────────────────────────────────────
 
-router.delete('/:id', async (req, res) => {
+router.delete("/:id", async (req, res) => {
   const db = getDb();
-  const [project] = await db.select().from(projects).where(eq(projects.id, req.params.id));
-  if (!project) { res.status(404).json({ error: 'Not found' }); return; }
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.id, req.params.id));
+  if (!project) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   const fullPath = path.join(os.homedir(), project.path);
 
-  if (getSetting('useTrash')) {
+  if (getSetting("useTrash")) {
     try {
       await shell.trashItem(fullPath);
     } catch {
