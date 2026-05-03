@@ -109,6 +109,17 @@ const MIGRATIONS: Migration[] = [
         ON document_chunks USING hnsw (embedding vector_cosine_ops);
     `,
   },
+  {
+    id: '003_image_embeddings',
+    description: 'Add nullable embedding column on images for semantic search',
+    sql: `
+      ALTER TABLE images
+        ADD COLUMN embedding VECTOR(1536);
+
+      CREATE INDEX idx_images_embedding
+        ON images USING hnsw (embedding vector_cosine_ops);
+    `,
+  },
 ];
 
 export async function runMigrations(pglite: PGlite): Promise<void> {

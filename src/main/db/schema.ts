@@ -44,6 +44,10 @@ export const images = pgTable('images', {
   mimeType: text('mime_type').default('image/png').notNull(),
   createdBy: text('created_by').notNull(),
   metadata: jsonb('metadata'), // { prompt, size, quality, model }
+  // Single embedding per image (name + prompt is short enough that no
+  // chunking is needed). Nullable so an image can exist before its embed
+  // call lands; rows without an embedding are skipped by semantic search.
+  embedding: vector('embedding', { dimensions: 1536 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

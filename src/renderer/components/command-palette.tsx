@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FileTextIcon,
+  ImageIcon,
   KeyRoundIcon,
   SearchIcon,
   SparklesIcon,
@@ -30,6 +31,19 @@ interface SearchResult {
   directory: string;
   snippet: string;
   score: number;
+}
+
+interface ImageSearchResult {
+  id: string;
+  name: string;
+  prompt: string | undefined;
+  snippet: string;
+  score: number;
+}
+
+interface SemanticResults {
+  documents: SearchResult[];
+  images: ImageSearchResult[];
 }
 
 interface Props {
@@ -99,7 +113,7 @@ export function CommandPalette({
 }: Props) {
   const navigate = useNavigate();
   const [input, setInput] = useState("");
-  const [semanticResults, setSemanticResults] = useState<SearchResult[] | null>(
+  const [semanticResults, setSemanticResults] = useState<SemanticResults | null>(
     null,
   );
   const [searching, setSearching] = useState(false);
@@ -145,19 +159,19 @@ export function CommandPalette({
     setNoKey(false);
     setSearchError(false);
     try {
-      const result = await api_post<{ results: SearchResult[] }>(
+      const result = await api_post<SemanticResults>(
         `/api/projects/${projectId}/search`,
         { query: q },
       );
-      setSemanticResults(result.results);
+      setSemanticResults(result);
     } catch (err) {
       if (isApiError(err) && err.status === 409) {
         setNoKey(true);
-        setSemanticResults([]);
+        setSemanticResults({ documents: [], images: [] });
       } else {
         console.error("Semantic search failed:", err);
         setSearchError(true);
-        setSemanticResults([]);
+        setSemanticResults({ documents: [], images: [] });
       }
     } finally {
       setSearching(false);
@@ -169,6 +183,16 @@ export function CommandPalette({
       onOpenChange(false);
       navigate(`/projects/${projectId}/docs`, {
         state: { focusDocumentId: docId },
+      });
+    },
+    [navigate, onOpenChange, projectId],
+  );
+
+  const openImage = useCallback(
+    (imageId: string) => {
+      onOpenChange(false);
+      navigate(`/projects/${projectId}/gallery`, {
+        state: { focusImageId: imageId },
       });
     },
     [navigate, onOpenChange, projectId],
@@ -207,34 +231,63 @@ export function CommandPalette({
               </Button>
             </div>
           ) : semanticResults !== null ? (
-            <CommandGroup
-              heading={
-                searching ? "Searching by content..." : "Semantic results"
-              }
-            >
-              {semanticResults.length === 0 && !searching && (
+            <>
+              {searching ? (
+                <CommandGroup heading="Searching by content...">
+                  <></>
+                </CommandGroup>
+              ) : semanticResults.documents.length === 0 &&
+                semanticResults.images.length === 0 ? (
                 <CommandEmpty>
                   {searchError
                     ? "Search failed. Try again."
-                    : "No documents matched."}
+                    : "Nothing matched."}
                 </CommandEmpty>
+              ) : (
+                <>
+                  {semanticResults.documents.length > 0 && (
+                    <CommandGroup heading="Documents">
+                      {semanticResults.documents.map((r) => (
+                        <CommandItem
+                          key={r.id}
+                          value={`doc-${r.id}`}
+                          onSelect={() => openDoc(r.id)}
+                        >
+                          <SparklesIcon className="opacity-60" />
+                          <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
+                            <span className="truncate font-medium">{r.name}</span>
+                            <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
+                              {r.snippet}
+                            </span>
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
+                  {semanticResults.images.length > 0 && (
+                    <CommandGroup heading="Images">
+                      {semanticResults.images.map((r) => (
+                        <CommandItem
+                          key={r.id}
+                          value={`image-${r.id}`}
+                          onSelect={() => openImage(r.id)}
+                        >
+                          <ImageIcon className="opacity-60" />
+                          <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
+                            <span className="truncate font-medium">{r.name}</span>
+                            {r.snippet && (
+                              <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
+                                {r.snippet}
+                              </span>
+                            )}
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
+                </>
               )}
-              {semanticResults.map((r) => (
-                <CommandItem
-                  key={r.id}
-                  value={`semantic-${r.id}`}
-                  onSelect={() => openDoc(r.id)}
-                >
-                  <SparklesIcon className="opacity-60" />
-                  <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
-                    <span className="truncate font-medium">{r.name}</span>
-                    <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
-                      {r.snippet}
-                    </span>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            </>
           ) : (
             <CommandGroup
               heading={input.trim() ? "Documents" : "All documents"}

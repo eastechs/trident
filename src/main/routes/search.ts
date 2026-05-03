@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { searchProject, NoOpenAIKeyError } from '../ai/embeddings.js';
+import { searchProject, searchImagesProject, NoOpenAIKeyError } from '../ai/embeddings.js';
 
 const router = Router({ mergeParams: true });
 
@@ -13,9 +13,11 @@ const searchBody = z.object({
 
 // POST /api/projects/:projectId/search
 //
-// Returns ranked doc-level results with snippets. 409 + { error: 'no-openai-key' }
-// when no key is configured so the UI can render its inline configure-key
-// state without polling the settings endpoint.
+// Returns ranked semantic results split into `documents` and `images`. The
+// two are ranked independently (different corpora) so the UI can group or
+// interleave however it wants. 409 + { error: 'no-openai-key' } when no key
+// is configured so the UI can render its inline configure-key state without
+// polling the settings endpoint.
 router.post('/', async (req: ProjectRequest, res) => {
   const parse = searchBody.safeParse(req.body);
   if (!parse.success) {
@@ -25,8 +27,11 @@ router.post('/', async (req: ProjectRequest, res) => {
   const { query, topK } = parse.data;
 
   try {
-    const results = await searchProject(req.params.projectId, query, { topK });
-    res.json({ results });
+    const [documents, images] = await Promise.all([
+      searchProject(req.params.projectId, query, { topK }),
+      searchImagesProject(req.params.projectId, query, { topK }),
+    ]);
+    res.json({ documents, images });
   } catch (err) {
     if (err instanceof NoOpenAIKeyError) {
       res.status(409).json({ error: 'no-openai-key' });

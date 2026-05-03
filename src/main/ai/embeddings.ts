@@ -1,7 +1,7 @@
-import { eq, and, sql, cosineDistance } from 'drizzle-orm';
+import { eq, and, isNotNull, sql, cosineDistance } from 'drizzle-orm';
 import { embed, embedMany } from 'ai';
 import { getDb } from '../database.js';
-import { documents, documentChunks, projects } from '../db/schema.js';
+import { documents, documentChunks, images, projects } from '../db/schema.js';
 import { getApiKey } from '../settings.js';
 
 const EMBEDDING_MODEL = 'text-embedding-3-small';
@@ -248,4 +248,104 @@ export async function searchProject(
     snippet: r.text.length > SNIPPET_CHARS ? `${r.text.slice(0, SNIPPET_CHARS)}…` : r.text,
     score: typeof r.score === 'string' ? parseFloat(r.score) : r.score,
   }));
+}
+
+// ─── Image embeddings ───────────────────────────────────────
+//
+// Images get a single embedding combining their name and the generation
+// prompt. That's almost always well under TOKEN_CAP, so no chunking; the
+// vector lives directly on the `images` row. Skipped silently when the
+// project disables embeddings or no OpenAI key is set, mirroring the doc
+// path.
+
+export interface ImageSearchResult {
+  id: string;
+  name: string;
+  prompt: string | undefined;
+  snippet: string;
+  score: number;
+}
+
+function imageEmbeddingSource(name: string, prompt: string | undefined): string {
+  return prompt && prompt.trim().length > 0 ? `${name}\n\n${prompt}` : name;
+}
+
+export async function embedImage(imageId: string): Promise<void> {
+  const db = getDb();
+
+  const [img] = await db.select().from(images).where(eq(images.id, imageId));
+  if (!img) return;
+
+  const [project] = await db.select().from(projects).where(eq(projects.id, img.projectId));
+  if (!project || !project.embeddingsEnabled) return;
+
+  if (!getApiKey('openai')) return;
+
+  const meta = (img.metadata ?? {}) as { prompt?: string };
+  const text = imageEmbeddingSource(img.name, meta.prompt);
+
+  const { embedding } = await withRetry(async () => {
+    const openai = await getOpenAIClient();
+    return embed({
+      model: openai.embedding(EMBEDDING_MODEL),
+      value: text,
+    });
+  });
+
+  await db.update(images).set({ embedding }).where(eq(images.id, imageId));
+}
+
+// Semantic search across a project's images. Same MIN_SIMILARITY floor as
+// docs; rows with a NULL embedding (e.g. created before the column existed,
+// or while no OpenAI key was set) are excluded.
+export async function searchImagesProject(
+  projectId: string,
+  query: string,
+  opts: { topK?: number } = {},
+): Promise<ImageSearchResult[]> {
+  const topK = opts.topK ?? 10;
+  if (topK <= 0) return [];
+
+  if (query.trim().length === 0) return [];
+
+  const db = getDb();
+  const openai = await getOpenAIClient();
+  const { embedding } = await embed({
+    model: openai.embedding(EMBEDDING_MODEL),
+    value: query,
+  });
+
+  const distance = cosineDistance(images.embedding, embedding);
+  const similarity = sql<number>`1 - (${distance})`;
+
+  const rows = await db
+    .select({
+      id: images.id,
+      name: images.name,
+      metadata: images.metadata,
+      score: similarity,
+    })
+    .from(images)
+    .where(and(
+      eq(images.projectId, projectId),
+      isNotNull(images.embedding),
+      sql`${distance} < ${1 - MIN_SIMILARITY}`,
+    ))
+    .orderBy(distance)
+    .limit(topK);
+
+  return rows.map((r) => {
+    const meta = (r.metadata ?? {}) as { prompt?: string };
+    const prompt = meta.prompt;
+    const snippet = prompt && prompt.length > SNIPPET_CHARS
+      ? `${prompt.slice(0, SNIPPET_CHARS)}…`
+      : prompt ?? '';
+    return {
+      id: r.id,
+      name: r.name,
+      prompt,
+      snippet,
+      score: typeof r.score === 'string' ? parseFloat(r.score) : r.score,
+    };
+  });
 }

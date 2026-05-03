@@ -7,9 +7,9 @@ import path from 'path';
 import readline from 'readline';
 import ignore, { type Ignore } from 'ignore';
 import { getDb } from '../../database.js';
-import { documents, projects } from '../../db/schema.js';
+import { documents, images, projects } from '../../db/schema.js';
 import { getApiKey } from '../../settings.js';
-import { embedDocument, searchProject, NoOpenAIKeyError } from '../embeddings.js';
+import { embedDocument, searchProject, searchImagesProject, NoOpenAIKeyError } from '../embeddings.js';
 
 // ─── Workspace tools ─────────────────────────────────────────
 //
@@ -391,6 +391,64 @@ export function createTools(
         return {
           status: 'success',
           documents: results.map((d) => ({ document_id: d.id, document_name: d.name })),
+        };
+      },
+    }),
+
+    SearchImages: tool({
+      description: 'Search for images in this project by name or by the prompt they were generated from. Returns matching images with their generation prompt as a snippet. Unlike SearchDocuments this is project-wide — the user picks the generation model on a per-image card, so images aren\'t owned by the conversational agent that requested them.',
+      inputSchema: z.object({
+        query: z.string().describe('A name fragment or topic phrase. Both literal name matches and meaning-based matches against the generation prompt are searched.'),
+      }),
+      execute: async ({ query }, { abortSignal }) => {
+        throwIfAborted(abortSignal);
+
+        // Prefer semantic match; fall through to ILIKE on the name when no
+        // OpenAI key, embeddings disabled, or the call fails. The two paths
+        // return the same shape so callers don't have to branch.
+        if (getApiKey('openai')) {
+          const [project] = await db
+            .select({ embeddingsEnabled: projects.embeddingsEnabled })
+            .from(projects)
+            .where(eq(projects.id, projectId));
+          if (project?.embeddingsEnabled) {
+            try {
+              const semantic = await searchImagesProject(projectId, query, { topK: 10 });
+              if (semantic.length === 0) {
+                return { status: 'success', images: [], message: 'No images found matching that query.' };
+              }
+              return {
+                status: 'success',
+                images: semantic.map((i) => ({
+                  image_id: i.id,
+                  image_name: i.name,
+                  prompt: i.prompt,
+                  snippet: i.snippet,
+                })),
+              };
+            } catch (err) {
+              if (!(err instanceof NoOpenAIKeyError)) {
+                console.error('[embeddings] Image semantic search failed, falling back to name match:', err);
+              }
+            }
+          }
+        }
+
+        const results = await db
+          .select({ id: images.id, name: images.name })
+          .from(images)
+          .where(and(
+            eq(images.projectId, projectId),
+            ilike(images.name, `%${query}%`),
+          ));
+
+        if (results.length === 0) {
+          return { status: 'success', images: [], message: 'No images found matching that query.' };
+        }
+
+        return {
+          status: 'success',
+          images: results.map((i) => ({ image_id: i.id, image_name: i.name })),
         };
       },
     }),

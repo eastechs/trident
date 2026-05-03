@@ -14,7 +14,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { api_get, api_post, api_put, api_patch, api_delete } from "@/lib/api";
 import {
@@ -435,6 +435,23 @@ function GalleryView({
     },
     [tabs],
   );
+
+  // Deep-link from the project command palette: navigate(...) is called with
+  // location.state.focusImageId; on first arrival we look the image up and
+  // open it as a tab. consumedRef stops the same id from re-firing if the
+  // images list changes while the state is still set.
+  const location = useLocation();
+  const focusImageId =
+    (location.state as { focusImageId?: string } | null)?.focusImageId ?? null;
+  const consumedFocusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusImageId || consumedFocusRef.current === focusImageId) return;
+    const image = localImages.find((i) => i.id === focusImageId);
+    if (image) {
+      openImage({ id: image.id, name: image.name });
+      consumedFocusRef.current = focusImageId;
+    }
+  }, [focusImageId, localImages, openImage]);
 
   const closeTab = useCallback(
     (tabId: string, e: React.MouseEvent) => {

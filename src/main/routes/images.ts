@@ -8,6 +8,7 @@ import { shell } from 'electron';
 import { getDb } from '../database.js';
 import { images, projects } from '../db/schema.js';
 import { getSetting, getApiKey } from '../settings.js';
+import { embedImage } from '../ai/embeddings.js';
 
 const router = Router({ mergeParams: true });
 
@@ -129,6 +130,10 @@ router.post('/generate', async (req: ProjectRequest, res) => {
       metadata: { prompt, size, quality, model },
     }).returning();
 
+    void embedImage(image.id).catch((err) => {
+      console.error(`[embeddings] Failed to embed image ${image.id}:`, err);
+    });
+
     res.json({
       status: 'success',
       image_id: image.id,
@@ -218,6 +223,10 @@ router.patch('/:imageId', async (req: ImageRequest, res) => {
     .update(images)
     .set({ name, path: newImagePath, updatedAt: new Date() })
     .where(eq(images.id, image.id));
+
+  void embedImage(image.id).catch((err) => {
+    console.error(`[embeddings] Failed to embed image ${image.id}:`, err);
+  });
 
   res.json({ id: image.id, name });
 });
