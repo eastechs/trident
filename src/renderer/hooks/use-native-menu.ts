@@ -86,15 +86,20 @@ export function useNativeMenu(actions: NativeMenuActions): void {
     });
 
     useEffect(() => {
-        // Listen for menu actions from Electron main process via preload bridge
-        const api = (window as unknown as { electronAPI?: { onMenuAction: (cb: (action: string) => void) => void } }).electronAPI;
-        if (!api) return;
+        // Listen for menu actions from Electron main process via preload bridge.
+        // The preload returns an unsubscribe so we can detach on unmount —
+        // without this, every page that mounts useNativeMenu leaks a listener
+        // and a single menu click fires every stale handler (e.g. two `New
+        // Document` callbacks → two new docs from one click).
+        const api = window.electronAPI;
+        if (!api?.onMenuAction) return;
 
-        api.onMenuAction((action: string) => {
+        const unsubscribe = api.onMenuAction((action: string) => {
             const actionKey = ACTION_MAP[action];
             if (actionKey) {
                 actionsRef.current[actionKey]?.();
             }
         });
+        return unsubscribe;
     }, []);
 }

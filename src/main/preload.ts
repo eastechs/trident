@@ -1,13 +1,25 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+// Both subscription helpers return an unsubscribe function so callers can
+// detach on component unmount. Without this, useEffect-based subscribers
+// accumulate listeners across remounts/route changes — every menu click
+// then fires every stale handler in turn (e.g. multiple `New Document`
+// callbacks → multiple docs created from one menu invocation).
 contextBridge.exposeInMainWorld('electronAPI', {
   onMenuAction: (callback: (action: string) => void) => {
-    ipcRenderer.on('menu-action', (_event, action: string) => callback(action));
+    const handler = (_event: Electron.IpcRendererEvent, action: string) => callback(action);
+    ipcRenderer.on('menu-action', handler);
+    return () => ipcRenderer.removeListener('menu-action', handler);
   },
   onNotificationNavigate: (
     callback: (target: { projectId: string; conversationId: string }) => void,
   ) => {
-    ipcRenderer.on('notification-navigate', (_event, target) => callback(target));
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      target: { projectId: string; conversationId: string },
+    ) => callback(target);
+    ipcRenderer.on('notification-navigate', handler);
+    return () => ipcRenderer.removeListener('notification-navigate', handler);
   },
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
   openDocumentation: () => ipcRenderer.invoke('open-documentation'),

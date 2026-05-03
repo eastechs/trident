@@ -24,11 +24,12 @@ function NotificationNavigator() {
     useEffect(() => {
         const api = window.electronAPI;
         if (!api?.onNotificationNavigate) return;
-        api.onNotificationNavigate((target) => {
+        const unsubscribe = api.onNotificationNavigate((target) => {
             navigateRef.current(`/projects/${target.projectId}`, {
                 state: { focusConversationId: target.conversationId },
             });
         });
+        return unsubscribe;
     }, []);
 
     return null;
