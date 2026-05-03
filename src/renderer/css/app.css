@@ -485,6 +485,48 @@
   }
 }
 
+/* driver.js — re-skin the tour popover with theme variables so it
+   adapts to light and dark mode. */
+.driver-popover {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+}
+
+.driver-popover-title {
+    color: var(--popover-foreground);
+}
+
+.driver-popover-description,
+.driver-popover-progress-text,
+.driver-popover-close-btn {
+    color: var(--muted-foreground);
+}
+
+.driver-popover-close-btn:hover,
+.driver-popover-close-btn:focus {
+    color: var(--popover-foreground);
+}
+
+.driver-popover-footer button {
+    background-color: var(--secondary);
+    color: var(--secondary-foreground);
+    border: 1px solid var(--border);
+    text-shadow: none;
+}
+
+.driver-popover-footer button:hover,
+.driver-popover-footer button:focus {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+}
+
+.driver-popover-arrow-side-left { border-left-color: var(--popover); }
+.driver-popover-arrow-side-right { border-right-color: var(--popover); }
+.driver-popover-arrow-side-top { border-top-color: var(--popover); }
+.driver-popover-arrow-side-bottom { border-bottom-color: var(--popover); }
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
