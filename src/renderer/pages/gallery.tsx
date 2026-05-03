@@ -403,6 +403,10 @@ function GalleryView({
             </Link>
 
             <nav className="mt-4 flex flex-col items-center gap-1">
+              <ProjectSearchTrigger
+                projectId={project.id}
+                documents={documents}
+              />
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Link to={`/projects/${project.id}`}>
@@ -434,10 +438,6 @@ function GalleryView({
                 </TooltipTrigger>
                 <TooltipContent side="right">Gallery</TooltipContent>
               </Tooltip>
-              <ProjectSearchTrigger
-                projectId={project.id}
-                documents={documents}
-              />
               <ProjectSettingsDialog
                 project={project}
                 onUpdated={onProjectUpdated}

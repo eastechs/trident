@@ -1140,6 +1140,10 @@ function ProjectView({
             </Link>
 
             <nav className="mt-4 flex flex-col items-center gap-1">
+              <ProjectSearchTrigger
+                projectId={project.id}
+                documents={localDocuments}
+              />
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon-sm">
@@ -1171,10 +1175,6 @@ function ProjectView({
                 </TooltipTrigger>
                 <TooltipContent side="right">Gallery</TooltipContent>
               </Tooltip>
-              <ProjectSearchTrigger
-                projectId={project.id}
-                documents={localDocuments}
-              />
               <ProjectSettingsDialog
                 project={project}
                 onUpdated={onProjectUpdated}
