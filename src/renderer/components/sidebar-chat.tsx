@@ -339,34 +339,10 @@ export function SidebarChat({
   const answeredQuestionsRef = useRef<
     Map<string, Array<{ question: string; answer: string }>>
   >(new Map());
-  const [conversationUsage, setConversationUsage] = useState<UsageData>({});
 
   const selectedModelData = availableModels.find((m) => m.id === model);
-
-  const usedTokens =
-    (conversationUsage.prompt_tokens ?? 0) +
-    (conversationUsage.completion_tokens ?? 0);
   const maxTokens =
     selectedModelData?.pricing?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
-  const inputTokens = conversationUsage.prompt_tokens ?? 0;
-  const outputTokens = conversationUsage.completion_tokens ?? 0;
-  const contextUsage = useMemo(
-    () => ({
-      inputTokens,
-      outputTokens,
-      totalTokens: inputTokens + outputTokens,
-      inputTokenDetails: {
-        cacheReadTokens: conversationUsage.cache_read_input_tokens ?? 0,
-        cacheWriteTokens: conversationUsage.cache_write_input_tokens ?? 0,
-        noCacheTokens: undefined,
-      },
-      outputTokenDetails: {
-        reasoningTokens: conversationUsage.reasoning_tokens ?? 0,
-        textTokens: undefined,
-      },
-    }),
-    [conversationUsage, inputTokens, outputTokens],
-  );
 
   const [messagesLoaded, setMessagesLoaded] = useState(false);
 
@@ -436,45 +412,74 @@ export function SidebarChat({
   const isModelLocked = lockedModel != null || messages.length > 0;
   const hasNoProviders = availableModels.length === 0;
 
+  // Aggregate per-message usage off `messages` directly — the AI SDK attaches
+  // each turn's `messageMetadata` (set in src/main/routes/chat.ts on the
+  // `finish` part) onto the assistant message in place, so this useMemo
+  // updates the moment a stream completes. Maintaining a separate
+  // `setConversationUsage` state would only ever populate on conversation
+  // load, so the chip would stay empty during a fresh chat session — which
+  // is exactly the regression this replaces.
+  const conversationUsage = useMemo<UsageData>(() => {
+    const accumulated: UsageData = {};
+    for (const m of messages) {
+      const usage = (m as UIMessage & { metadata?: { usage?: UsageData } })
+        .metadata?.usage;
+      if (!usage) continue;
+      accumulated.prompt_tokens =
+        (accumulated.prompt_tokens ?? 0) + (usage.prompt_tokens ?? 0);
+      accumulated.completion_tokens =
+        (accumulated.completion_tokens ?? 0) + (usage.completion_tokens ?? 0);
+      accumulated.cache_write_input_tokens =
+        (accumulated.cache_write_input_tokens ?? 0) +
+        (usage.cache_write_input_tokens ?? 0);
+      accumulated.cache_read_input_tokens =
+        (accumulated.cache_read_input_tokens ?? 0) +
+        (usage.cache_read_input_tokens ?? 0);
+      accumulated.reasoning_tokens =
+        (accumulated.reasoning_tokens ?? 0) + (usage.reasoning_tokens ?? 0);
+    }
+    return accumulated;
+  }, [messages]);
+
+  const usedTokens =
+    (conversationUsage.prompt_tokens ?? 0) +
+    (conversationUsage.completion_tokens ?? 0);
+  const inputTokens = conversationUsage.prompt_tokens ?? 0;
+  const outputTokens = conversationUsage.completion_tokens ?? 0;
+  const contextUsage = useMemo(
+    () => ({
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      inputTokenDetails: {
+        cacheReadTokens: conversationUsage.cache_read_input_tokens ?? 0,
+        cacheWriteTokens: conversationUsage.cache_write_input_tokens ?? 0,
+        noCacheTokens: undefined,
+      },
+      outputTokenDetails: {
+        reasoningTokens: conversationUsage.reasoning_tokens ?? 0,
+        textTokens: undefined,
+      },
+    }),
+    [conversationUsage, inputTokens, outputTokens],
+  );
+
   // Stable ref for sendMessage so the auto-send effect doesn't re-run
   // every time useChat recreates the function.
   const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
 
-  // Load existing messages on mount / conversation change
-  // Messages are stored in native UIMessage format — no transformation needed
+  // Load existing messages on mount / conversation change. Messages are
+  // stored in native UIMessage format — no transformation needed. Usage
+  // numbers ride along on each message's metadata and are aggregated by
+  // the conversationUsage useMemo above; nothing to accumulate here.
   useEffect(() => {
     setMessagesLoaded(false);
     api_get<UIMessage[]>(
       `/api/projects/${projectId}/chat/messages?conversation_id=${conversationId}`,
     )
       .then((data) => {
-        const uiMessages = data as UIMessage[];
-        setMessages(uiMessages);
-
-        // Accumulate usage from message metadata
-        const accumulated: UsageData = {};
-        for (const m of uiMessages) {
-          const usage = (m as UIMessage & { metadata?: { usage?: UsageData } })
-            .metadata?.usage;
-          if (usage) {
-            accumulated.prompt_tokens =
-              (accumulated.prompt_tokens ?? 0) + (usage.prompt_tokens ?? 0);
-            accumulated.completion_tokens =
-              (accumulated.completion_tokens ?? 0) +
-              (usage.completion_tokens ?? 0);
-            accumulated.cache_write_input_tokens =
-              (accumulated.cache_write_input_tokens ?? 0) +
-              (usage.cache_write_input_tokens ?? 0);
-            accumulated.cache_read_input_tokens =
-              (accumulated.cache_read_input_tokens ?? 0) +
-              (usage.cache_read_input_tokens ?? 0);
-            accumulated.reasoning_tokens =
-              (accumulated.reasoning_tokens ?? 0) +
-              (usage.reasoning_tokens ?? 0);
-          }
-        }
-        setConversationUsage(accumulated);
+        setMessages(data as UIMessage[]);
         setMessagesLoaded(true);
       })
       .catch((err) => {
