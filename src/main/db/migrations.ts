@@ -120,6 +120,14 @@ const MIGRATIONS: Migration[] = [
         ON images USING hnsw (embedding vector_cosine_ops);
     `,
   },
+  {
+    id: '004_default_agent',
+    description: 'Per-project default agent id for new conversations',
+    sql: `
+      ALTER TABLE projects
+        ADD COLUMN default_agent TEXT;
+    `,
+  },
 ];
 
 export async function runMigrations(pglite: PGlite): Promise<void> {

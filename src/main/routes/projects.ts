@@ -45,6 +45,7 @@ function serializeProject(p: ProjectRow): Record<string, unknown> {
     filesystem_root: p.filesystemRoot,
     initial_prompt: p.initialPrompt,
     embeddings_enabled: p.embeddingsEnabled,
+    default_agent: p.defaultAgent,
     created_at: p.createdAt,
     updated_at: p.updatedAt,
   };
@@ -174,6 +175,7 @@ router.get("/:id", async (req, res) => {
       filesystem_root: project.filesystemRoot,
       initial_prompt: project.initialPrompt,
       embeddings_enabled: project.embeddingsEnabled,
+      default_agent: project.defaultAgent,
       created_at: project.createdAt,
       updated_at: project.updatedAt,
     },
@@ -254,7 +256,7 @@ router.post("/", async (req, res) => {
 
 router.patch("/:id", async (req, res) => {
   const db = getDb();
-  const { name, description, filesystem_root, embeddings_enabled } = req.body;
+  const { name, description, filesystem_root, embeddings_enabled, default_agent } = req.body;
 
   const [existing] = await db
     .select()
@@ -351,6 +353,11 @@ router.patch("/:id", async (req, res) => {
       path: newProjectPath,
       ...(typeof embeddings_enabled === "boolean"
         ? { embeddingsEnabled: embeddings_enabled }
+        : {}),
+      // null/'' clears the project default; an explicit string id sets it.
+      // undefined leaves the existing value untouched (PATCH semantics).
+      ...(default_agent !== undefined
+        ? { defaultAgent: default_agent || null }
         : {}),
       updatedAt: new Date(),
     })

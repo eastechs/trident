@@ -11,6 +11,9 @@ export const projects = pgTable('projects', {
   filesystemRoot: text('filesystem_root'),
   initialPrompt: text('initial_prompt'),
   embeddingsEnabled: boolean('embeddings_enabled').default(true).notNull(),
+  // Per-project default agent for new conversations. Null means fall back
+  // to the panel-side defaults wired in the project view.
+  defaultAgent: text('default_agent'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

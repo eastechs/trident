@@ -5,6 +5,7 @@ export interface ProjectData {
   filesystem_root: string | null;
   initial_prompt: string | null;
   embeddings_enabled: boolean;
+  default_agent: string | null;
   path: string;
   created_at: string;
   updated_at: string;

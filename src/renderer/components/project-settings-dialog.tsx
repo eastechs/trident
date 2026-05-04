@@ -1,7 +1,8 @@
 import { FolderOpenIcon, Settings2Icon, XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { api_patch, api_post } from "@/lib/api";
+import { api_get, api_patch, api_post } from "@/lib/api";
+import { ModelSelectorLogo } from "@/components/ai-elements/model-selector";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,6 +13,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -19,13 +29,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { ProjectData } from "@/types/api";
+import type { ModelInfo, ProjectData } from "@/types/api";
+
+const AGENT_INHERIT = "__inherit__";
 
 interface FormData {
   name: string;
   description: string;
   filesystem_root: string;
   embeddings_enabled: boolean;
+  default_agent: string;
 }
 
 interface Props {
@@ -40,9 +53,11 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
     description: project.description ?? "",
     filesystem_root: project.filesystem_root ?? "",
     embeddings_enabled: project.embeddings_enabled,
+    default_agent: project.default_agent ?? "",
   });
   const [processing, setProcessing] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
 
   useEffect(() => {
     setFormData({
@@ -50,8 +65,23 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
       description: project.description ?? "",
       filesystem_root: project.filesystem_root ?? "",
       embeddings_enabled: project.embeddings_enabled,
+      default_agent: project.default_agent ?? "",
     });
   }, [project]);
+
+  // Fetched once per dialog open so the dropdown reflects whatever providers
+  // the user has configured in app settings.
+  useEffect(() => {
+    if (!isOpen || availableModels.length > 0) return;
+    api_get<ModelInfo[]>("/api/settings/models")
+      .then(setAvailableModels)
+      .catch(() => {});
+  }, [isOpen, availableModels.length]);
+
+  const availableProviders = useMemo(
+    () => [...new Set(availableModels.map((m) => m.provider))],
+    [availableModels],
+  );
 
   function setField<K extends keyof FormData>(key: K, value: FormData[K]) {
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -64,6 +94,7 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
       description: project.description ?? "",
       filesystem_root: project.filesystem_root ?? "",
       embeddings_enabled: project.embeddings_enabled,
+      default_agent: project.default_agent ?? "",
     });
     setIsOpen(true);
   }
@@ -186,6 +217,49 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
                   {errors.filesystem_root}
                 </p>
               )}
+            </div>
+            <div className="grid gap-2">
+              <label htmlFor="default-agent" className="text-sm font-medium">
+                Default agent{" "}
+                <span className="font-normal text-neutral-400">
+                  (for new conversations)
+                </span>
+              </label>
+              <Select
+                value={formData.default_agent || AGENT_INHERIT}
+                onValueChange={(value) =>
+                  setField(
+                    "default_agent",
+                    value === AGENT_INHERIT ? "" : value,
+                  )
+                }
+              >
+                <SelectTrigger id="default-agent" className="w-full">
+                  <SelectValue placeholder="Use the panel default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={AGENT_INHERIT}>
+                    <span className="text-muted-foreground">
+                      Use the panel default
+                    </span>
+                  </SelectItem>
+                  {availableProviders.map((provider) => (
+                    <SelectGroup key={provider}>
+                      <SelectLabel>{provider}</SelectLabel>
+                      {availableModels
+                        .filter((m) => m.provider === provider)
+                        .map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            <span className="flex items-center gap-2">
+                              <ModelSelectorLogo provider={m.providerSlug} />
+                              {m.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-3">
               <div className="grid gap-1">
