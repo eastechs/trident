@@ -109,54 +109,65 @@ function cleanText(text: string): string {
   return text.replace(ATTACHED_DOC_RE, "");
 }
 
+// Curated set; every entry here is a known reasoning-capable model so the
+// initial-render fallback flag is hardcoded true. Once the real /api/settings/models
+// list arrives, each entry carries its own server-stamped flag.
 const FALLBACK_MODELS: ModelInfo[] = [
   {
     id: "claude-opus-4-7",
     provider: "Anthropic",
     providerSlug: "anthropic",
     name: "Opus 4.7",
+    supportsReasoning: true,
   },
   {
     id: "claude-sonnet-4-6",
     provider: "Anthropic",
     providerSlug: "anthropic",
     name: "Sonnet 4.6",
+    supportsReasoning: true,
   },
   {
     id: "claude-haiku-4-5",
     provider: "Anthropic",
     providerSlug: "anthropic",
     name: "Haiku 4.5",
+    supportsReasoning: true,
   },
   {
     id: "gpt-5.5",
     provider: "OpenAI",
     providerSlug: "openai",
     name: "GPT-5.5",
+    supportsReasoning: true,
   },
   {
     id: "gpt-5-mini",
     provider: "OpenAI",
     providerSlug: "openai",
     name: "GPT-5 Mini",
+    supportsReasoning: true,
   },
   {
     id: "gpt-5-nano",
     provider: "OpenAI",
     providerSlug: "openai",
     name: "GPT-5 Nano",
+    supportsReasoning: true,
   },
   {
     id: "gemini-3.1-pro-preview",
     provider: "Gemini",
     providerSlug: "google",
     name: "Gemini 3.1 Pro Preview",
+    supportsReasoning: true,
   },
   {
     id: "gemini-3-flash-preview",
     provider: "Gemini",
     providerSlug: "google",
     name: "Gemini 3 Flash Preview",
+    supportsReasoning: true,
   },
 ];
 
@@ -266,17 +277,16 @@ export function SidebarChat({
     [availableModels],
   );
   const [model, setModel] = useState<string>(() => {
-    // lockedModel is the conversation's authoritative choice — honor it
-    // verbatim, even when FALLBACK_MODELS (the only data we have at first
-    // render) doesn't contain it. Validating membership here would silently
-    // snap a conversation locked to an outside-fallback model (e.g.
-    // gpt-5.4) to FALLBACK_MODELS[0] (claude-opus-4-7), and the catch-up
-    // effect's early-return-on-locked path would never correct it.
+    // Trust both lockedModel and defaultModel verbatim. FALLBACK_MODELS is
+    // the only data we have at first render and it's Anthropic-only, so
+    // checking membership here would silently snap any non-Anthropic id
+    // (e.g. a project default of gpt-5.4) to FALLBACK_MODELS[0]
+    // (claude-opus-4-7) — and the catch-up effect below wouldn't correct
+    // it because opus is in the eventually-loaded list. The reconciliation
+    // effect handles truly-invalid ids by snapping to availableModels[0]
+    // once the real list lands.
     if (lockedModel) return lockedModel;
-    const preferred = defaultModel ?? FALLBACK_MODELS[0].id;
-    return availableModels.some((m) => m.id === preferred)
-      ? preferred
-      : (availableModels[0]?.id ?? FALLBACK_MODELS[0].id);
+    return defaultModel ?? FALLBACK_MODELS[0].id;
   });
 
   // Once the dynamic list loads, reconcile the selected model. For a locked
@@ -897,13 +907,9 @@ export function SidebarChat({
                       {isModelLocked ? (
                         <PromptInputButton
                           disabled
-                          className="h-7 gap-1 px-2 text-xs opacity-60 cursor-default"
+                          size="sm"
+                          className="h-7 px-2 text-xs opacity-60 cursor-default"
                         >
-                          {selectedModelData?.providerSlug && (
-                            <ModelSelectorLogo
-                              provider={selectedModelData.providerSlug}
-                            />
-                          )}
                           {selectedModelData?.name && (
                             <ModelSelectorName>
                               {selectedModelData.name}
@@ -916,12 +922,7 @@ export function SidebarChat({
                           open={modelSelectorOpen}
                         >
                           <ModelSelectorTrigger asChild>
-                            <PromptInputButton className="h-7 gap-1 px-2 text-xs">
-                              {selectedModelData?.providerSlug && (
-                                <ModelSelectorLogo
-                                  provider={selectedModelData.providerSlug}
-                                />
-                              )}
+                            <PromptInputButton size="sm" className="h-7 px-2 text-xs">
                               {selectedModelData?.name && (
                                 <ModelSelectorName>
                                   {selectedModelData.name}
@@ -967,26 +968,31 @@ export function SidebarChat({
                           </ModelSelectorContent>
                         </ModelSelector>
                       )}
-                      <Select
-                        value={effort}
-                        onValueChange={(v) =>
-                          handleEffortChange(v as EffortLevel)
-                        }
-                      >
-                        <SelectTrigger
-                          size="sm"
-                          className="h-7 w-auto gap-1 border-transparent bg-transparent px-2 text-xs font-medium text-muted-foreground shadow-none hover:bg-neutral-50 focus:ring-0 dark:hover:bg-neutral-800 [&>svg]:hidden"
+                      {selectedModelData?.supportsReasoning && (
+                        <Select
+                          value={effort}
+                          onValueChange={(v) =>
+                            handleEffortChange(v as EffortLevel)
+                          }
                         >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent align="start">
-                          {EFFORT_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                          <SelectTrigger
+                            size="sm"
+                            // Override the size variant with a matching variant so
+                            // tailwind-merge actually strips the base's
+                            // data-[size=sm]:h-8 instead of letting both apply.
+                            className="w-auto gap-1 rounded-4xl border-transparent bg-transparent bg-clip-padding px-2 py-0 text-xs font-medium text-muted-foreground shadow-none data-[size=sm]:h-7 hover:bg-muted focus:ring-0 dark:hover:bg-muted/50 [&>svg]:hidden"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent align="start">
+                            {EFFORT_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                       {usedTokens > 0 && (
                         <Context
                           maxTokens={maxTokens}
