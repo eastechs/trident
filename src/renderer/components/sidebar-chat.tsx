@@ -788,6 +788,9 @@ export function SidebarChat({
                                 image_name: result.image_name,
                                 mime_type: result.mime_type,
                                 prompt: result.prompt,
+                                model: result.model,
+                                size: result.size,
+                                quality: result.quality,
                               },
                             });
                             onImageCreated?.(result.image);

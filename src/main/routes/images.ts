@@ -61,6 +61,14 @@ router.post('/generate', async (req: ProjectRequest, res) => {
     res.status(422).json({ error: 'model is required' });
     return;
   }
+  if (typeof size !== 'string' || !size) {
+    res.status(422).json({ error: 'size is required' });
+    return;
+  }
+  if (typeof quality !== 'string' || !quality) {
+    res.status(422).json({ error: 'quality is required' });
+    return;
+  }
 
   const [project] = await db.select().from(projects).where(eq(projects.id, req.params.projectId));
   if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
@@ -93,20 +101,16 @@ router.post('/generate', async (req: ProjectRequest, res) => {
       prompt,
       abortSignal: abortController.signal,
     };
-    if (typeof size === 'string' && size) {
-      if (isGemini) {
-        // Gemini supports aspectRatio directly (e.g. '16:9', '3:2').
-        genOptions.aspectRatio = size;
-      } else {
-        // OpenAI image models need WxH; map the ratio.
-        genOptions.size = sizeFromAspect(size);
-      }
+    if (isGemini) {
+      // Gemini supports aspectRatio directly (e.g. '16:9', '3:2').
+      genOptions.aspectRatio = size;
+    } else {
+      // OpenAI image models need WxH; map the ratio.
+      genOptions.size = sizeFromAspect(size);
     }
-    if (typeof quality === 'string' && quality) {
-      genOptions.providerOptions = isGemini
-        ? { google: { quality } }
-        : { openai: { quality } };
-    }
+    genOptions.providerOptions = isGemini
+      ? { google: { quality } }
+      : { openai: { quality } };
 
     const result = await generateImageFn(genOptions as Parameters<typeof generateImageFn>[0]);
     const generated = result.image;
@@ -140,6 +144,12 @@ router.post('/generate', async (req: ProjectRequest, res) => {
       image_name: image.name,
       mime_type: mime,
       prompt,
+      // Echo the user's choices so the chat can hand them to the agent
+      // via addToolOutput, giving the model concrete evidence that the
+      // user has already configured and submitted the generation.
+      model,
+      size,
+      quality,
       // Full row so the client can hydrate its local images list without
       // a follow-up GET — otherwise the metadata drawer in the auto-opened
       // preview tab renders empty until a reload refetches.

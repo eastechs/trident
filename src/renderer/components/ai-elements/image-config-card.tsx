@@ -79,6 +79,13 @@ export interface ImageGenerationResult {
     image_name: string;
     mime_type: string;
     prompt: string;
+    // The settings the user picked on the card. Echoed back from the
+    // endpoint so the chat can pass them to the agent via addToolOutput
+    // — without these the model has no signal that the user already made
+    // their selections, and tends to instruct them to do so post-hoc.
+    model: string;
+    size: string;
+    quality: string;
     // Full image record so the parent can drop it into its local list
     // without a follow-up fetch.
     image: ImageData;

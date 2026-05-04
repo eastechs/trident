@@ -640,7 +640,7 @@ export function createTools(
     // No execute => the AI SDK pauses the stream after this call's input is
     // emitted and waits for the client to provide an output.
     GenerateImage: tool({
-      description: 'Request an image to be generated and saved to the project. The chat UI will render a card for the user to choose model, aspect ratio, and quality, then submit the generation request. Provide only the prompt and a descriptive name.',
+      description: 'Generate and save an image. Calling this tool renders an inline image card in the chat where the user picks the model, aspect ratio, and quality and clicks Generate; the tool does not return until that flow finishes. A "success" result means the image has ALREADY been generated and saved with the settings echoed back in the result (model, size, quality) — the card is gone by the time you read this. Briefly confirm completion by name and stop. Do NOT tell the user to choose model/aspect/quality, click Generate, or otherwise interact with the card after a success result; all of that already happened before this output reached you. A "cancelled" result means the user dismissed the card before generating — acknowledge it without retrying unless they ask. Input is just the prompt and a descriptive name.',
       inputSchema: z.object({
         prompt: z.string().describe('The image generation prompt describing what to create.'),
         name: z.string().describe('A name for the image (without file extension). Use a natural, descriptive, human-readable title with normal spacing and capitalization — not kebab-case, snake_case, camelCase, or PascalCase.'),
@@ -652,6 +652,12 @@ export function createTools(
           image_name: z.string(),
           mime_type: z.string(),
           prompt: z.string(),
+          // Settings the user picked on the image card before submitting.
+          // Present so the agent has positive evidence that the user has
+          // already configured the generation — not a request to choose.
+          model: z.string(),
+          size: z.string(),
+          quality: z.string(),
         }),
         z.object({
           status: z.literal('cancelled'),
