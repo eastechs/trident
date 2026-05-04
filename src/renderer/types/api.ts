@@ -61,5 +61,9 @@ export interface ModelInfo {
   provider: "Anthropic" | "OpenAI" | "Gemini";
   providerSlug: "anthropic" | "openai" | "google";
   name: string;
+  // True when the model exposes reasoning_effort / thinking_level. The chat
+  // hides the effort selector when this is false so we don't 4xx by sending
+  // a reasoning param to a chat-only model.
+  supportsReasoning: boolean;
   pricing?: ModelPricing;
 }

@@ -5,20 +5,60 @@ export interface ModelInfo {
   provider: 'Anthropic' | 'OpenAI' | 'Gemini';
   providerSlug: 'anthropic' | 'openai' | 'google';
   name: string;
+  // True when the model exposes a reasoning/thinking knob the chat surfaces
+  // as the effort selector. Hidden in the UI and skipped server-side when
+  // false so we don't 4xx by sending reasoning_effort to a chat-only model.
+  supportsReasoning: boolean;
 }
 
 type ProviderKey = 'anthropic' | 'openai' | 'gemini';
+
+// Family-based capability check. Patterns:
+//   - OpenAI: o-series (o1/o3/o4...) and the GPT-5 line all support
+//     reasoning_effort. GPT-4 and earlier do not.
+//   - Anthropic: extended thinking is on Claude 3.7 (legacy `claude-3-7-...`
+//     ids) and the Claude 4+ family-first ids (`claude-(opus|sonnet|haiku)-N-x`).
+//     Older claude-3-5-* / claude-2 / claude-instant don't support thinking.
+//   - Gemini: thinking is on 2.5+ (and any 3+ family). Earlier 1.x / 2.0 don't.
+export function supportsReasoning(
+  modelId: string,
+  providerSlug: 'anthropic' | 'openai' | 'google',
+): boolean {
+  if (providerSlug === 'openai') {
+    return /^o\d/.test(modelId) || /^gpt-5/.test(modelId);
+  }
+  if (providerSlug === 'anthropic') {
+    return /^claude-(opus|sonnet|haiku)-/.test(modelId)
+      || /^claude-3-7/.test(modelId);
+  }
+  if (providerSlug === 'google') {
+    return /^gemini-(2[-.]5|[3-9])/.test(modelId);
+  }
+  return false;
+}
 
 const FETCH_TIMEOUT_MS = 8_000;
 const CACHE_TTL_MS = 5 * 60_000;
 
 const cache = new Map<ProviderKey, { at: number; models: ModelInfo[] }>();
 
+// Intermediate row used by FALLBACK and the per-provider fetchers; the
+// reasoning capability is stamped in one place after fetch so we don't
+// have to repeat the predicate at every construction site.
+type ModelDescriptor = Omit<ModelInfo, 'supportsReasoning'>;
+
+function stampCapabilities(models: ModelDescriptor[]): ModelInfo[] {
+  return models.map((m) => ({
+    ...m,
+    supportsReasoning: supportsReasoning(m.id, m.providerSlug),
+  }));
+}
+
 /**
  * Hardcoded fallback — used when a provider's model-list API is unreachable or
  * the response can't be parsed. Kept as a last-known-good snapshot.
  */
-const FALLBACK: Record<ProviderKey, ModelInfo[]> = {
+const FALLBACK: Record<ProviderKey, ModelDescriptor[]> = {
   anthropic: [
     { id: 'claude-opus-4-7', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Opus 4.7' },
     { id: 'claude-sonnet-4-6', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Sonnet 4.6' },
@@ -85,13 +125,13 @@ async function fetchForProvider(provider: ProviderKey): Promise<ModelInfo[]> {
 
   try {
     switch (provider) {
-      case 'anthropic': return await fetchAnthropic(key);
-      case 'openai': return await fetchOpenAI(key);
-      case 'gemini': return await fetchGemini(key);
+      case 'anthropic': return stampCapabilities(await fetchAnthropic(key));
+      case 'openai': return stampCapabilities(await fetchOpenAI(key));
+      case 'gemini': return stampCapabilities(await fetchGemini(key));
     }
   } catch (err) {
     console.warn(`[model-registry] ${provider} fetch failed, using fallback:`, err);
-    return FALLBACK[provider];
+    return stampCapabilities(FALLBACK[provider]);
   }
 }
 
@@ -103,7 +143,7 @@ interface AnthropicModel {
   display_name?: string;
 }
 
-async function fetchAnthropic(key: string): Promise<ModelInfo[]> {
+async function fetchAnthropic(key: string): Promise<ModelDescriptor[]> {
   const data = await getJson<{ data: AnthropicModel[] }>('https://api.anthropic.com/v1/models?limit=1000', {
     headers: {
       'x-api-key': key,
@@ -139,7 +179,7 @@ interface OpenAIModel {
   object: string;
 }
 
-async function fetchOpenAI(key: string): Promise<ModelInfo[]> {
+async function fetchOpenAI(key: string): Promise<ModelDescriptor[]> {
   const data = await getJson<{ data: OpenAIModel[] }>('https://api.openai.com/v1/models', {
     headers: { Authorization: `Bearer ${key}` },
   });
@@ -197,7 +237,20 @@ interface GeminiModel {
   supportedGenerationMethods?: string[];
 }
 
-async function fetchGemini(key: string): Promise<ModelInfo[]> {
+function isGeminiChatModel(id: string): boolean {
+  // Image generation models — `gemini-*-image-*` (e.g. gemini-2.5-flash-image,
+  // gemini-3-flash-image-preview) and the marketing alias `nano-banana[*]`
+  // (Google's image model codename) — share the generateContent method but
+  // can't be used as conversational agents.
+  if (id.includes('image')) return false;
+  if (id.includes('nano-banana')) return false;
+  // Vision/embedding/tts/aqa variants shouldn't appear in the chat picker.
+  const blocklist = ['vision', 'embedding', 'tts', 'aqa'];
+  if (blocklist.some((word) => id.includes(word))) return false;
+  return true;
+}
+
+async function fetchGemini(key: string): Promise<ModelDescriptor[]> {
   const url = new URL('https://generativelanguage.googleapis.com/v1beta/models');
   url.searchParams.set('key', key);
   url.searchParams.set('pageSize', '1000');
@@ -207,6 +260,10 @@ async function fetchGemini(key: string): Promise<ModelInfo[]> {
   return data.models
     .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
     .filter((m) => m.name.includes('gemini'))
+    // Image / vision-only models share the generateContent method but aren't
+    // chat agents — gemini-*-image-*, the "nano-banana" image-gen aliases,
+    // gemini-*-vision, etc. Exclude them so they don't pollute the picker.
+    .filter((m) => isGeminiChatModel(m.name.replace(/^models\//, '')))
     .map((m) => {
       const id = m.name.replace(/^models\//, '');
       return {

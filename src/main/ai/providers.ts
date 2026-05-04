@@ -4,6 +4,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import { getApiKey } from "../settings.js";
+import { supportsReasoning } from "./model-registry.js";
 
 export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];
@@ -94,10 +95,17 @@ export function getProviderOptions(
   const effort = context?.effort ?? DEFAULT_EFFORT;
 
   if (provider === "anthropic") {
+    const reasoningOk = supportsReasoning(modelId, "anthropic");
     return {
       anthropic: {
-        thinking: { type: "adaptive", display: "summarized" },
-        effort,
+        // Skip the thinking block + effort knob on chat-only Claude models
+        // (e.g. claude-3-5-*) so the API doesn't reject the request.
+        ...(reasoningOk
+          ? {
+              thinking: { type: "adaptive", display: "summarized" },
+              effort,
+            }
+          : {}),
         sendReasoning: true,
         contextManagement: {
           edits: [
@@ -113,10 +121,17 @@ export function getProviderOptions(
   }
 
   if (provider === "openai") {
+    const reasoningOk = supportsReasoning(modelId, "openai");
     return {
       openai: {
-        reasoningEffort: effortToOpenAI(effort),
-        reasoningSummary: "auto",
+        // reasoningEffort is only valid on the o-series and gpt-5 family;
+        // sending it to gpt-4o or chat-only models 4xxs.
+        ...(reasoningOk
+          ? {
+              reasoningEffort: effortToOpenAI(effort),
+              reasoningSummary: "auto",
+            }
+          : {}),
         truncation: "auto",
         promptCacheRetention: "24h",
         ...(context?.projectId ? { promptCacheKey: context.projectId } : {}),
@@ -125,6 +140,7 @@ export function getProviderOptions(
   }
 
   if (provider === "gemini") {
+    if (!supportsReasoning(modelId, "google")) return {};
     return {
       google: {
         thinkingConfig: {
