@@ -156,7 +156,6 @@ function ImageCard({
   );
 }
 
-
 interface SortableImageTabProps {
   tab: Tab;
   isActive: boolean;
@@ -211,81 +210,88 @@ function SortableImageTab({
       {...listeners}
       className="flex"
     >
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <button
-            onClick={() => onSelect(tab.id)}
-            className={`group flex w-48 min-w-0 shrink-0 items-center gap-1.5 border px-3 py-1.5 text-sm transition-colors ${
-              isActive
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
-            }`}
-          >
-            {isRenaming ? (
-              <input
-                ref={renameInputRef}
-                type="text"
-                value={renameValue}
-                onChange={(e) => onRenameValueChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    onSubmitRename(tab.id);
-                  }
+      <Tooltip>
+        <ContextMenu>
+          <TooltipTrigger asChild>
+            <ContextMenuTrigger asChild>
+              <button
+                onClick={() => onSelect(tab.id)}
+                className={`group flex w-48 min-w-0 shrink-0 items-center gap-1.5 border px-3 py-1.5 text-sm transition-colors ${
+                  isActive
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+                }`}
+              >
+                {isRenaming ? (
+                  <input
+                    ref={renameInputRef}
+                    type="text"
+                    value={renameValue}
+                    onChange={(e) => onRenameValueChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        onSubmitRename(tab.id);
+                      }
 
-                  if (e.key === "Escape") {
-                    onCancelRename();
-                  }
-                }}
-                onBlur={() => {
-                  if (Date.now() - renameStartTime.current > 100) {
-                    onSubmitRename(tab.id);
-                  }
-                }}
-                autoFocus
-                onFocus={(e) => e.target.select()}
-                className="w-full bg-transparent text-sm outline-none"
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span className="min-w-0 flex-1 truncate text-left">
-                {tab.title}
-              </span>
-            )}
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => onClose(tab.id, e)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  onClose(tab.id, e as unknown as React.MouseEvent);
-                }
-              }}
-              className="flex shrink-0 items-center justify-center rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                      if (e.key === "Escape") {
+                        onCancelRename();
+                      }
+                    }}
+                    onBlur={() => {
+                      if (Date.now() - renameStartTime.current > 100) {
+                        onSubmitRename(tab.id);
+                      }
+                    }}
+                    autoFocus
+                    onFocus={(e) => e.target.select()}
+                    className="w-full bg-transparent text-sm outline-none"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {tab.title}
+                  </span>
+                )}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => onClose(tab.id, e)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      onClose(tab.id, e as unknown as React.MouseEvent);
+                    }
+                  }}
+                  className="flex shrink-0 items-center justify-center rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                >
+                  <XIcon className="size-3" />
+                </span>
+              </button>
+            </ContextMenuTrigger>
+          </TooltipTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem onSelect={() => onRename(tab.id)}>
+              Rename
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() =>
+                onClose(tab.id, {
+                  stopPropagation: () => {},
+                } as React.MouseEvent)
+              }
             >
-              <XIcon className="size-3" />
-            </span>
-          </button>
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem onSelect={() => onRename(tab.id)}>
-            Rename
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={() =>
-              onClose(tab.id, { stopPropagation: () => {} } as React.MouseEvent)
-            }
-          >
-            Close
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            onSelect={() => onDelete(tab.id)}
-            className="text-red-600 dark:text-red-400"
-          >
-            Delete
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
+              Close
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onSelect={() => onDelete(tab.id)}
+              className="text-red-600 dark:text-red-400"
+            >
+              Delete
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+        <TooltipContent side="bottom">{tab.title}</TooltipContent>
+      </Tooltip>
     </div>
   );
 }
@@ -636,9 +642,7 @@ function GalleryView({
                 ) : (
                   <div className="columns-2 gap-2.5">
                     {localImages.map((image) => {
-                      const ratio = aspectInfo(
-                        image.metadata?.size,
-                      ).ratio;
+                      const ratio = aspectInfo(image.metadata?.size).ratio;
                       const isWide =
                         ratio !== undefined && ratio >= WIDE_RATIO_THRESHOLD;
 

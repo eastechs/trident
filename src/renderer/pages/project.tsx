@@ -155,81 +155,88 @@ function SortableTab({
       {...listeners}
       className="flex"
     >
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <button
-            onClick={() => onSelect(tab.id)}
-            className={`group flex w-48 min-w-0 shrink-0 items-center gap-1.5 border px-3 py-1.5 text-sm transition-colors ${
-              isActive
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
-            }`}
-          >
-            {isRenaming ? (
-              <input
-                ref={renameInputRef}
-                type="text"
-                value={renameValue}
-                onChange={(e) => onRenameValueChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    onSubmitRename(tab.id);
-                  }
+      <Tooltip>
+        <ContextMenu>
+          <TooltipTrigger asChild>
+            <ContextMenuTrigger asChild>
+              <button
+                onClick={() => onSelect(tab.id)}
+                className={`group flex w-48 min-w-0 shrink-0 items-center gap-1.5 border px-3 py-1.5 text-sm transition-colors ${
+                  isActive
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+                }`}
+              >
+                {isRenaming ? (
+                  <input
+                    ref={renameInputRef}
+                    type="text"
+                    value={renameValue}
+                    onChange={(e) => onRenameValueChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        onSubmitRename(tab.id);
+                      }
 
-                  if (e.key === "Escape") {
-                    onCancelRename();
-                  }
-                }}
-                onBlur={() => {
-                  if (Date.now() - renameStartTime.current > 100) {
-                    onSubmitRename(tab.id);
-                  }
-                }}
-                autoFocus
-                onFocus={(e) => e.target.select()}
-                className="w-full bg-transparent outline-none text-sm"
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span className="min-w-0 flex-1 truncate text-left">
-                {tab.title}
-              </span>
-            )}
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => onClose(tab.id, e)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  onClose(tab.id, e as unknown as React.MouseEvent);
-                }
-              }}
-              className="flex shrink-0 items-center justify-center rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                      if (e.key === "Escape") {
+                        onCancelRename();
+                      }
+                    }}
+                    onBlur={() => {
+                      if (Date.now() - renameStartTime.current > 100) {
+                        onSubmitRename(tab.id);
+                      }
+                    }}
+                    autoFocus
+                    onFocus={(e) => e.target.select()}
+                    className="w-full bg-transparent outline-none text-sm"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {tab.title}
+                  </span>
+                )}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => onClose(tab.id, e)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      onClose(tab.id, e as unknown as React.MouseEvent);
+                    }
+                  }}
+                  className="flex shrink-0 items-center justify-center rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                >
+                  <XIcon className="size-3" />
+                </span>
+              </button>
+            </ContextMenuTrigger>
+          </TooltipTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem onSelect={() => onRename(tab.id)}>
+              Rename
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() =>
+                onClose(tab.id, {
+                  stopPropagation: () => {},
+                } as React.MouseEvent)
+              }
             >
-              <XIcon className="size-3" />
-            </span>
-          </button>
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem onSelect={() => onRename(tab.id)}>
-            Rename
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={() =>
-              onClose(tab.id, { stopPropagation: () => {} } as React.MouseEvent)
-            }
-          >
-            Close
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            onSelect={() => onDelete(tab.id)}
-            className="text-red-600 dark:text-red-400"
-          >
-            Delete
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
+              Close
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onSelect={() => onDelete(tab.id)}
+              className="text-red-600 dark:text-red-400"
+            >
+              Delete
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+        <TooltipContent side="bottom">{tab.title}</TooltipContent>
+      </Tooltip>
     </div>
   );
 }
@@ -1152,8 +1159,8 @@ function ProjectView({
         </div>
       </header>
 
-      <div className="flex h-[calc(100vh-2rem)] w-full overflow-hidden">
-        <TooltipProvider>
+      <TooltipProvider>
+        <div className="flex h-[calc(100vh-2rem)] w-full overflow-hidden">
           <aside className="flex w-12 flex-col items-center border-r border-border bg-white py-2 dark:bg-neutral-950">
             <Link to="/">
               {/*<img*/}
@@ -1212,327 +1219,334 @@ function ProjectView({
               <HelpSidebarButton />
             </div>
           </aside>
-        </TooltipProvider>
 
-        <ResizablePanelGroup
-          orientation="horizontal"
-          defaultLayout={defaultLayout}
-          onLayoutChanged={onLayoutChanged}
-          className="flex-1"
-        >
-          <ResizablePanel
-            id="left-sidebar"
-            panelRef={leftPanelRef}
-            defaultSize="25%"
-            minSize="15%"
-            maxSize="30%"
-            collapsible
-            collapsedSize="0%"
-            className="text-sidebar-foreground"
+          <ResizablePanelGroup
+            orientation="horizontal"
+            defaultLayout={defaultLayout}
+            onLayoutChanged={onLayoutChanged}
+            className="flex-1"
           >
-            <div
-              data-tour="chat-left"
-              className="h-full w-full overflow-hidden"
+            <ResizablePanel
+              id="left-sidebar"
+              panelRef={leftPanelRef}
+              defaultSize="25%"
+              minSize="15%"
+              maxSize="30%"
+              collapsible
+              collapsedSize="0%"
+              className="text-sidebar-foreground"
             >
-              <ChatPanel
-                projectId={project.id}
-                side="left"
-                conversations={localConversations}
-                otherSideActiveId={rightActiveId}
-                documents={localDocuments}
-                defaultModel={project.default_agent ?? "claude-opus-4-7"}
-                initialPrompt={initialPromptRef.current}
-                requestedActiveId={leftRequestedId}
-                onConversationCreated={handleConversationCreated}
-                onConversationUpdated={handleConversationUpdated}
-                onConversationDeleted={handleConversationDeleted}
-                onConversationsRefreshed={handleConversationsRefreshed}
-                onActiveIdChanged={handleActiveIdChanged}
-                onDocumentEdited={handleDocumentEdited}
-                onDocumentCreated={handleDocumentCreated}
-                onImageCreated={handleImageCreated}
-              />
-            </div>
-          </ResizablePanel>
+              <div
+                data-tour="chat-left"
+                className="h-full w-full overflow-hidden"
+              >
+                <ChatPanel
+                  projectId={project.id}
+                  side="left"
+                  conversations={localConversations}
+                  otherSideActiveId={rightActiveId}
+                  documents={localDocuments}
+                  defaultModel={project.default_agent ?? "claude-opus-4-7"}
+                  initialPrompt={initialPromptRef.current}
+                  requestedActiveId={leftRequestedId}
+                  onConversationCreated={handleConversationCreated}
+                  onConversationUpdated={handleConversationUpdated}
+                  onConversationDeleted={handleConversationDeleted}
+                  onConversationsRefreshed={handleConversationsRefreshed}
+                  onActiveIdChanged={handleActiveIdChanged}
+                  onDocumentEdited={handleDocumentEdited}
+                  onDocumentCreated={handleDocumentCreated}
+                  onImageCreated={handleImageCreated}
+                />
+              </div>
+            </ResizablePanel>
 
-          <ResizableHandle withHandle />
+            <ResizableHandle withHandle />
 
-          <ResizablePanel id="main-content" defaultSize="50%" minSize="20%">
-            <div
-              data-tour="main-content"
-              className="flex h-full flex-col overflow-hidden"
-            >
-              <div className="flex min-h-9 items-center border-b border-border">
-                <Popover open={fileListOpen} onOpenChange={setFileListOpen}>
-                  <PopoverTrigger asChild>
-                    <button className="mx-1 flex shrink-0 items-center justify-center rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-700 dark:hover:text-neutral-300">
-                      {fileListOpen ? (
-                        <FolderOpenIcon className="size-4" />
-                      ) : (
-                        <FolderClosedIcon className="size-4" />
-                      )}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" className="w-64 gap-1 p-2">
-                    <Tabs defaultValue="documents">
-                      <TabsList className="mb-2 h-7 w-full">
-                        <TabsTrigger
-                          value="documents"
-                          className="flex-1 text-xs"
-                        >
-                          Documents
-                        </TabsTrigger>
-                        <TabsTrigger value="images" className="flex-1 text-xs">
-                          Images
-                        </TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="documents" className="mt-0">
-                        <div className="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
-                          {(() => {
-                            const groups = localDocuments.reduce<
-                              Record<string, DocumentData[]>
-                            >((acc, doc) => {
-                              const dir = doc.directory ?? "user";
-                              (acc[dir] ??= []).push(doc);
+            <ResizablePanel id="main-content" defaultSize="50%" minSize="20%">
+              <div
+                data-tour="main-content"
+                className="flex h-full flex-col overflow-hidden"
+              >
+                <div className="flex min-h-9 items-center border-b border-border">
+                  <Popover open={fileListOpen} onOpenChange={setFileListOpen}>
+                    <PopoverTrigger asChild>
+                      <button className="mx-1 flex shrink-0 items-center justify-center rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-700 dark:hover:text-neutral-300">
+                        {fileListOpen ? (
+                          <FolderOpenIcon className="size-4" />
+                        ) : (
+                          <FolderClosedIcon className="size-4" />
+                        )}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-64 gap-1 p-2">
+                      <Tabs defaultValue="documents">
+                        <TabsList className="mb-2 h-7 w-full">
+                          <TabsTrigger
+                            value="documents"
+                            className="flex-1 text-xs"
+                          >
+                            Documents
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="images"
+                            className="flex-1 text-xs"
+                          >
+                            Images
+                          </TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="documents" className="mt-0">
+                          <div className="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
+                            {(() => {
+                              const groups = localDocuments.reduce<
+                                Record<string, DocumentData[]>
+                              >((acc, doc) => {
+                                const dir = doc.directory ?? "user";
+                                (acc[dir] ??= []).push(doc);
 
-                              return acc;
-                            }, {});
-                            const sortedDirs = Object.keys(groups).sort(
-                              (a, b) => {
-                                if (a === "user") {
-                                  return -1;
-                                }
+                                return acc;
+                              }, {});
+                              const sortedDirs = Object.keys(groups).sort(
+                                (a, b) => {
+                                  if (a === "user") {
+                                    return -1;
+                                  }
 
-                                if (b === "user") {
-                                  return 1;
-                                }
+                                  if (b === "user") {
+                                    return 1;
+                                  }
 
-                                return a.localeCompare(b);
-                              },
-                            );
+                                  return a.localeCompare(b);
+                                },
+                              );
 
-                            return sortedDirs.map((dir) => (
-                              <div key={dir}>
-                                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
-                                  {dir === "user" ? "Your Documents" : dir}
+                              return sortedDirs.map((dir) => (
+                                <div key={dir}>
+                                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                                    {dir === "user" ? "Your Documents" : dir}
+                                  </div>
+                                  {groups[dir].map((doc) => (
+                                    <ContextMenu key={doc.id}>
+                                      <ContextMenuTrigger asChild>
+                                        <button
+                                          onClick={() => {
+                                            if (fileListRenamingId !== doc.id) {
+                                              openDocument(doc);
+                                            }
+                                          }}
+                                          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
+                                            doc.id === activeTabId
+                                              ? "bg-neutral-50 dark:bg-neutral-900 font-medium"
+                                              : ""
+                                          }`}
+                                        >
+                                          <FileTextIcon className="size-4 shrink-0 text-neutral-400" />
+                                          {fileListRenamingId === doc.id ? (
+                                            <input
+                                              ref={fileListRenameInputRef}
+                                              type="text"
+                                              value={fileListRenameValue}
+                                              onChange={(e) =>
+                                                setFileListRenameValue(
+                                                  e.target.value,
+                                                )
+                                              }
+                                              onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                  submitFileListRename(doc.id);
+                                                }
+
+                                                if (e.key === "Escape") {
+                                                  setFileListRenamingId(null);
+                                                }
+                                              }}
+                                              onBlur={() => {
+                                                if (
+                                                  Date.now() -
+                                                    fileListRenameStartTime.current >
+                                                  100
+                                                ) {
+                                                  submitFileListRename(doc.id);
+                                                }
+                                              }}
+                                              onFocus={(e) => e.target.select()}
+                                              autoFocus
+                                              className="w-full bg-transparent outline-none text-sm"
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                            />
+                                          ) : (
+                                            <span className="truncate">
+                                              {doc.name}
+                                            </span>
+                                          )}
+                                        </button>
+                                      </ContextMenuTrigger>
+                                      <ContextMenuContent>
+                                        <ContextMenuItem
+                                          onSelect={() =>
+                                            handleFileListRename(
+                                              doc.id,
+                                              doc.name,
+                                            )
+                                          }
+                                        >
+                                          Rename
+                                        </ContextMenuItem>
+                                        <ContextMenuSeparator />
+                                        <ContextMenuItem
+                                          onSelect={() => deleteTab(doc.id)}
+                                          className="text-red-600 dark:text-red-400"
+                                        >
+                                          Delete
+                                        </ContextMenuItem>
+                                      </ContextMenuContent>
+                                    </ContextMenu>
+                                  ))}
                                 </div>
-                                {groups[dir].map((doc) => (
-                                  <ContextMenu key={doc.id}>
-                                    <ContextMenuTrigger asChild>
-                                      <button
-                                        onClick={() => {
-                                          if (fileListRenamingId !== doc.id) {
-                                            openDocument(doc);
+                              ));
+                            })()}
+                            {localDocuments.length === 0 && (
+                              <p className="px-2 py-1.5 text-sm text-neutral-400">
+                                No documents yet
+                              </p>
+                            )}
+                          </div>
+                          <div className="mt-1 border-t border-border pt-1">
+                            <button
+                              onClick={addTab}
+                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                            >
+                              <PlusIcon className="size-4" />
+                              <span>New Document</span>
+                            </button>
+                          </div>
+                        </TabsContent>
+                        <TabsContent value="images" className="mt-0">
+                          <div className="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
+                            {localImages.map((image) => (
+                              <ContextMenu key={image.id}>
+                                <ContextMenuTrigger asChild>
+                                  <button
+                                    onClick={() => {
+                                      if (fileListRenamingId !== image.id) {
+                                        openImage(image);
+                                      }
+                                    }}
+                                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
+                                      image.id === activeTabId
+                                        ? "bg-neutral-50 dark:bg-neutral-900 font-medium"
+                                        : ""
+                                    }`}
+                                  >
+                                    <ImageIcon className="size-4 shrink-0 text-neutral-400" />
+                                    {fileListRenamingId === image.id ? (
+                                      <input
+                                        ref={fileListRenameInputRef}
+                                        type="text"
+                                        value={fileListRenameValue}
+                                        onChange={(e) =>
+                                          setFileListRenameValue(e.target.value)
+                                        }
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            submitFileListRename(image.id);
+                                          }
+
+                                          if (e.key === "Escape") {
+                                            setFileListRenamingId(null);
                                           }
                                         }}
-                                        className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
-                                          doc.id === activeTabId
-                                            ? "bg-neutral-50 dark:bg-neutral-900 font-medium"
-                                            : ""
-                                        }`}
-                                      >
-                                        <FileTextIcon className="size-4 shrink-0 text-neutral-400" />
-                                        {fileListRenamingId === doc.id ? (
-                                          <input
-                                            ref={fileListRenameInputRef}
-                                            type="text"
-                                            value={fileListRenameValue}
-                                            onChange={(e) =>
-                                              setFileListRenameValue(
-                                                e.target.value,
-                                              )
-                                            }
-                                            onKeyDown={(e) => {
-                                              if (e.key === "Enter") {
-                                                submitFileListRename(doc.id);
-                                              }
-
-                                              if (e.key === "Escape") {
-                                                setFileListRenamingId(null);
-                                              }
-                                            }}
-                                            onBlur={() => {
-                                              if (
-                                                Date.now() -
-                                                  fileListRenameStartTime.current >
-                                                100
-                                              ) {
-                                                submitFileListRename(doc.id);
-                                              }
-                                            }}
-                                            onFocus={(e) => e.target.select()}
-                                            autoFocus
-                                            className="w-full bg-transparent outline-none text-sm"
-                                            onClick={(e) => e.stopPropagation()}
-                                          />
-                                        ) : (
-                                          <span className="truncate">
-                                            {doc.name}
-                                          </span>
-                                        )}
-                                      </button>
-                                    </ContextMenuTrigger>
-                                    <ContextMenuContent>
-                                      <ContextMenuItem
-                                        onSelect={() =>
-                                          handleFileListRename(doc.id, doc.name)
-                                        }
-                                      >
-                                        Rename
-                                      </ContextMenuItem>
-                                      <ContextMenuSeparator />
-                                      <ContextMenuItem
-                                        onSelect={() => deleteTab(doc.id)}
-                                        className="text-red-600 dark:text-red-400"
-                                      >
-                                        Delete
-                                      </ContextMenuItem>
-                                    </ContextMenuContent>
-                                  </ContextMenu>
-                                ))}
-                              </div>
-                            ));
-                          })()}
-                          {localDocuments.length === 0 && (
-                            <p className="px-2 py-1.5 text-sm text-neutral-400">
-                              No documents yet
-                            </p>
-                          )}
-                        </div>
-                        <div className="mt-1 border-t border-border pt-1">
-                          <button
-                            onClick={addTab}
-                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
-                          >
-                            <PlusIcon className="size-4" />
-                            <span>New Document</span>
-                          </button>
-                        </div>
-                      </TabsContent>
-                      <TabsContent value="images" className="mt-0">
-                        <div className="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
-                          {localImages.map((image) => (
-                            <ContextMenu key={image.id}>
-                              <ContextMenuTrigger asChild>
-                                <button
-                                  onClick={() => {
-                                    if (fileListRenamingId !== image.id) {
-                                      openImage(image);
+                                        onBlur={() => {
+                                          if (
+                                            Date.now() -
+                                              fileListRenameStartTime.current >
+                                            100
+                                          ) {
+                                            submitFileListRename(image.id);
+                                          }
+                                        }}
+                                        onFocus={(e) => e.target.select()}
+                                        autoFocus
+                                        className="w-full bg-transparent outline-none text-sm"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    ) : (
+                                      <span className="truncate">
+                                        {image.name}
+                                      </span>
+                                    )}
+                                  </button>
+                                </ContextMenuTrigger>
+                                <ContextMenuContent>
+                                  <ContextMenuItem
+                                    onSelect={() =>
+                                      handleFileListRename(image.id, image.name)
                                     }
-                                  }}
-                                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
-                                    image.id === activeTabId
-                                      ? "bg-neutral-50 dark:bg-neutral-900 font-medium"
-                                      : ""
-                                  }`}
-                                >
-                                  <ImageIcon className="size-4 shrink-0 text-neutral-400" />
-                                  {fileListRenamingId === image.id ? (
-                                    <input
-                                      ref={fileListRenameInputRef}
-                                      type="text"
-                                      value={fileListRenameValue}
-                                      onChange={(e) =>
-                                        setFileListRenameValue(e.target.value)
-                                      }
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          submitFileListRename(image.id);
-                                        }
-
-                                        if (e.key === "Escape") {
-                                          setFileListRenamingId(null);
-                                        }
-                                      }}
-                                      onBlur={() => {
-                                        if (
-                                          Date.now() -
-                                            fileListRenameStartTime.current >
-                                          100
-                                        ) {
-                                          submitFileListRename(image.id);
-                                        }
-                                      }}
-                                      onFocus={(e) => e.target.select()}
-                                      autoFocus
-                                      className="w-full bg-transparent outline-none text-sm"
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  ) : (
-                                    <span className="truncate">
-                                      {image.name}
-                                    </span>
-                                  )}
-                                </button>
-                              </ContextMenuTrigger>
-                              <ContextMenuContent>
-                                <ContextMenuItem
-                                  onSelect={() =>
-                                    handleFileListRename(image.id, image.name)
-                                  }
-                                >
-                                  Rename
-                                </ContextMenuItem>
-                                <ContextMenuSeparator />
-                                <ContextMenuItem
-                                  onSelect={() => deleteTab(image.id)}
-                                  className="text-red-600 dark:text-red-400"
-                                >
-                                  Delete
-                                </ContextMenuItem>
-                              </ContextMenuContent>
-                            </ContextMenu>
-                          ))}
-                          {localImages.length === 0 && (
-                            <p className="px-2 py-1.5 text-sm text-neutral-400">
-                              No images yet
-                            </p>
-                          )}
-                        </div>
-                      </TabsContent>
-                    </Tabs>
-                  </PopoverContent>
-                </Popover>
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                  modifiers={[restrictToHorizontalAxis]}
-                >
-                  <SortableContext
-                    items={tabs.map((t) => t.id)}
-                    strategy={horizontalListSortingStrategy}
+                                  >
+                                    Rename
+                                  </ContextMenuItem>
+                                  <ContextMenuSeparator />
+                                  <ContextMenuItem
+                                    onSelect={() => deleteTab(image.id)}
+                                    className="text-red-600 dark:text-red-400"
+                                  >
+                                    Delete
+                                  </ContextMenuItem>
+                                </ContextMenuContent>
+                              </ContextMenu>
+                            ))}
+                            {localImages.length === 0 && (
+                              <p className="px-2 py-1.5 text-sm text-neutral-400">
+                                No images yet
+                              </p>
+                            )}
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                    </PopoverContent>
+                  </Popover>
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                    modifiers={[restrictToHorizontalAxis]}
                   >
-                    <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-0 overflow-x-auto">
-                      {tabs.map((tab) => (
-                        <SortableTab
-                          key={tab.id}
-                          tab={tab}
-                          isActive={tab.id === activeTabId}
-                          isRenaming={renamingTabId === tab.id}
-                          renameValue={renameValue}
-                          renameInputRef={renameInputRef}
-                          renameStartTime={renameStartTime}
-                          onSelect={setActiveTabId}
-                          onClose={closeTab}
-                          onRename={handleRename}
-                          onDelete={deleteTab}
-                          onRenameValueChange={setRenameValue}
-                          onSubmitRename={submitRename}
-                          onCancelRename={() => setRenamingTabId(null)}
-                        />
-                      ))}
-                    </div>
-                  </SortableContext>
-                </DndContext>
-                <button
-                  onClick={addTab}
-                  className="mx-1 flex shrink-0 items-center justify-center rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-700 dark:hover:text-neutral-300"
-                >
-                  <PlusIcon className="size-4" />
-                </button>
-              </div>
-              {/* {activeTab && (
+                    <SortableContext
+                      items={tabs.map((t) => t.id)}
+                      strategy={horizontalListSortingStrategy}
+                    >
+                      <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-0 overflow-x-auto">
+                        {tabs.map((tab) => (
+                          <SortableTab
+                            key={tab.id}
+                            tab={tab}
+                            isActive={tab.id === activeTabId}
+                            isRenaming={renamingTabId === tab.id}
+                            renameValue={renameValue}
+                            renameInputRef={renameInputRef}
+                            renameStartTime={renameStartTime}
+                            onSelect={setActiveTabId}
+                            onClose={closeTab}
+                            onRename={handleRename}
+                            onDelete={deleteTab}
+                            onRenameValueChange={setRenameValue}
+                            onSubmitRename={submitRename}
+                            onCancelRename={() => setRenamingTabId(null)}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                  <button
+                    onClick={addTab}
+                    className="mx-1 flex shrink-0 items-center justify-center rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-700 dark:hover:text-neutral-300"
+                  >
+                    <PlusIcon className="size-4" />
+                  </button>
+                </div>
+                {/* {activeTab && (
                                 <div className="flex items-center justify-between border-b border-border bg-white px-2 py-1.5 dark:bg-neutral-950">
                                     <div className="flex items-center gap-2">
                                         <h2 className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
@@ -1568,180 +1582,185 @@ function ProjectView({
                                     )}
                                 </div>
                             )} */}
-              <main className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
-                {tabs.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center gap-4 text-neutral-400 dark:text-neutral-500">
-                    <FilesIcon className="size-12 stroke-1" />
-                    <p className="text-sm">No documents open</p>
-                    <Button variant="outline" size="sm" onClick={addTab}>
-                      <PlusIcon className="size-4" />
-                      New Document
-                    </Button>
-                  </div>
-                ) : (
-                  tabs.map((tab) => (
-                    <div
-                      key={tab.id}
-                      className={
-                        tab.id === activeTabId
-                          ? tab.type === "image"
-                            ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-                            : "flex flex-1 flex-col"
-                          : "hidden"
-                      }
-                    >
-                      {tab.type === "image" ? (
-                        (() => {
-                          const img = localImages.find((i) => i.id === tab.id);
-
-                          return img ? (
-                            <ImagePreview
-                              image={img}
-                              projectId={project.id}
-                              defaultDetailsOpen={false}
-                            />
-                          ) : null;
-                        })()
-                      ) : tabContent[tab.id] !== undefined ? (
-                        <MilkdownEditorWrapper
-                          key={editorKeys[tab.id] ?? 0}
-                          ref={(el) => {
-                            editorRefs.current[tab.id] = el;
-                          }}
-                          defaultValue={tabContent[tab.id]}
-                          onChange={(markdown) =>
-                            handleContentChange(tab.id, markdown)
-                          }
-                          onReady={(markdown) => {
-                            setTabContent((prev) => ({
-                              ...prev,
-                              [tab.id]: markdown,
-                            }));
-                          }}
-                        />
-                      ) : (
-                        <div className="flex flex-1 items-center justify-center text-neutral-400">
-                          Loading...
-                        </div>
-                      )}
+                <main className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+                  {tabs.length === 0 ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-4 text-neutral-400 dark:text-neutral-500">
+                      <FilesIcon className="size-12 stroke-1" />
+                      <p className="text-sm">No documents open</p>
+                      <Button variant="outline" size="sm" onClick={addTab}>
+                        <PlusIcon className="size-4" />
+                        New Document
+                      </Button>
                     </div>
-                  ))
-                )}
-              </main>
-              {activeTab?.type === "document" &&
-                (() => {
-                  const activeDoc = localDocuments.find(
-                    (d) => d.id === activeTabId,
-                  );
+                  ) : (
+                    tabs.map((tab) => (
+                      <div
+                        key={tab.id}
+                        className={
+                          tab.id === activeTabId
+                            ? tab.type === "image"
+                              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                              : "flex flex-1 flex-col"
+                            : "hidden"
+                        }
+                      >
+                        {tab.type === "image" ? (
+                          (() => {
+                            const img = localImages.find(
+                              (i) => i.id === tab.id,
+                            );
 
-                  return (
-                    <div className="h-8 flex items-center justify-between border-t border-border bg-neutral-50 px-2 py-1 dark:bg-neutral-950">
-                      <div className="flex items-center gap-2">
-                        <label
-                          htmlFor="autosave-toggle"
-                          className="text-xs text-neutral-400 dark:text-neutral-500"
-                        >
-                          Autosave
-                        </label>
-                        <Switch
-                          id="autosave-toggle"
-                          size="sm"
-                          checked={autosaveEnabled}
-                          onCheckedChange={toggleAutosave}
-                        />
+                            return img ? (
+                              <ImagePreview
+                                image={img}
+                                projectId={project.id}
+                                defaultDetailsOpen={false}
+                              />
+                            ) : null;
+                          })()
+                        ) : tabContent[tab.id] !== undefined ? (
+                          <MilkdownEditorWrapper
+                            key={editorKeys[tab.id] ?? 0}
+                            ref={(el) => {
+                              editorRefs.current[tab.id] = el;
+                            }}
+                            defaultValue={tabContent[tab.id]}
+                            onChange={(markdown) =>
+                              handleContentChange(tab.id, markdown)
+                            }
+                            onReady={(markdown) => {
+                              setTabContent((prev) => ({
+                                ...prev,
+                                [tab.id]: markdown,
+                              }));
+                            }}
+                          />
+                        ) : (
+                          <div className="flex flex-1 items-center justify-center text-neutral-400">
+                            Loading...
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-3">
-                        {activeDoc &&
-                          (activeDoc.created_by ||
-                            activeDoc.last_edited_by) && (
-                            <div className="flex items-center gap-3 text-xs text-neutral-400 dark:text-neutral-500">
-                              {activeDoc.created_by && (
-                                <span>Created by {activeDoc.created_by}</span>
-                              )}
-                              {activeDoc.last_edited_by && (
-                                <span>
-                                  Last edited by {activeDoc.last_edited_by}
-                                </span>
-                              )}
-                            </div>
-                          )}
+                    ))
+                  )}
+                </main>
+                {activeTab?.type === "document" &&
+                  (() => {
+                    const activeDoc = localDocuments.find(
+                      (d) => d.id === activeTabId,
+                    );
+
+                    return (
+                      <div className="h-8 flex items-center justify-between border-t border-border bg-neutral-50 px-2 py-1 dark:bg-neutral-950">
                         <div className="flex items-center gap-2">
-                          {saveStatus[activeTabId] === "saving" ? (
-                            <span className="text-xs text-neutral-400">
-                              Saving...
-                            </span>
-                          ) : saveStatus[activeTabId] === "saved" ? (
-                            <span className="text-xs text-green-500">
-                              Saved
-                            </span>
-                          ) : dirtyTabs[activeTabId] ? (
-                            <>
-                              <Button
-                                variant="icon"
-                                size="icon-xs"
-                                onClick={() => revertDocument(activeTabId)}
-                                title="Revert changes"
-                              >
-                                <Undo2Icon />
-                                <span className="sr-only">Revert changes</span>
-                              </Button>
-                              <Button
-                                variant="icon"
-                                size="icon-xs"
-                                onClick={() => saveDocument(activeTabId)}
-                                title="Save"
-                              >
-                                <SaveIcon />
-                                <span className="sr-only">Save</span>
-                              </Button>
-                            </>
-                          ) : null}
+                          <label
+                            htmlFor="autosave-toggle"
+                            className="text-xs text-neutral-400 dark:text-neutral-500"
+                          >
+                            Autosave
+                          </label>
+                          <Switch
+                            id="autosave-toggle"
+                            size="sm"
+                            checked={autosaveEnabled}
+                            onCheckedChange={toggleAutosave}
+                          />
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {activeDoc &&
+                            (activeDoc.created_by ||
+                              activeDoc.last_edited_by) && (
+                              <div className="flex items-center gap-3 text-xs text-neutral-400 dark:text-neutral-500">
+                                {activeDoc.created_by && (
+                                  <span>Created by {activeDoc.created_by}</span>
+                                )}
+                                {activeDoc.last_edited_by && (
+                                  <span>
+                                    Last edited by {activeDoc.last_edited_by}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          <div className="flex items-center gap-2">
+                            {saveStatus[activeTabId] === "saving" ? (
+                              <span className="text-xs text-neutral-400">
+                                Saving...
+                              </span>
+                            ) : saveStatus[activeTabId] === "saved" ? (
+                              <span className="text-xs text-green-500">
+                                Saved
+                              </span>
+                            ) : dirtyTabs[activeTabId] ? (
+                              <>
+                                <Button
+                                  variant="icon"
+                                  size="icon-xs"
+                                  onClick={() => revertDocument(activeTabId)}
+                                  title="Revert changes"
+                                >
+                                  <Undo2Icon />
+                                  <span className="sr-only">
+                                    Revert changes
+                                  </span>
+                                </Button>
+                                <Button
+                                  variant="icon"
+                                  size="icon-xs"
+                                  onClick={() => saveDocument(activeTabId)}
+                                  title="Save"
+                                >
+                                  <SaveIcon />
+                                  <span className="sr-only">Save</span>
+                                </Button>
+                              </>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })()}
-            </div>
-          </ResizablePanel>
+                    );
+                  })()}
+              </div>
+            </ResizablePanel>
 
-          <ResizableHandle withHandle />
+            <ResizableHandle withHandle />
 
-          <ResizablePanel
-            id="right-sidebar"
-            panelRef={rightPanelRef}
-            defaultSize="25%"
-            minSize="15%"
-            maxSize="30%"
-            collapsible
-            collapsedSize="0%"
-            className="text-sidebar-foreground"
-          >
-            <div
-              data-tour="chat-right"
-              className="h-full w-full overflow-hidden"
+            <ResizablePanel
+              id="right-sidebar"
+              panelRef={rightPanelRef}
+              defaultSize="25%"
+              minSize="15%"
+              maxSize="30%"
+              collapsible
+              collapsedSize="0%"
+              className="text-sidebar-foreground"
             >
-              <ChatPanel
-                projectId={project.id}
-                side="right"
-                conversations={localConversations}
-                otherSideActiveId={leftActiveId}
-                documents={localDocuments}
-                defaultModel={project.default_agent ?? "gpt-5.5"}
-                initialPrompt={initialPromptRef.current}
-                requestedActiveId={rightRequestedId}
-                onConversationCreated={handleConversationCreated}
-                onConversationUpdated={handleConversationUpdated}
-                onConversationDeleted={handleConversationDeleted}
-                onConversationsRefreshed={handleConversationsRefreshed}
-                onActiveIdChanged={handleActiveIdChanged}
-                onDocumentEdited={handleDocumentEdited}
-                onDocumentCreated={handleDocumentCreated}
-                onImageCreated={handleImageCreated}
-              />
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      </div>
+              <div
+                data-tour="chat-right"
+                className="h-full w-full overflow-hidden"
+              >
+                <ChatPanel
+                  projectId={project.id}
+                  side="right"
+                  conversations={localConversations}
+                  otherSideActiveId={leftActiveId}
+                  documents={localDocuments}
+                  defaultModel={project.default_agent ?? "gpt-5.5"}
+                  initialPrompt={initialPromptRef.current}
+                  requestedActiveId={rightRequestedId}
+                  onConversationCreated={handleConversationCreated}
+                  onConversationUpdated={handleConversationUpdated}
+                  onConversationDeleted={handleConversationDeleted}
+                  onConversationsRefreshed={handleConversationsRefreshed}
+                  onActiveIdChanged={handleActiveIdChanged}
+                  onDocumentEdited={handleDocumentEdited}
+                  onDocumentCreated={handleDocumentCreated}
+                  onImageCreated={handleImageCreated}
+                />
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </div>
+      </TooltipProvider>
       <AlertDialog
         open={deletingTabId !== null}
         onOpenChange={(open) => {

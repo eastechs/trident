@@ -139,81 +139,88 @@ function SortableDocTab({
       {...listeners}
       className="flex"
     >
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <button
-            onClick={() => onSelect(tab.id)}
-            className={`group flex w-48 min-w-0 shrink-0 items-center gap-1.5 border px-3 py-1.5 text-sm transition-colors ${
-              isActive
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
-            }`}
-          >
-            {isRenaming ? (
-              <input
-                ref={renameInputRef}
-                type="text"
-                value={renameValue}
-                onChange={(e) => onRenameValueChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    onSubmitRename(tab.id);
-                  }
+      <Tooltip>
+        <ContextMenu>
+          <TooltipTrigger asChild>
+            <ContextMenuTrigger asChild>
+              <button
+                onClick={() => onSelect(tab.id)}
+                className={`group flex w-48 min-w-0 shrink-0 items-center gap-1.5 border px-3 py-1.5 text-sm transition-colors ${
+                  isActive
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+                }`}
+              >
+                {isRenaming ? (
+                  <input
+                    ref={renameInputRef}
+                    type="text"
+                    value={renameValue}
+                    onChange={(e) => onRenameValueChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        onSubmitRename(tab.id);
+                      }
 
-                  if (e.key === "Escape") {
-                    onCancelRename();
-                  }
-                }}
-                onBlur={() => {
-                  if (Date.now() - renameStartTime.current > 100) {
-                    onSubmitRename(tab.id);
-                  }
-                }}
-                autoFocus
-                onFocus={(e) => e.target.select()}
-                className="w-full bg-transparent text-sm outline-none"
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span className="min-w-0 flex-1 truncate text-left">
-                {tab.title}
-              </span>
-            )}
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => onClose(tab.id, e)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  onClose(tab.id, e as unknown as React.MouseEvent);
-                }
-              }}
-              className="flex shrink-0 items-center justify-center rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                      if (e.key === "Escape") {
+                        onCancelRename();
+                      }
+                    }}
+                    onBlur={() => {
+                      if (Date.now() - renameStartTime.current > 100) {
+                        onSubmitRename(tab.id);
+                      }
+                    }}
+                    autoFocus
+                    onFocus={(e) => e.target.select()}
+                    className="w-full bg-transparent text-sm outline-none"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {tab.title}
+                  </span>
+                )}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => onClose(tab.id, e)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      onClose(tab.id, e as unknown as React.MouseEvent);
+                    }
+                  }}
+                  className="flex shrink-0 items-center justify-center rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                >
+                  <XIcon className="size-3" />
+                </span>
+              </button>
+            </ContextMenuTrigger>
+          </TooltipTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem onSelect={() => onRename(tab.id)}>
+              Rename
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() =>
+                onClose(tab.id, {
+                  stopPropagation: () => {},
+                } as React.MouseEvent)
+              }
             >
-              <XIcon className="size-3" />
-            </span>
-          </button>
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem onSelect={() => onRename(tab.id)}>
-            Rename
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={() =>
-              onClose(tab.id, { stopPropagation: () => {} } as React.MouseEvent)
-            }
-          >
-            Close
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            onSelect={() => onDelete(tab.id)}
-            className="text-red-600 dark:text-red-400"
-          >
-            Delete
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
+              Close
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onSelect={() => onDelete(tab.id)}
+              className="text-red-600 dark:text-red-400"
+            >
+              Delete
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+        <TooltipContent side="bottom">{tab.title}</TooltipContent>
+      </Tooltip>
     </div>
   );
 }
@@ -815,8 +822,8 @@ function DocsView({
           )}
         </div>
       </header>
-      <div className="flex flex-1 overflow-hidden bg-white select-none dark:bg-neutral-950">
-        <TooltipProvider delayDuration={300}>
+      <TooltipProvider delayDuration={300}>
+        <div className="flex flex-1 overflow-hidden bg-white select-none dark:bg-neutral-950">
           <aside className="flex w-12 flex-col items-center border-r border-border bg-white py-2 dark:bg-neutral-950">
             <Link to={`/projects/${project.id}`}>
               <div className="flex size-8 items-center justify-center rounded-lg bg-neutral-50 text-black dark:bg-neutral-900 dark:text-primary">
@@ -869,263 +876,269 @@ function DocsView({
               <HelpSidebarButton />
             </div>
           </aside>
-        </TooltipProvider>
 
-        <div className="flex flex-1 overflow-hidden">
-          {/* File tree */}
-          <div className="flex w-80 shrink-0 flex-col border-r border-border">
-            <div className="flex items-center justify-between border-b border-border px-3 py-2">
-              <div className="flex items-center gap-2">
-                <FileTextIcon className="size-5 text-neutral-400" />
-                <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
-                  Documents
-                </span>
-              </div>
-              <button
-                onClick={addDocument}
-                className="flex items-center justify-center rounded p-0.5 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:hover:bg-neutral-700 dark:hover:text-neutral-300"
-              >
-                <PlusIcon className="size-3.5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto py-1">
-              {localDocuments.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-neutral-400">
-                  No documents yet
+          <div className="flex flex-1 overflow-hidden">
+            {/* File tree */}
+            <div className="flex w-80 shrink-0 flex-col border-r border-border">
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <FileTextIcon className="size-5 text-neutral-400" />
+                  <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
+                    Documents
+                  </span>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-0.5">
-                  {fileTree.map((group) => (
-                    <Collapsible key={group.name} defaultOpen>
-                      <CollapsibleTrigger asChild>
-                        <button className="group flex w-full items-center gap-1 px-2 py-1 text-left text-xs font-medium text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300">
-                          <ChevronRightIcon className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />
-                          <FolderIcon className="size-3.5" />
-                          <span>{group.name}</span>
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <div className="ml-3 flex flex-col gap-0.5">
-                          {group.items.map((doc) => (
-                            <ContextMenu key={doc.id}>
-                              <ContextMenuTrigger asChild>
-                                <button
-                                  onClick={() => {
-                                    if (renamingId !== doc.id) {
-                                      openDocument(doc);
-                                    }
-                                  }}
-                                  className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
-                                    doc.id === activeTabId
-                                      ? "bg-neutral-50 font-medium dark:bg-neutral-900"
-                                      : "text-neutral-600 dark:text-neutral-400"
-                                  }`}
-                                >
-                                  <FileTextIcon className="size-3.5 shrink-0 text-neutral-400" />
-                                  {fileListRenamingId === doc.id ? (
-                                    <input
-                                      ref={fileListRenameInputRef}
-                                      type="text"
-                                      value={fileListRenameValue}
-                                      onChange={(e) =>
-                                        setFileListRenameValue(e.target.value)
-                                      }
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          submitFileListRename(doc.id);
-                                        }
-
-                                        if (e.key === "Escape") {
-                                          setFileListRenamingId(null);
-                                        }
-                                      }}
-                                      onBlur={() => {
-                                        if (
-                                          Date.now() -
-                                            fileListRenameStartTime.current >
-                                          100
-                                        ) {
-                                          submitFileListRename(doc.id);
-                                        }
-                                      }}
-                                      onFocus={(e) => e.target.select()}
-                                      autoFocus
-                                      className="w-full bg-transparent text-sm outline-none"
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  ) : (
-                                    <span className="truncate">{doc.name}</span>
-                                  )}
-                                </button>
-                              </ContextMenuTrigger>
-                              <ContextMenuContent>
-                                <ContextMenuItem
-                                  onSelect={() =>
-                                    handleFileListRename(doc.id, doc.name)
-                                  }
-                                >
-                                  Rename
-                                </ContextMenuItem>
-                                <ContextMenuSeparator />
-                                <ContextMenuItem
-                                  onSelect={() => setDeletingId(doc.id)}
-                                  className="text-red-600 dark:text-red-400"
-                                >
-                                  Delete
-                                </ContextMenuItem>
-                              </ContextMenuContent>
-                            </ContextMenu>
-                          ))}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Editor area */}
-          <div className="flex flex-1 flex-col overflow-hidden">
-            {/* Tab bar */}
-            <div className="flex min-h-9 items-center border-b border-border">
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-                modifiers={[restrictToHorizontalAxis]}
-              >
-                <SortableContext
-                  items={tabs.map((t) => t.id)}
-                  strategy={horizontalListSortingStrategy}
+                <button
+                  onClick={addDocument}
+                  className="flex items-center justify-center rounded p-0.5 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:hover:bg-neutral-700 dark:hover:text-neutral-300"
                 >
-                  <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-0 overflow-x-auto">
-                    {tabs.map((tab) => (
-                      <SortableDocTab
-                        key={tab.id}
-                        tab={tab}
-                        isActive={tab.id === activeTabId}
-                        isRenaming={renamingId === tab.id}
-                        renameValue={renameValue}
-                        renameInputRef={renameInputRef}
-                        renameStartTime={renameStartTime}
-                        onSelect={setActiveTabId}
-                        onClose={closeTab}
-                        onRename={handleRenameById}
-                        onDelete={setDeletingId}
-                        onRenameValueChange={setRenameValue}
-                        onSubmitRename={submitRename}
-                        onCancelRename={() => setRenamingId(null)}
-                      />
+                  <PlusIcon className="size-3.5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto py-1">
+                {localDocuments.length === 0 ? (
+                  <div className="flex h-full items-center justify-center text-sm text-neutral-400">
+                    No documents yet
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-0.5">
+                    {fileTree.map((group) => (
+                      <Collapsible key={group.name} defaultOpen>
+                        <CollapsibleTrigger asChild>
+                          <button className="group flex w-full items-center gap-1 px-2 py-1 text-left text-xs font-medium text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300">
+                            <ChevronRightIcon className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />
+                            <FolderIcon className="size-3.5" />
+                            <span>{group.name}</span>
+                          </button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <div className="ml-3 flex flex-col gap-0.5">
+                            {group.items.map((doc) => (
+                              <ContextMenu key={doc.id}>
+                                <ContextMenuTrigger asChild>
+                                  <button
+                                    onClick={() => {
+                                      if (renamingId !== doc.id) {
+                                        openDocument(doc);
+                                      }
+                                    }}
+                                    className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
+                                      doc.id === activeTabId
+                                        ? "bg-neutral-50 font-medium dark:bg-neutral-900"
+                                        : "text-neutral-600 dark:text-neutral-400"
+                                    }`}
+                                  >
+                                    <FileTextIcon className="size-3.5 shrink-0 text-neutral-400" />
+                                    {fileListRenamingId === doc.id ? (
+                                      <input
+                                        ref={fileListRenameInputRef}
+                                        type="text"
+                                        value={fileListRenameValue}
+                                        onChange={(e) =>
+                                          setFileListRenameValue(e.target.value)
+                                        }
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            submitFileListRename(doc.id);
+                                          }
+
+                                          if (e.key === "Escape") {
+                                            setFileListRenamingId(null);
+                                          }
+                                        }}
+                                        onBlur={() => {
+                                          if (
+                                            Date.now() -
+                                              fileListRenameStartTime.current >
+                                            100
+                                          ) {
+                                            submitFileListRename(doc.id);
+                                          }
+                                        }}
+                                        onFocus={(e) => e.target.select()}
+                                        autoFocus
+                                        className="w-full bg-transparent text-sm outline-none"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    ) : (
+                                      <span className="truncate">
+                                        {doc.name}
+                                      </span>
+                                    )}
+                                  </button>
+                                </ContextMenuTrigger>
+                                <ContextMenuContent>
+                                  <ContextMenuItem
+                                    onSelect={() =>
+                                      handleFileListRename(doc.id, doc.name)
+                                    }
+                                  >
+                                    Rename
+                                  </ContextMenuItem>
+                                  <ContextMenuSeparator />
+                                  <ContextMenuItem
+                                    onSelect={() => setDeletingId(doc.id)}
+                                    className="text-red-600 dark:text-red-400"
+                                  >
+                                    Delete
+                                  </ContextMenuItem>
+                                </ContextMenuContent>
+                              </ContextMenu>
+                            ))}
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
                     ))}
                   </div>
-                </SortableContext>
-              </DndContext>
-              <button
-                onClick={addDocument}
-                className="mx-1 flex shrink-0 items-center justify-center rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-700 dark:hover:text-neutral-300"
-              >
-                <PlusIcon className="size-4" />
-              </button>
+                )}
+              </div>
             </div>
 
-            {/* Editor content */}
-            <main className="flex min-h-0 flex-1 flex-col overflow-auto">
-              {tabs.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center gap-4 text-neutral-400 dark:text-neutral-500">
-                  <FileTextIcon className="size-12 stroke-1" />
-                  <p className="text-sm">No documents open</p>
-                  <Button variant="outline" size="sm" onClick={addDocument}>
-                    <PlusIcon className="size-4" />
-                    New Document
-                  </Button>
-                </div>
-              ) : (
-                tabs.map((tab) => (
-                  <div
-                    key={tab.id}
-                    className={
-                      tab.id === activeTabId ? "flex flex-1 flex-col" : "hidden"
-                    }
+            {/* Editor area */}
+            <div className="flex flex-1 flex-col overflow-hidden">
+              {/* Tab bar */}
+              <div className="flex min-h-9 items-center border-b border-border">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                  modifiers={[restrictToHorizontalAxis]}
+                >
+                  <SortableContext
+                    items={tabs.map((t) => t.id)}
+                    strategy={horizontalListSortingStrategy}
                   >
-                    {tabContent[tab.id] !== undefined ? (
-                      <MilkdownEditorWrapper
-                        key={editorKeys[tab.id] ?? 0}
-                        ref={(el) => {
-                          editorRefs.current[tab.id] = el;
-                        }}
-                        defaultValue={tabContent[tab.id]}
-                        onChange={(markdown) =>
-                          handleContentChange(tab.id, markdown)
-                        }
-                        onReady={(markdown) => {
-                          setTabContent((prev) => ({
-                            ...prev,
-                            [tab.id]: markdown,
-                          }));
-                        }}
-                      />
-                    ) : (
-                      <div className="flex flex-1 items-center justify-center text-neutral-400">
-                        Loading...
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </main>
-
-            {/* Footer */}
-            {activeTab && (
-              <div className="h-8 flex items-center justify-between border-t border-border bg-neutral-50 px-2 py-1 dark:bg-neutral-950">
-                <div className="flex items-center gap-2">
-                  <label
-                    htmlFor="docs-autosave-toggle"
-                    className="text-xs text-neutral-400 dark:text-neutral-500"
-                  >
-                    Autosave
-                  </label>
-                  <Switch
-                    id="docs-autosave-toggle"
-                    size="sm"
-                    checked={autosaveEnabled}
-                    onCheckedChange={toggleAutosave}
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {saveStatus[activeTabId!] === "saving" ? (
-                    <span className="text-xs text-neutral-400">Saving...</span>
-                  ) : saveStatus[activeTabId!] === "saved" ? (
-                    <span className="text-xs text-green-500">Saved</span>
-                  ) : dirtyTabs[activeTabId!] ? (
-                    <>
-                      <Button
-                        variant="icon"
-                        size="icon-xs"
-                        onClick={() => revertDocument(activeTabId!)}
-                        title="Revert changes"
-                      >
-                        <Undo2Icon />
-                        <span className="sr-only">Revert changes</span>
-                      </Button>
-                      <Button
-                        variant="icon"
-                        size="icon-xs"
-                        onClick={() => saveDocument(activeTabId!)}
-                        title="Save"
-                      >
-                        <SaveIcon />
-                        <span className="sr-only">Save</span>
-                      </Button>
-                    </>
-                  ) : null}
-                </div>
+                    <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-0 overflow-x-auto">
+                      {tabs.map((tab) => (
+                        <SortableDocTab
+                          key={tab.id}
+                          tab={tab}
+                          isActive={tab.id === activeTabId}
+                          isRenaming={renamingId === tab.id}
+                          renameValue={renameValue}
+                          renameInputRef={renameInputRef}
+                          renameStartTime={renameStartTime}
+                          onSelect={setActiveTabId}
+                          onClose={closeTab}
+                          onRename={handleRenameById}
+                          onDelete={setDeletingId}
+                          onRenameValueChange={setRenameValue}
+                          onSubmitRename={submitRename}
+                          onCancelRename={() => setRenamingId(null)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+                <button
+                  onClick={addDocument}
+                  className="mx-1 flex shrink-0 items-center justify-center rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-700 dark:hover:text-neutral-300"
+                >
+                  <PlusIcon className="size-4" />
+                </button>
               </div>
-            )}
+
+              {/* Editor content */}
+              <main className="flex min-h-0 flex-1 flex-col overflow-auto">
+                {tabs.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-4 text-neutral-400 dark:text-neutral-500">
+                    <FileTextIcon className="size-12 stroke-1" />
+                    <p className="text-sm">No documents open</p>
+                    <Button variant="outline" size="sm" onClick={addDocument}>
+                      <PlusIcon className="size-4" />
+                      New Document
+                    </Button>
+                  </div>
+                ) : (
+                  tabs.map((tab) => (
+                    <div
+                      key={tab.id}
+                      className={
+                        tab.id === activeTabId
+                          ? "flex flex-1 flex-col"
+                          : "hidden"
+                      }
+                    >
+                      {tabContent[tab.id] !== undefined ? (
+                        <MilkdownEditorWrapper
+                          key={editorKeys[tab.id] ?? 0}
+                          ref={(el) => {
+                            editorRefs.current[tab.id] = el;
+                          }}
+                          defaultValue={tabContent[tab.id]}
+                          onChange={(markdown) =>
+                            handleContentChange(tab.id, markdown)
+                          }
+                          onReady={(markdown) => {
+                            setTabContent((prev) => ({
+                              ...prev,
+                              [tab.id]: markdown,
+                            }));
+                          }}
+                        />
+                      ) : (
+                        <div className="flex flex-1 items-center justify-center text-neutral-400">
+                          Loading...
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </main>
+
+              {/* Footer */}
+              {activeTab && (
+                <div className="h-8 flex items-center justify-between border-t border-border bg-neutral-50 px-2 py-1 dark:bg-neutral-950">
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="docs-autosave-toggle"
+                      className="text-xs text-neutral-400 dark:text-neutral-500"
+                    >
+                      Autosave
+                    </label>
+                    <Switch
+                      id="docs-autosave-toggle"
+                      size="sm"
+                      checked={autosaveEnabled}
+                      onCheckedChange={toggleAutosave}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {saveStatus[activeTabId!] === "saving" ? (
+                      <span className="text-xs text-neutral-400">
+                        Saving...
+                      </span>
+                    ) : saveStatus[activeTabId!] === "saved" ? (
+                      <span className="text-xs text-green-500">Saved</span>
+                    ) : dirtyTabs[activeTabId!] ? (
+                      <>
+                        <Button
+                          variant="icon"
+                          size="icon-xs"
+                          onClick={() => revertDocument(activeTabId!)}
+                          title="Revert changes"
+                        >
+                          <Undo2Icon />
+                          <span className="sr-only">Revert changes</span>
+                        </Button>
+                        <Button
+                          variant="icon"
+                          size="icon-xs"
+                          onClick={() => saveDocument(activeTabId!)}
+                          title="Save"
+                        >
+                          <SaveIcon />
+                          <span className="sr-only">Save</span>
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      </TooltipProvider>
 
       <AlertDialog
         open={deletingId !== null}
