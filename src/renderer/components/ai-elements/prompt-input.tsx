@@ -1278,10 +1278,20 @@ export const PromptInputSubmit = ({
   status,
   onStop,
   onClick,
+  disabled,
   children,
   ...props
 }: PromptInputSubmitProps) => {
   const isGenerating = status === "submitted" || status === "streaming";
+  // When wrapped in PromptInputProvider, gate submit on the input having
+  // non-whitespace text. While the agent is streaming the button doubles
+  // as a stop control, so leave it enabled then. When no provider is
+  // present (form-data-only mode) we can't read the input value here, so
+  // skip the auto-disable to preserve the legacy behavior.
+  const controller = useOptionalPromptInputController();
+  const isInputEmpty =
+    controller != null && controller.textInput.value.trim() === "";
+  const isDisabled = disabled || (!isGenerating && isInputEmpty);
 
   let Icon = <ArrowUpIcon className="size-4" />;
 
@@ -1311,6 +1321,7 @@ export const PromptInputSubmit = ({
     <InputGroupButton
       aria-label={isGenerating ? "Stop" : "Submit"}
       className={cn(className)}
+      disabled={isDisabled}
       onClick={handleClick}
       size={size}
       type={isGenerating && onStop ? "button" : "submit"}
