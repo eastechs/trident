@@ -84,7 +84,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { DocumentData, EffortLevel, ModelInfo } from "@/types/api";
+import type { DocumentData, EffortLevel, ImageData, ModelInfo } from "@/types/api";
 
 const EFFORT_OPTIONS: Array<{ value: EffortLevel; label: string }> = [
   { value: "low", label: "Low" },
@@ -228,7 +228,7 @@ interface SidebarChatProps {
       last_edited_by?: string | null;
     },
   ) => void;
-  onImageCreated?: (imageId: string, imageName: string) => void;
+  onImageCreated?: (image: ImageData) => void;
   onStreamingComplete?: () => void;
 }
 
@@ -775,10 +775,7 @@ export function SidebarChat({
                                 prompt: result.prompt,
                               },
                             });
-                            onImageCreated?.(
-                              result.image_id,
-                              result.image_name,
-                            );
+                            onImageCreated?.(result.image);
                           }}
                           onCancel={() => {
                             addToolOutput({

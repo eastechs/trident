@@ -140,6 +140,17 @@ router.post('/generate', async (req: ProjectRequest, res) => {
       image_name: image.name,
       mime_type: mime,
       prompt,
+      // Full row so the client can hydrate its local images list without
+      // a follow-up GET — otherwise the metadata drawer in the auto-opened
+      // preview tab renders empty until a reload refetches.
+      image: {
+        id: image.id,
+        name: image.name,
+        mime_type: image.mimeType,
+        created_by: image.createdBy,
+        metadata: image.metadata,
+        created_at: image.createdAt,
+      },
     });
   } catch (err) {
     if ((err as Error).name === 'AbortError') {

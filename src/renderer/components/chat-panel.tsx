@@ -13,7 +13,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import type { ConversationData, DocumentData } from '@/types/api';
+import type { ConversationData, DocumentData, ImageData } from '@/types/api';
 
 interface ChatPanelProps {
     projectId: string;
@@ -34,7 +34,7 @@ interface ChatPanelProps {
     onActiveIdChanged: (side: 'left' | 'right', id: string | null) => void;
     onDocumentEdited?: (documentId: string) => void;
     onDocumentCreated?: (documentId: string, documentName: string) => void;
-    onImageCreated?: (imageId: string, imageName: string) => void;
+    onImageCreated?: (image: ImageData) => void;
 }
 
 function getStorageKey(projectId: string): string {

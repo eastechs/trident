@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { useCallback, useState } from 'react';
+import type { ImageData } from '@/types/api';
 
 interface ImageModel {
     id: string;
@@ -78,6 +79,9 @@ export interface ImageGenerationResult {
     image_name: string;
     mime_type: string;
     prompt: string;
+    // Full image record so the parent can drop it into its local list
+    // without a follow-up fetch.
+    image: ImageData;
 }
 
 interface ImageConfigCardProps {

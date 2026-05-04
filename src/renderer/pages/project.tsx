@@ -987,15 +987,15 @@ function ProjectView({
   );
 
   const handleImageCreated = useCallback(
-    (imageId: string, imageName: string) => {
+    (image: ImageData) => {
       setLocalImages((prev) => {
-        if (prev.some((img) => img.id === imageId)) {
+        if (prev.some((img) => img.id === image.id)) {
           return prev;
         }
 
-        return [{ id: imageId, name: imageName, created_by: null }, ...prev];
+        return [image, ...prev];
       });
-      openImage({ id: imageId, name: imageName });
+      openImage({ id: image.id, name: image.name });
     },
     [openImage],
   );
