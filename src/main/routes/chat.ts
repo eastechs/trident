@@ -311,11 +311,16 @@ router.post('/', async (req: ProjectRequest, res) => {
                   metadata: (msg.metadata as Record<string, unknown> | undefined) ?? { model: effectiveModelId },
                 })
                 .where(eq(messages.id, msg.id));
-            } else {
-              // Existing prior message — its parts may have changed
+            } else if (msg.role === 'assistant') {
+              // Existing prior assistant message — its parts may have changed
               // client-side since we last saved (e.g. a client-side tool call
-              // got fulfilled via addToolOutput between turns). Re-write
-              // parts so the tool result persists for future reloads.
+              // got fulfilled via addToolOutput between turns). Re-write parts
+              // so the tool result persists for future reloads.
+              //
+              // User messages are intentionally NOT updated here: the client
+              // only knows the user's typed text, but the server-side prepend
+              // attaches <attached_document> parts that are already in the
+              // DB. Overwriting with the client version would strip them.
               await db
                 .update(messages)
                 .set({ parts: msg.parts as unknown as Record<string, unknown> })
