@@ -432,40 +432,66 @@ function ProjectView({
     [],
   );
 
-  // Notification deep-link: app.tsx navigates here with router state when
-  // the user clicks a system notification. If the target conversation isn't
-  // already loaded in either panel, swap it into the left panel; otherwise
-  // bringing the window to the foreground is enough. The router state is
-  // cleared after we read it so a subsequent reload doesn't re-trigger.
+  // Router-state deep links land here with one of two payloads:
+  //   • focusConversationId       — from the system notification handler;
+  //                                  routes the conversation into the LEFT panel.
+  //   • focusConversationIdRight  — from the gallery's "New chat" button on
+  //                                  an image's metadata drawer; routes the
+  //                                  newly-created conversation into the RIGHT
+  //                                  panel so the prompt-seeded draft surfaces
+  //                                  there.
+  // In both cases we expand the target panel if collapsed, then clear the
+  // router state so a reload doesn't re-trigger the deep link.
   const location = useLocation();
   const navigate = useNavigate();
   const focusConversationId =
     (location.state as { focusConversationId?: string } | null)
       ?.focusConversationId ?? null;
+  const focusConversationIdRight =
+    (location.state as { focusConversationIdRight?: string } | null)
+      ?.focusConversationIdRight ?? null;
   const [leftRequestedId, setLeftRequestedId] = useState<string | null>(null);
+  const [rightRequestedId, setRightRequestedId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!focusConversationId) return;
-    const alreadyLoaded =
-      leftActiveId === focusConversationId ||
-      rightActiveId === focusConversationId;
-    if (!alreadyLoaded) {
-      setLeftRequestedId(focusConversationId);
-      const panel = leftPanelRef.current;
-      if (panel?.isCollapsed()) panel.resize("25%");
+    if (!focusConversationId && !focusConversationIdRight) return;
+
+    if (focusConversationId) {
+      const alreadyLoaded =
+        leftActiveId === focusConversationId ||
+        rightActiveId === focusConversationId;
+      if (!alreadyLoaded) {
+        setLeftRequestedId(focusConversationId);
+        const panel = leftPanelRef.current;
+        if (panel?.isCollapsed()) panel.resize("25%");
+      }
     }
+
+    if (focusConversationIdRight) {
+      const alreadyLoaded =
+        leftActiveId === focusConversationIdRight ||
+        rightActiveId === focusConversationIdRight;
+      if (!alreadyLoaded) {
+        setRightRequestedId(focusConversationIdRight);
+        const panel = rightPanelRef.current;
+        if (panel?.isCollapsed()) panel.resize("25%");
+      }
+    }
+
     navigate(location.pathname + location.search, {
       replace: true,
       state: null,
     });
   }, [
     focusConversationId,
+    focusConversationIdRight,
     leftActiveId,
     rightActiveId,
     navigate,
     location.pathname,
     location.search,
     leftPanelRef,
+    rightPanelRef,
   ]);
 
   const editorRefs = useRef<Record<string, EditorHandle | null>>({});
@@ -1702,6 +1728,7 @@ function ProjectView({
                 documents={localDocuments}
                 defaultModel={project.default_agent ?? "gpt-5.5"}
                 initialPrompt={initialPromptRef.current}
+                requestedActiveId={rightRequestedId}
                 onConversationCreated={handleConversationCreated}
                 onConversationUpdated={handleConversationUpdated}
                 onConversationDeleted={handleConversationDeleted}

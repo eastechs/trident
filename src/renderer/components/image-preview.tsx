@@ -3,10 +3,12 @@ import {
     ChevronDownIcon,
     CopyIcon,
     MaximizeIcon,
+    MessageSquarePlusIcon,
     MinusIcon,
     PlusIcon,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ModelSelectorLogo } from '@/components/ai-elements/model-selector';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,7 +22,8 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { ImageData, ImageMetadata } from '@/types/api';
+import { api_post } from '@/lib/api';
+import type { ConversationData, ImageData, ImageMetadata } from '@/types/api';
 
 // ─── Image metadata helpers ────────────────────────────────
 //
@@ -312,15 +315,19 @@ function MetadataPill({
 
 function MetadataPanel({
     image,
+    projectId,
     defaultOpen,
 }: {
     image: ImageData;
+    projectId: string;
     defaultOpen: boolean;
 }) {
     const meta: ImageMetadata = image.metadata ?? {};
     const aspect = aspectInfo(meta.size);
     const [copied, setCopied] = useState(false);
+    const [creatingChat, setCreatingChat] = useState(false);
     const [open, setOpen] = useState(defaultOpen);
+    const navigate = useNavigate();
 
     const copyPrompt = useCallback(
         (e: React.MouseEvent) => {
@@ -339,6 +346,47 @@ function MetadataPanel({
                 });
         },
         [meta.prompt],
+    );
+
+    // "New chat" — creates a fresh conversation, seeds its prompt-input draft
+    // with the image's prompt wrapped in a regenerate template, then routes
+    // the user to the project page with the right panel focused on the new
+    // chat. The draft is read by SidebarChat's loadDraft() at mount time, so
+    // the textarea pre-fills without auto-sending.
+    const startNewChat = useCallback(
+        (e: React.MouseEvent) => {
+            e.stopPropagation();
+            if (!meta.prompt || creatingChat) return;
+            setCreatingChat(true);
+            const draft = `Create an image using the following prompt:\n\n${meta.prompt}`;
+            api_post<ConversationData>(`/api/projects/${projectId}/conversations`)
+                .then((conversation) => {
+                    try {
+                        localStorage.setItem(
+                            `trident:conversation:${conversation.id}:draft`,
+                            draft,
+                        );
+                    } catch {
+                        // localStorage may be unavailable (private mode, quota); the
+                        // navigation will still land on the new conversation, the
+                        // textarea just won't be pre-populated.
+                    }
+                    navigate(`/projects/${projectId}`, {
+                        state: { focusConversationIdRight: conversation.id },
+                    });
+                })
+                .catch((err) => {
+                    console.error('Failed to start new chat from image:', err);
+                })
+                .finally(() => {
+                    // Re-enable the button when MetadataPanel stays mounted —
+                    // i.e. clicking from the project page itself (same-route
+                    // navigation, no unmount). When clicking from the gallery
+                    // the component unmounts on navigation and this is a no-op.
+                    setCreatingChat(false);
+                });
+        },
+        [creatingChat, meta.prompt, navigate, projectId],
     );
 
     return (
@@ -368,20 +416,40 @@ function MetadataPanel({
                                 <span className="text-xs text-neutral-400 dark:text-neutral-500">
                                     Prompt
                                 </span>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 gap-1 px-2 text-[11px]"
-                                    onClick={copyPrompt}
-                                    aria-label="Copy prompt"
-                                >
-                                    {copied ? (
-                                        <CheckIcon className="size-3" />
-                                    ) : (
-                                        <CopyIcon className="size-3" />
-                                    )}
-                                    {copied ? 'Copied' : 'Copy'}
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 gap-1 px-2 text-[11px]"
+                                                onClick={startNewChat}
+                                                disabled={creatingChat}
+                                                aria-label="Start new chat with this prompt"
+                                            >
+                                                <MessageSquarePlusIcon className="size-3" />
+                                                New chat
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                            Open this prompt in a new chat
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 gap-1 px-2 text-[11px]"
+                                        onClick={copyPrompt}
+                                        aria-label="Copy prompt"
+                                    >
+                                        {copied ? (
+                                            <CheckIcon className="size-3" />
+                                        ) : (
+                                            <CopyIcon className="size-3" />
+                                        )}
+                                        {copied ? 'Copied' : 'Copy'}
+                                    </Button>
+                                </div>
                             </div>
                             <p className="font-serif text-[13px] leading-relaxed whitespace-pre-wrap text-neutral-800 dark:text-neutral-200">
                                 {meta.prompt}
@@ -434,7 +502,7 @@ export function ImagePreview({
                 alt={image.name}
                 resetKey={image.id}
             />
-            <MetadataPanel image={image} defaultOpen={defaultDetailsOpen} />
+            <MetadataPanel image={image} projectId={projectId} defaultOpen={defaultDetailsOpen} />
         </TooltipProvider>
     );
 }
