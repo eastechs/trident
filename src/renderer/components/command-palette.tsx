@@ -113,9 +113,8 @@ export function CommandPalette({
 }: Props) {
   const navigate = useNavigate();
   const [input, setInput] = useState("");
-  const [semanticResults, setSemanticResults] = useState<SemanticResults | null>(
-    null,
-  );
+  const [semanticResults, setSemanticResults] =
+    useState<SemanticResults | null>(null);
   const [searching, setSearching] = useState(false);
   const [noKey, setNoKey] = useState(false);
   const [searchError, setSearchError] = useState(false);
@@ -134,14 +133,12 @@ export function CommandPalette({
 
   // When the user edits the input after a semantic search ran, drop back
   // to name-match mode so they can keep typing without re-pressing Enter.
-  useEffect(() => {
-    if (semanticResults !== null || noKey || searchError) {
-      setSemanticResults(null);
-      setNoKey(false);
-      setSearchError(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [input]);
+  const handleInputChange = useCallback((value: string) => {
+    setInput(value);
+    setSemanticResults(null);
+    setNoKey(false);
+    setSearchError(false);
+  }, []);
 
   const nameMatches = useMemo(() => {
     const q = input.trim().toLowerCase();
@@ -209,7 +206,7 @@ export function CommandPalette({
         <CommandInput
           placeholder="Search documents..."
           value={input}
-          onValueChange={setInput}
+          onValueChange={handleInputChange}
           onKeyDown={(e) => {
             if (e.key === "Enter" && input.trim()) {
               e.preventDefault();
@@ -222,7 +219,7 @@ export function CommandPalette({
             <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
               <KeyRoundIcon className="size-5 opacity-60" />
               <p className="text-sm font-medium">Configure an OpenAI API key</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 Semantic search needs an OpenAI key for embeddings. Name-only
                 search keeps working without one.
               </p>
@@ -234,7 +231,10 @@ export function CommandPalette({
             <>
               {searching ? (
                 <CommandGroup heading="Searching by content...">
-                  <></>
+                  <CommandItem disabled>
+                    <SparklesIcon className="opacity-60" />
+                    <span className="text-muted-foreground">Searching…</span>
+                  </CommandItem>
                 </CommandGroup>
               ) : semanticResults.documents.length === 0 &&
                 semanticResults.images.length === 0 ? (
@@ -255,8 +255,10 @@ export function CommandPalette({
                         >
                           <SparklesIcon className="opacity-60" />
                           <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
-                            <span className="truncate font-medium">{r.name}</span>
-                            <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
+                            <span className="truncate font-medium">
+                              {r.name}
+                            </span>
+                            <span className="text-muted-foreground line-clamp-2 text-xs font-normal">
                               {r.snippet}
                             </span>
                           </div>
@@ -274,9 +276,11 @@ export function CommandPalette({
                         >
                           <ImageIcon className="opacity-60" />
                           <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
-                            <span className="truncate font-medium">{r.name}</span>
+                            <span className="truncate font-medium">
+                              {r.name}
+                            </span>
                             {r.snippet && (
-                              <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
+                              <span className="text-muted-foreground line-clamp-2 text-xs font-normal">
                                 {r.snippet}
                               </span>
                             )}

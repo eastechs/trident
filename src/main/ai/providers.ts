@@ -56,7 +56,7 @@ export function resolveModel(modelId: string): LanguageModel {
  * Provider native ranges (verified against installed AI SDK provider zod enums):
  *   - Anthropic:  low | medium | high | xhigh | max   (full set, passes through)
  *   - OpenAI:     low | medium | high | xhigh         (no 'max'; clamp down)
- *   - Gemini:     minimal | low | medium | high       (no 'xhigh' or 'max'; clamp down)
+ *   - Gemini:     low | medium | high                 (no 'xhigh' or 'max'; clamp down)
  *
  * 'max' and 'xhigh' clamp to the highest available rung where unsupported.
  */

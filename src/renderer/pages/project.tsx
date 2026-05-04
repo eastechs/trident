@@ -66,7 +66,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
@@ -91,14 +90,6 @@ interface Tab {
   id: string;
   title: string;
   type: "document" | "image";
-}
-
-interface Props {
-  project: ProjectData;
-  documents: DocumentData[];
-  images: ImageData[];
-  conversations: ConversationData[];
-  shouldShowTour: boolean;
 }
 
 interface SortableTabProps {
@@ -189,7 +180,7 @@ function SortableTab({
                     }}
                     autoFocus
                     onFocus={(e) => e.target.select()}
-                    className="w-full bg-transparent outline-none text-sm"
+                    className="w-full bg-transparent text-sm outline-none"
                     onClick={(e) => e.stopPropagation()}
                   />
                 ) : (
@@ -255,9 +246,18 @@ export default function Project() {
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     api_get<ProjectViewProps>(`/api/projects/${id}`)
-      .then(setData)
-      .catch(console.error);
+      .then((data) => {
+        if (!cancelled) setData(data);
+      })
+      .catch((err) => {
+        if (!cancelled) console.error(err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useDocumentTitle(data?.project.name);
@@ -761,8 +761,40 @@ function ProjectView({
   );
 
   const closeTab = useCallback(
-    (tabId: string, e: React.MouseEvent) => {
+    async (tabId: string, e: React.MouseEvent) => {
       e.stopPropagation();
+
+      // Cancel any pending autosave so it can't fire post-unmount as a no-op.
+      if (autosaveTimerRef.current[tabId]) {
+        clearTimeout(autosaveTimerRef.current[tabId]);
+        delete autosaveTimerRef.current[tabId];
+      }
+
+      // Flush unsaved edits before the editor unmounts: once the tab leaves
+      // the tabs.map() the editor instance is gone and getMarkdown() returns
+      // null, silently dropping the user's changes. Compare live editor
+      // content to last-saved (tabContent) directly rather than checking
+      // dirtyTabs — the dirty flag is set by the editor's 1s onChange poll,
+      // so closing within 1s of a keystroke would leave dirty=false and skip
+      // the save.
+      const editorRef = editorRefs.current[tabId];
+      if (editorRef) {
+        const liveContent = editorRef.getMarkdown();
+        const savedContent = tabContent[tabId] ?? "";
+        if (liveContent !== savedContent) {
+          try {
+            await api_put(
+              `/api/projects/${project.id}/documents/${tabId}/content`,
+              { content: liveContent },
+            );
+          } catch (error) {
+            console.error("Failed to flush unsaved changes on close:", error);
+          }
+        }
+      }
+
+      delete editorRefs.current[tabId];
+
       setTabs((prev) => {
         const next = prev.filter((t) => t.id !== tabId);
 
@@ -779,15 +811,32 @@ function ProjectView({
         return next;
       });
 
-      // Clear cached content so re-opening fetches fresh from server
       setTabContent((prev) => {
         const next = { ...prev };
         delete next[tabId];
 
         return next;
       });
+      setDirtyTabs((prev) => {
+        const next = { ...prev };
+        delete next[tabId];
+
+        return next;
+      });
+      setSaveStatus((prev) => {
+        const next = { ...prev };
+        delete next[tabId];
+
+        return next;
+      });
+      setEditorKeys((prev) => {
+        const next = { ...prev };
+        delete next[tabId];
+
+        return next;
+      });
     },
-    [activeTabId],
+    [activeTabId, project.id, tabContent],
   );
 
   const handleRename = useCallback(
@@ -1161,7 +1210,7 @@ function ProjectView({
 
       <TooltipProvider>
         <div className="flex h-[calc(100vh-2rem)] w-full overflow-hidden">
-          <aside className="flex w-12 flex-col items-center border-r border-border bg-white py-2 dark:bg-neutral-950">
+          <aside className="border-border flex w-12 flex-col items-center border-r bg-white py-2 dark:bg-neutral-950">
             <Link to="/">
               {/*<img*/}
               {/*    src={appIcon}*/}
@@ -1169,7 +1218,7 @@ function ProjectView({
               {/*    className="size-8 rounded-lg"*/}
               {/*/>*/}
 
-              <div className="size-8 rounded-lg bg-neutral-50 dark:bg-neutral-900 text-black dark:text-primary flex items-center justify-center">
+              <div className="dark:text-primary flex size-8 items-center justify-center rounded-lg bg-neutral-50 text-black dark:bg-neutral-900">
                 <ArrowLeftIcon className="size-4" />
               </div>
             </Link>
@@ -1268,7 +1317,7 @@ function ProjectView({
                 data-tour="main-content"
                 className="flex h-full flex-col overflow-hidden"
               >
-                <div className="flex min-h-9 items-center border-b border-border">
+                <div className="border-border flex min-h-9 items-center border-b">
                   <Popover open={fileListOpen} onOpenChange={setFileListOpen}>
                     <PopoverTrigger asChild>
                       <button className="mx-1 flex shrink-0 items-center justify-center rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-700 dark:hover:text-neutral-300">
@@ -1322,7 +1371,7 @@ function ProjectView({
 
                               return sortedDirs.map((dir) => (
                                 <div key={dir}>
-                                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                                  <div className="px-2 py-1 text-[10px] font-semibold tracking-wider text-neutral-400 uppercase dark:text-neutral-500">
                                     {dir === "user" ? "Your Documents" : dir}
                                   </div>
                                   {groups[dir].map((doc) => (
@@ -1334,9 +1383,9 @@ function ProjectView({
                                               openDocument(doc);
                                             }
                                           }}
-                                          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
+                                          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
                                             doc.id === activeTabId
-                                              ? "bg-neutral-50 dark:bg-neutral-900 font-medium"
+                                              ? "bg-neutral-50 font-medium dark:bg-neutral-900"
                                               : ""
                                           }`}
                                         >
@@ -1371,7 +1420,7 @@ function ProjectView({
                                               }}
                                               onFocus={(e) => e.target.select()}
                                               autoFocus
-                                              className="w-full bg-transparent outline-none text-sm"
+                                              className="w-full bg-transparent text-sm outline-none"
                                               onClick={(e) =>
                                                 e.stopPropagation()
                                               }
@@ -1413,7 +1462,7 @@ function ProjectView({
                               </p>
                             )}
                           </div>
-                          <div className="mt-1 border-t border-border pt-1">
+                          <div className="border-border mt-1 border-t pt-1">
                             <button
                               onClick={addTab}
                               className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
@@ -1434,9 +1483,9 @@ function ProjectView({
                                         openImage(image);
                                       }
                                     }}
-                                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
+                                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
                                       image.id === activeTabId
-                                        ? "bg-neutral-50 dark:bg-neutral-900 font-medium"
+                                        ? "bg-neutral-50 font-medium dark:bg-neutral-900"
                                         : ""
                                     }`}
                                   >
@@ -1469,7 +1518,7 @@ function ProjectView({
                                         }}
                                         onFocus={(e) => e.target.select()}
                                         autoFocus
-                                        className="w-full bg-transparent outline-none text-sm"
+                                        className="w-full bg-transparent text-sm outline-none"
                                         onClick={(e) => e.stopPropagation()}
                                       />
                                     ) : (
@@ -1651,7 +1700,7 @@ function ProjectView({
                     );
 
                     return (
-                      <div className="h-8 flex items-center justify-between border-t border-border bg-neutral-50 px-2 py-1 dark:bg-neutral-950">
+                      <div className="border-border flex h-8 items-center justify-between border-t bg-neutral-50 px-2 py-1 dark:bg-neutral-950">
                         <div className="flex items-center gap-2">
                           <label
                             htmlFor="autosave-toggle"
@@ -1784,7 +1833,7 @@ function ProjectView({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => confirmDelete()}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 text-white hover:bg-red-700"
             >
               {trashEnabled ? "Move to Trash" : "Delete"}
             </AlertDialogAction>

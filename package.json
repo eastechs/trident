@@ -12,8 +12,8 @@
     "start": "node scripts/launch-electron.js",
     "build": "tsup && vite build --config vite.config.ts",
     "build:all": "npm run build && electron-builder",
-    "format": "prettier --write src/renderer/",
-    "format:check": "prettier --check src/renderer/",
+    "format": "prettier --write src/ scripts/ vite.config.ts tsup.config.ts",
+    "format:check": "prettier --check src/ scripts/ vite.config.ts tsup.config.ts",
     "lint": "eslint . --fix",
     "lint:check": "eslint .",
     "types:check": "tsc --noEmit"

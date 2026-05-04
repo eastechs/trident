@@ -1,10 +1,10 @@
-import { eq, and, isNotNull, sql, cosineDistance } from 'drizzle-orm';
-import { embed, embedMany } from 'ai';
-import { getDb } from '../database.js';
-import { documents, documentChunks, images, projects } from '../db/schema.js';
-import { getApiKey } from '../settings.js';
+import { eq, and, isNotNull, sql, cosineDistance } from "drizzle-orm";
+import { embed, embedMany } from "ai";
+import { getDb } from "../database.js";
+import { documents, documentChunks, images, projects } from "../db/schema.js";
+import { getApiKey } from "../settings.js";
 
-const EMBEDDING_MODEL = 'text-embedding-3-small';
+const EMBEDDING_MODEL = "text-embedding-3-small";
 const TOKEN_CAP = 512;
 const SNIPPET_CHARS = 300;
 const RETRY_DELAYS_MS = [250, 500, 1000];
@@ -17,7 +17,10 @@ const RETRY_DELAYS_MS = [250, 500, 1000];
 const MIN_SIMILARITY = 0.3;
 
 export class NoOpenAIKeyError extends Error {
-  constructor() { super('no-openai-key'); this.name = 'NoOpenAIKeyError'; }
+  constructor() {
+    super("no-openai-key");
+    this.name = "NoOpenAIKeyError";
+  }
 }
 
 export interface Chunk {
@@ -46,7 +49,7 @@ function estimateTokens(text: string): number {
 // further split on blank-line paragraph boundaries; a single oversized
 // paragraph is emitted as-is and accepts the overflow.
 export function chunkMarkdown(content: string): Chunk[] {
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   type Section = { headingPath: string[]; lines: string[] };
   const sections: Section[] = [];
 
@@ -67,9 +70,17 @@ export function chunkMarkdown(content: string): Chunk[] {
       flushSection();
       const depth = m[1].length;
       const title = m[2];
-      pathStack = pathStack.slice(0, depth - 1);
-      pathStack.push(title);
-      currentPath = [...pathStack];
+      // When the stack is shorter than this heading's depth - 1 (e.g. an H3
+      // before any H1/H2), don't grow it with implicit ancestors — just emit
+      // the current section's path locally so siblings later don't end up
+      // nested under the previous heading.
+      if (pathStack.length >= depth - 1) {
+        pathStack = pathStack.slice(0, depth - 1);
+        pathStack.push(title);
+        currentPath = pathStack.slice();
+      } else {
+        currentPath = [...pathStack, title];
+      }
       currentLines = [line];
     } else {
       currentLines.push(line);
@@ -79,12 +90,16 @@ export function chunkMarkdown(content: string): Chunk[] {
 
   const chunks: Chunk[] = [];
   for (const section of sections) {
-    const text = section.lines.join('\n').trim();
+    const text = section.lines.join("\n").trim();
     if (!text) continue;
 
     const tokens = estimateTokens(text);
     if (tokens <= TOKEN_CAP) {
-      chunks.push({ headingPath: section.headingPath, text, tokenCount: tokens });
+      chunks.push({
+        headingPath: section.headingPath,
+        text,
+        tokenCount: tokens,
+      });
       continue;
     }
 
@@ -93,14 +108,19 @@ export function chunkMarkdown(content: string): Chunk[] {
     let bufferTokens = 0;
     const flushBuffer = () => {
       if (buffer.length === 0) return;
-      const t = buffer.join('\n\n');
-      chunks.push({ headingPath: section.headingPath, text: t, tokenCount: estimateTokens(t) });
+      const t = buffer.join("\n\n");
+      chunks.push({
+        headingPath: section.headingPath,
+        text: t,
+        tokenCount: estimateTokens(t),
+      });
       buffer = [];
       bufferTokens = 0;
     };
     for (const p of paragraphs) {
       const pTokens = estimateTokens(p);
-      if (bufferTokens + pTokens > TOKEN_CAP && buffer.length > 0) flushBuffer();
+      if (bufferTokens + pTokens > TOKEN_CAP && buffer.length > 0)
+        flushBuffer();
       buffer.push(p);
       bufferTokens += pTokens;
       if (bufferTokens > TOKEN_CAP) flushBuffer();
@@ -112,9 +132,9 @@ export function chunkMarkdown(content: string): Chunk[] {
 }
 
 async function getOpenAIClient() {
-  const apiKey = getApiKey('openai');
+  const apiKey = getApiKey("openai");
   if (!apiKey) throw new NoOpenAIKeyError();
-  const { createOpenAI } = await import('@ai-sdk/openai');
+  const { createOpenAI } = await import("@ai-sdk/openai");
   return createOpenAI({ apiKey });
 }
 
@@ -134,25 +154,54 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   throw lastError;
 }
 
+// Per-document serialization. Concurrent edits to the same doc would otherwise
+// race: delete-then-insert with stale content can land after a newer call's
+// transaction, leaving older content in the chunks table. Queue work per
+// documentId so each call sees the latest content when it runs.
+const embedQueue = new Map<string, Promise<void>>();
+
 // Embeds a document's content as heading-aware chunks. Delete-then-insert in
 // a single transaction so a doc never has a half-rebuilt embedding set
 // visible to the search query. Silently skips when the project has the
 // per-project toggle off or no OpenAI key is configured.
 export async function embedDocument(documentId: string): Promise<void> {
+  const previous = embedQueue.get(documentId) ?? Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(() => embedDocumentInner(documentId));
+  embedQueue.set(documentId, next);
+  try {
+    await next;
+  } finally {
+    if (embedQueue.get(documentId) === next) {
+      embedQueue.delete(documentId);
+    }
+  }
+}
+
+async function embedDocumentInner(documentId: string): Promise<void> {
   const db = getDb();
 
-  const [doc] = await db.select().from(documents).where(eq(documents.id, documentId));
+  const [doc] = await db
+    .select()
+    .from(documents)
+    .where(eq(documents.id, documentId));
   if (!doc) return;
 
-  const [project] = await db.select().from(projects).where(eq(projects.id, doc.projectId));
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.id, doc.projectId));
   if (!project || !project.embeddingsEnabled) return;
 
-  if (!getApiKey('openai')) return;
+  if (!getApiKey("openai")) return;
 
-  const chunks = chunkMarkdown(doc.content ?? '');
+  const chunks = chunkMarkdown(doc.content ?? "");
 
   if (chunks.length === 0) {
-    await db.delete(documentChunks).where(eq(documentChunks.documentId, documentId));
+    await db
+      .delete(documentChunks)
+      .where(eq(documentChunks.documentId, documentId));
     return;
   }
 
@@ -166,11 +215,15 @@ export async function embedDocument(documentId: string): Promise<void> {
   });
 
   if (embeddings.length !== chunks.length) {
-    throw new Error(`Embedding count ${embeddings.length} != chunk count ${chunks.length}`);
+    throw new Error(
+      "malformed embedding response from provider; document chunks not updated",
+    );
   }
 
   await db.transaction(async (tx) => {
-    await tx.delete(documentChunks).where(eq(documentChunks.documentId, documentId));
+    await tx
+      .delete(documentChunks)
+      .where(eq(documentChunks.documentId, documentId));
     await tx.insert(documentChunks).values(
       chunks.map((chunk, i) => ({
         documentId,
@@ -241,13 +294,18 @@ export async function searchProject(
     if (!byDoc.has(row.documentId)) byDoc.set(row.documentId, row);
   }
 
-  return Array.from(byDoc.values()).slice(0, topK).map((r) => ({
-    id: r.documentId,
-    name: r.name,
-    directory: r.directory,
-    snippet: r.text.length > SNIPPET_CHARS ? `${r.text.slice(0, SNIPPET_CHARS)}…` : r.text,
-    score: typeof r.score === 'string' ? parseFloat(r.score) : r.score,
-  }));
+  return Array.from(byDoc.values())
+    .slice(0, topK)
+    .map((r) => ({
+      id: r.documentId,
+      name: r.name,
+      directory: r.directory,
+      snippet:
+        r.text.length > SNIPPET_CHARS
+          ? `${r.text.slice(0, SNIPPET_CHARS)}…`
+          : r.text,
+      score: typeof r.score === "string" ? parseFloat(r.score) : r.score,
+    }));
 }
 
 // ─── Image embeddings ───────────────────────────────────────
@@ -266,7 +324,10 @@ export interface ImageSearchResult {
   score: number;
 }
 
-function imageEmbeddingSource(name: string, prompt: string | undefined): string {
+function imageEmbeddingSource(
+  name: string,
+  prompt: string | undefined,
+): string {
   return prompt && prompt.trim().length > 0 ? `${name}\n\n${prompt}` : name;
 }
 
@@ -276,10 +337,13 @@ export async function embedImage(imageId: string): Promise<void> {
   const [img] = await db.select().from(images).where(eq(images.id, imageId));
   if (!img) return;
 
-  const [project] = await db.select().from(projects).where(eq(projects.id, img.projectId));
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.id, img.projectId));
   if (!project || !project.embeddingsEnabled) return;
 
-  if (!getApiKey('openai')) return;
+  if (!getApiKey("openai")) return;
 
   const meta = (img.metadata ?? {}) as { prompt?: string };
   const text = imageEmbeddingSource(img.name, meta.prompt);
@@ -326,26 +390,29 @@ export async function searchImagesProject(
       score: similarity,
     })
     .from(images)
-    .where(and(
-      eq(images.projectId, projectId),
-      isNotNull(images.embedding),
-      sql`${distance} < ${1 - MIN_SIMILARITY}`,
-    ))
+    .where(
+      and(
+        eq(images.projectId, projectId),
+        isNotNull(images.embedding),
+        sql`${distance} < ${1 - MIN_SIMILARITY}`,
+      ),
+    )
     .orderBy(distance)
     .limit(topK);
 
   return rows.map((r) => {
     const meta = (r.metadata ?? {}) as { prompt?: string };
     const prompt = meta.prompt;
-    const snippet = prompt && prompt.length > SNIPPET_CHARS
-      ? `${prompt.slice(0, SNIPPET_CHARS)}…`
-      : prompt ?? '';
+    const snippet =
+      prompt && prompt.length > SNIPPET_CHARS
+        ? `${prompt.slice(0, SNIPPET_CHARS)}…`
+        : (prompt ?? "");
     return {
       id: r.id,
       name: r.name,
       prompt,
       snippet,
-      score: typeof r.score === 'string' ? parseFloat(r.score) : r.score,
+      score: typeof r.score === "string" ? parseFloat(r.score) : r.score,
     };
   });
 }

@@ -1,7 +1,7 @@
-import { Notification } from 'electron';
-import { getSetting } from '../settings.js';
-import { appIconPath } from './app-icon.js';
-import { getMainWindow } from './windows.js';
+import { Notification } from "electron";
+import { getSetting } from "../settings.js";
+import { appIconPath } from "./app-icon.js";
+import { getMainWindow } from "./windows.js";
 
 export interface NotificationTarget {
   projectId: string;
@@ -14,34 +14,36 @@ export interface NotificationTarget {
 // This is intentionally regex-only — we don't need a real markdown parser
 // for a 3-line preview, just legible output.
 function stripMarkdown(text: string): string {
-  return text
-    // Fenced code blocks: keep the content, drop the fences + lang tag.
-    .replace(/```[\w-]*\n?([\s\S]*?)```/g, '$1')
-    // Inline code: `foo` → foo
-    .replace(/`([^`]+)`/g, '$1')
-    // Images: ![alt](url) → alt   (must run before the link rule)
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    // Links: [text](url) → text
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    // Bold (** or __)
-    .replace(/(\*\*|__)(.+?)\1/g, '$2')
-    // Italic (single * or _)
-    .replace(/(?<![*_])([*_])(?!\1)(.+?)\1(?![*_])/g, '$2')
-    // Strikethrough
-    .replace(/~~(.+?)~~/g, '$1')
-    // ATX headings: leading `# `, `## `, …
-    .replace(/^#{1,6}\s+/gm, '')
-    // Blockquotes
-    .replace(/^>\s?/gm, '')
-    // Bulleted list markers
-    .replace(/^[ \t]*[-*+]\s+/gm, '')
-    // Numbered list markers
-    .replace(/^[ \t]*\d+\.\s+/gm, '')
-    // Horizontal rules
-    .replace(/^[ \t]*[-*_]{3,}[ \t]*$/gm, '')
-    // Collapse runs of intra-line whitespace
-    .replace(/[ \t]+/g, ' ')
-    .trim();
+  return (
+    text
+      // Fenced code blocks: keep the content, drop the fences + lang tag.
+      .replace(/```[\w-]*\n?([\s\S]*?)```/g, "$1")
+      // Inline code: `foo` → foo
+      .replace(/`([^`]+)`/g, "$1")
+      // Images: ![alt](url) → alt   (must run before the link rule)
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+      // Links: [text](url) → text
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      // Bold (** or __)
+      .replace(/(\*\*|__)(.+?)\1/g, "$2")
+      // Italic (single * or _)
+      .replace(/(?<![*_])([*_])(?!\1)(.+?)\1(?![*_])/g, "$2")
+      // Strikethrough
+      .replace(/~~(.+?)~~/g, "$1")
+      // ATX headings: leading `# `, `## `, …
+      .replace(/^#{1,6}\s+/gm, "")
+      // Blockquotes
+      .replace(/^>\s?/gm, "")
+      // Bulleted list markers
+      .replace(/^[ \t]*[-*+]\s+/gm, "")
+      // Numbered list markers
+      .replace(/^[ \t]*\d+\.\s+/gm, "")
+      // Horizontal rules
+      .replace(/^[ \t]*[-*_]{3,}[ \t]*$/gm, "")
+      // Collapse runs of intra-line whitespace
+      .replace(/[ \t]+/g, " ")
+      .trim()
+  );
 }
 
 export function showNotification(
@@ -49,7 +51,7 @@ export function showNotification(
   body: string,
   target?: NotificationTarget,
 ): void {
-  if (!getSetting('notifications')) return;
+  if (!getSetting("notifications")) return;
 
   const notification = new Notification({
     title,
@@ -58,13 +60,13 @@ export function showNotification(
   });
 
   if (target) {
-    notification.on('click', () => {
+    notification.on("click", () => {
       const win = getMainWindow();
       if (!win || win.isDestroyed()) return;
       if (win.isMinimized()) win.restore();
       if (!win.isVisible()) win.show();
       win.focus();
-      win.webContents.send('notification-navigate', target);
+      win.webContents.send("notification-navigate", target);
     });
   }
 

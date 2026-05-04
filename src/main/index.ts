@@ -1,20 +1,21 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage } from 'electron';
-import contextMenu from 'electron-context-menu';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { createServer } from './server.js';
-import { buildMenu, setEnabledMenuActions } from './native/menus.js';
-import { initDatabase } from './database.js';
-import { initSettings, getSetting } from './settings.js';
-import { selectDirectory } from './native/dialogs.js';
-import { openDocumentationWindow, setMainWindow } from './native/windows.js';
-import { appIconPath } from './native/app-icon.js';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage } from "electron";
+import contextMenu from "electron-context-menu";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { createServer } from "./server.js";
+import { buildMenu, setEnabledMenuActions } from "./native/menus.js";
+import { initDatabase } from "./database.js";
+import { initSettings, getSetting } from "./settings.js";
+import { selectDirectory } from "./native/dialogs.js";
+import { openDocumentationWindow, setMainWindow } from "./native/windows.js";
+import { appIconPath } from "./native/app-icon.js";
+import { getServerAuth } from "./auth.js";
 
-app.setName('Trident');
-app.setAppUserModelId('com.eastechs.trident');
+app.setName("Trident");
+app.setAppUserModelId("com.eastechs.trident");
 app.setAboutPanelOptions({
-  applicationName: 'Trident',
+  applicationName: "Trident",
   applicationVersion: app.getVersion(),
   copyright: `Copyright © ${new Date().getFullYear()} Eastechs`,
   iconPath: appIconPath(),
@@ -38,11 +39,11 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    titleBarStyle: 'hidden',
+    titleBarStyle: "hidden",
     trafficLightPosition: { x: 12, y: 12 },
     icon: appIconPath(),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -51,45 +52,54 @@ async function createWindow() {
   setMainWindow(mainWindow);
   Menu.setApplicationMenu(buildMenu(mainWindow));
 
-  const baseUrl = isDev ? 'http://localhost:5173' : `http://localhost:${SERVER_PORT}`;
-  const initialRoute = getSetting('onboardingCompleted') ? '/' : '/onboarding';
+  // Production loads the SPA from the same Express server. Use 127.0.0.1
+  // explicitly to match the loopback bind in server.ts and avoid any IPv4 vs
+  // ::1 ambiguity from `localhost` resolution.
+  const baseUrl = isDev
+    ? "http://localhost:5173"
+    : `http://127.0.0.1:${SERVER_PORT}`;
+  const initialRoute = getSetting("onboardingCompleted") ? "/" : "/onboarding";
   mainWindow.loadURL(baseUrl + initialRoute);
 
   if (isDev) {
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    mainWindow.webContents.openDevTools({ mode: "detach" });
   }
 
-  mainWindow.on('closed', () => {
+  mainWindow.on("closed", () => {
     setMainWindow(null);
     mainWindow = null;
   });
 }
 
 // IPC handlers
-ipcMain.handle('select-directory', () => selectDirectory());
-ipcMain.handle('open-documentation', () => openDocumentationWindow());
-ipcMain.on('menu-set-enabled', (_event, actions: string[]) => {
+ipcMain.handle("get-server-auth", () => getServerAuth());
+ipcMain.handle("select-directory", () => selectDirectory());
+ipcMain.handle("open-documentation", () => openDocumentationWindow());
+ipcMain.on("menu-set-enabled", (_event, actions: string[]) => {
   if (Array.isArray(actions)) setEnabledMenuActions(actions);
 });
 
 function writeTridentMetadata(): void {
   try {
-    const projectsDir = path.join(os.homedir(), 'Trident', 'Projects');
+    const projectsDir = path.join(os.homedir(), "Trident", "Projects");
     fs.mkdirSync(projectsDir, { recursive: true });
 
-    const metadataPath = path.join(os.homedir(), 'Trident', '.trident');
-    fs.writeFileSync(metadataPath, JSON.stringify({
-      app_version: app.getVersion(),
-      release_version: process.env.TRIDENT_RELEASE_VERSION ?? null,
-      migration_version: process.env.TRIDENT_MIGRATION_VERSION ?? null,
-    }));
+    const metadataPath = path.join(os.homedir(), "Trident", ".trident");
+    fs.writeFileSync(
+      metadataPath,
+      JSON.stringify({
+        app_version: app.getVersion(),
+        release_version: process.env.TRIDENT_RELEASE_VERSION ?? null,
+        migration_version: process.env.TRIDENT_MIGRATION_VERSION ?? null,
+      }),
+    );
   } catch (err) {
-    console.error('Failed to write Trident metadata:', err);
+    console.error("Failed to write Trident metadata:", err);
   }
 }
 
 app.whenReady().then(async () => {
-  if (isDev && process.platform === 'darwin') {
+  if (isDev && process.platform === "darwin") {
     app.dock?.setIcon(nativeImage.createFromPath(appIconPath()));
   }
 
@@ -108,15 +118,15 @@ app.whenReady().then(async () => {
   // Create the main window
   await createWindow();
 
-  app.on('activate', () => {
+  app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
     app.quit();
   }
 });

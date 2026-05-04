@@ -1,8 +1,9 @@
 import { FolderOpenIcon, Settings2Icon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { api_get, api_patch, api_post } from "@/lib/api";
+import { api_get, api_patch, api_post, isApiError } from "@/lib/api";
 import { ModelSelectorLogo } from "@/components/ai-elements/model-selector";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -57,6 +58,7 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
   });
   const [processing, setProcessing] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
 
   useEffect(() => {
@@ -89,6 +91,7 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
 
   function openDialog() {
     setErrors({});
+    setSubmitError(null);
     setFormData({
       name: project.name,
       description: project.description ?? "",
@@ -116,6 +119,7 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
     e.preventDefault();
     setProcessing(true);
     setErrors({});
+    setSubmitError(null);
     api_patch<ProjectData>(`/api/projects/${project.id}`, formData)
       .then((updated) => {
         onUpdated?.(updated);
@@ -123,6 +127,25 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
       })
       .catch((err) => {
         console.error(err);
+        if (isApiError(err) && err.status === 422) {
+          const body = err.response as
+            | { errors?: Record<string, string[] | string> }
+            | undefined;
+          const fieldErrors = body?.errors;
+          if (fieldErrors) {
+            const flattened: Record<string, string> = {};
+            for (const [key, value] of Object.entries(fieldErrors)) {
+              flattened[key] = Array.isArray(value) ? value[0] : value;
+            }
+            setErrors(flattened);
+            return;
+          }
+        }
+        setSubmitError(
+          isApiError(err)
+            ? `Failed to save (${err.status}).`
+            : "Failed to save. Check your connection and try again.",
+        );
       })
       .finally(() => setProcessing(false));
   }
@@ -144,10 +167,16 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
           <DialogHeader>
             <DialogTitle>Project Settings</DialogTitle>
             <DialogDescription>
-              Update this project's name, description, and workspace directory.
+              Update this project&apos;s name, description, and workspace
+              directory.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="grid gap-4">
+            {submitError && (
+              <Alert variant="destructive">
+                <AlertDescription>{submitError}</AlertDescription>
+              </Alert>
+            )}
             <div className="grid gap-2">
               <label htmlFor="update-name" className="text-sm font-medium">
                 Name
@@ -160,7 +189,7 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
                 required
               />
               {errors.name && (
-                <p className="text-sm text-destructive">{errors.name}</p>
+                <p className="text-destructive text-sm">{errors.name}</p>
               )}
             </div>
             <div className="grid gap-2">
@@ -177,7 +206,7 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
                 placeholder="A short description of the project"
               />
               {errors.description && (
-                <p className="text-sm text-destructive">{errors.description}</p>
+                <p className="text-destructive text-sm">{errors.description}</p>
               )}
             </div>
             <div className="grid gap-2">
@@ -213,7 +242,7 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
                 </Button>
               </div>
               {errors.filesystem_root && (
-                <p className="text-sm text-destructive">
+                <p className="text-destructive text-sm">
                   {errors.filesystem_root}
                 </p>
               )}
@@ -261,7 +290,7 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-3">
+            <div className="border-border flex items-start justify-between gap-4 rounded-lg border p-3">
               <div className="grid gap-1">
                 <label
                   htmlFor="embeddings-toggle"
@@ -269,9 +298,9 @@ export function ProjectSettingsDialog({ project, onUpdated }: Props) {
                 >
                   Semantic search
                 </label>
-                <p className="text-xs text-muted-foreground">
-                  Embed this project's documents with OpenAI so the agent and
-                  the command palette can search them by meaning.
+                <p className="text-muted-foreground text-xs">
+                  Embed this project&apos;s documents with OpenAI so the agent
+                  and the command palette can search them by meaning.
                 </p>
               </div>
               <Switch

@@ -16,7 +16,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/use-document-title";
-import { api_get, api_post, api_put, api_patch, api_delete } from "@/lib/api";
+import { useAuthedImage } from "@/hooks/use-authed-image";
+import { api_get, api_patch, api_delete } from "@/lib/api";
 import {
   ArrowLeftIcon,
   FileTextIcon,
@@ -79,11 +80,6 @@ interface Tab {
   title: string;
 }
 
-interface Props {
-  project: ProjectData;
-  images: ImageData[];
-}
-
 // Anything wider than ~16:9 (1.78) gets pulled out of the masonry column flow
 // and rendered full-width, since cramming an ultra-wide thumbnail into one of
 // two narrow columns leaves a thin sliver of an image surrounded by dead space.
@@ -106,12 +102,15 @@ function ImageCard({
   const provider = imageProviderFor(meta.model);
   const aspect = aspectInfo(meta.size);
   const quality = qualityLabel(meta.quality);
+  const imageSrc = useAuthedImage(
+    `/api/projects/${projectId}/images/${image.id}`,
+  );
 
   return (
     <button
       onClick={onClick}
       data-active={isActive}
-      className="group relative block w-full overflow-hidden rounded-xl border border-neutral-200 bg-white text-left transition-colors duration-150 ease-out hover:border-neutral-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:border-neutral-800 dark:bg-neutral-950 dark:hover:border-neutral-700 data-[active=true]:border-primary data-[active=true]:shadow-[0_0_0_1px_var(--color-primary)]"
+      className="group focus-visible:ring-primary/40 data-[active=true]:border-primary relative block w-full overflow-hidden rounded-xl border border-neutral-200 bg-white text-left transition-colors duration-150 ease-out hover:border-neutral-300 hover:shadow-sm focus-visible:ring-2 focus-visible:outline-none data-[active=true]:shadow-[0_0_0_1px_var(--color-primary)] dark:border-neutral-800 dark:bg-neutral-950 dark:hover:border-neutral-700"
     >
       {/* Thumbnail keeps the image's natural aspect ratio when known so
           portrait/landscape generations don't all look square. */}
@@ -119,12 +118,14 @@ function ImageCard({
         className="relative w-full overflow-hidden bg-neutral-100 dark:bg-neutral-900"
         style={{ aspectRatio: aspect.cssRatio ?? "1 / 1" }}
       >
-        <img
-          src={`/api/projects/${projectId}/images/${image.id}`}
-          alt={image.name}
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02]"
-        />
+        {imageSrc && (
+          <img
+            src={imageSrc}
+            alt={image.name}
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02]"
+          />
+        )}
         {provider !== "unknown" && (
           <span
             title={PROVIDER_NAMES[provider]}
@@ -396,6 +397,7 @@ function GalleryView({
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deletingTabId, setDeletingTabId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const renameStartTime = useRef<number>(0);
 
@@ -538,6 +540,7 @@ function GalleryView({
 
     const tabId = deletingTabId;
     setDeletingTabId(null);
+    setDeleteError(null);
 
     api_delete(`/api/projects/${project.id}/images/${tabId}`)
       .then(() => {
@@ -556,7 +559,7 @@ function GalleryView({
       })
       .catch((error) => {
         console.error("Failed to delete:", error);
-        window.alert("Failed to delete image.");
+        setDeleteError("Failed to delete image. Please try again.");
       });
   }, [deletingTabId, project.id, activeTabId]);
 
@@ -571,9 +574,9 @@ function GalleryView({
       <header className="title-bar" />
       <div className="flex flex-1 overflow-hidden bg-white select-none dark:bg-neutral-950">
         <TooltipProvider delayDuration={300}>
-          <aside className="flex w-12 flex-col items-center border-r border-border bg-white py-2 dark:bg-neutral-950">
+          <aside className="border-border flex w-12 flex-col items-center border-r bg-white py-2 dark:bg-neutral-950">
             <Link to={`/projects/${project.id}`}>
-              <div className="flex size-8 items-center justify-center rounded-lg bg-neutral-50 text-black dark:bg-neutral-900 dark:text-primary">
+              <div className="dark:text-primary flex size-8 items-center justify-center rounded-lg bg-neutral-50 text-black dark:bg-neutral-900">
                 <ArrowLeftIcon className="size-4" />
               </div>
             </Link>
@@ -626,8 +629,8 @@ function GalleryView({
 
           <div className="flex flex-1 overflow-hidden">
             {/* Image grid */}
-            <div className="flex w-80 shrink-0 flex-col border-r border-border bg-neutral-50/40 dark:bg-neutral-950/40">
-              <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+            <div className="border-border flex w-80 shrink-0 flex-col border-r bg-neutral-50/40 dark:bg-neutral-950/40">
+              <div className="border-border flex items-center gap-2 border-b px-3 py-2">
                 <ImageIcon className="size-5 text-neutral-400" />
                 <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
                   Gallery
@@ -684,8 +687,24 @@ function GalleryView({
 
             {/* Image viewer */}
             <div className="flex flex-1 flex-col overflow-hidden">
+              {deleteError && (
+                <div
+                  role="alert"
+                  className="border-destructive/30 bg-destructive/10 text-destructive flex items-center justify-between gap-3 border-b px-4 py-2 text-sm"
+                >
+                  <span>{deleteError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteError(null)}
+                    className="hover:bg-destructive/10 rounded p-0.5"
+                  >
+                    <XIcon className="size-3.5" />
+                    <span className="sr-only">Dismiss error</span>
+                  </button>
+                </div>
+              )}
               {/* Tab bar */}
-              <div className="flex min-h-9 items-center border-b border-border">
+              <div className="border-border flex min-h-9 items-center border-b">
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
@@ -722,7 +741,7 @@ function GalleryView({
 
               {/* Image name */}
               {activeTab && (
-                <div className="flex items-center gap-2 border-b border-border px-4 py-1">
+                <div className="border-border flex items-center gap-2 border-b px-4 py-1">
                   <h2 className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
                     {activeTab.title}
                   </h2>

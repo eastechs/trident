@@ -1,4 +1,4 @@
-import type { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from "@electric-sql/pglite";
 
 interface Migration {
   id: string;
@@ -17,8 +17,9 @@ interface Migration {
 //     rolls back and leaves the migration unmarked.
 const MIGRATIONS: Migration[] = [
   {
-    id: '001_initial',
-    description: 'Initial schema: projects, documents, images, conversations, messages',
+    id: "001_initial",
+    description:
+      "Initial schema: projects, documents, images, conversations, messages",
     sql: `
       CREATE TABLE projects (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -85,8 +86,9 @@ const MIGRATIONS: Migration[] = [
     `,
   },
   {
-    id: '002_embeddings',
-    description: 'pgvector extension, document_chunks table, per-project embeddings toggle',
+    id: "002_embeddings",
+    description:
+      "pgvector extension, document_chunks table, per-project embeddings toggle",
     sql: `
       CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -110,8 +112,8 @@ const MIGRATIONS: Migration[] = [
     `,
   },
   {
-    id: '003_image_embeddings',
-    description: 'Add nullable embedding column on images for semantic search',
+    id: "003_image_embeddings",
+    description: "Add nullable embedding column on images for semantic search",
     sql: `
       ALTER TABLE images
         ADD COLUMN embedding VECTOR(1536);
@@ -121,8 +123,8 @@ const MIGRATIONS: Migration[] = [
     `,
   },
   {
-    id: '004_default_agent',
-    description: 'Per-project default agent id for new conversations',
+    id: "004_default_agent",
+    description: "Per-project default agent id for new conversations",
     sql: `
       ALTER TABLE projects
         ADD COLUMN default_agent TEXT;
@@ -140,17 +142,23 @@ export async function runMigrations(pglite: PGlite): Promise<void> {
     )
   `);
 
-  const applied = await pglite.query<{ id: string }>('SELECT id FROM _migrations');
+  const applied = await pglite.query<{ id: string }>(
+    "SELECT id FROM _migrations",
+  );
   const appliedIds = new Set(applied.rows.map((r) => r.id));
 
   for (const migration of MIGRATIONS) {
     if (appliedIds.has(migration.id)) continue;
 
-    console.log(`[migrations] Applying ${migration.id}: ${migration.description}`);
+    console.log(
+      `[migrations] Applying ${migration.id}: ${migration.description}`,
+    );
 
     await pglite.transaction(async (tx) => {
       await tx.exec(migration.sql);
-      await tx.query('INSERT INTO _migrations (id) VALUES ($1)', [migration.id]);
+      await tx.query("INSERT INTO _migrations (id) VALUES ($1)", [
+        migration.id,
+      ]);
     });
   }
 }

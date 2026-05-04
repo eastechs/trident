@@ -13,7 +13,6 @@ import { nanoid } from "nanoid";
 import type {
   ChangeEvent,
   ChangeEventHandler,
-  ClipboardEventHandler,
   ComponentProps,
   FormEvent,
   FormEventHandler,
@@ -204,15 +203,15 @@ export interface PromptInputControllerProps {
   /** INTERNAL: Allows PromptInput to register its file textInput + "open" callback */
   __registerFileInput: (
     ref: RefObject<HTMLInputElement | null>,
-    open: () => void
+    open: () => void,
   ) => void;
 }
 
 const PromptInputController = createContext<PromptInputControllerProps | null>(
-  null
+  null,
 );
 const ProviderAttachmentsContext = createContext<AttachmentsContext | null>(
-  null
+  null,
 );
 
 export const usePromptInputController = () => {
@@ -220,7 +219,7 @@ export const usePromptInputController = () => {
 
   if (!ctx) {
     throw new Error(
-      "Wrap your component inside <PromptInputProvider> to use usePromptInputController()."
+      "Wrap your component inside <PromptInputProvider> to use usePromptInputController().",
     );
   }
 
@@ -236,7 +235,7 @@ export const useProviderAttachments = () => {
 
   if (!ctx) {
     throw new Error(
-      "Wrap your component inside <PromptInputProvider> to use useProviderAttachments()."
+      "Wrap your component inside <PromptInputProvider> to use useProviderAttachments().",
     );
   }
 
@@ -270,6 +269,10 @@ export const PromptInputProvider = ({
   // oxlint-disable-next-line eslint(no-empty-function)
   const openRef = useRef<() => void>(() => {});
 
+  // Intentionally unvalidated: PromptInput's `addWithProviderValidation`
+  // wraps this with the accept/maxFileSize/maxFiles checks before delegating
+  // here, and that wrapper is the only path callers reach. Don't validate
+  // again here or the rules would compound.
   const add = useCallback((files: File[] | FileList) => {
     const incoming = [...files];
 
@@ -329,7 +332,7 @@ export const PromptInputProvider = ({
         }
       }
     },
-    []
+    [],
   );
 
   const openFileDialog = useCallback(() => {
@@ -345,7 +348,7 @@ export const PromptInputProvider = ({
       openFileDialog,
       remove,
     }),
-    [attachmentFiles, add, remove, clear, openFileDialog]
+    [attachmentFiles, add, remove, clear, openFileDialog],
   );
 
   const __registerFileInput = useCallback(
@@ -353,7 +356,7 @@ export const PromptInputProvider = ({
       fileInputRef.current = ref.current;
       openRef.current = open;
     },
-    []
+    [],
   );
 
   const controller = useMemo<PromptInputControllerProps>(
@@ -366,7 +369,7 @@ export const PromptInputProvider = ({
         value: textInput,
       },
     }),
-    [textInput, clearInput, attachments, __registerFileInput]
+    [textInput, clearInput, attachments, __registerFileInput],
   );
 
   return (
@@ -392,7 +395,7 @@ export const usePromptInputAttachments = () => {
 
   if (!context) {
     throw new Error(
-      "usePromptInputAttachments must be used within a PromptInput or PromptInputProvider"
+      "usePromptInputAttachments must be used within a PromptInput or PromptInputProvider",
     );
   }
 
@@ -418,7 +421,7 @@ export const usePromptInputReferencedSources = () => {
 
   if (!ctx) {
     throw new Error(
-      "usePromptInputReferencedSources must be used within a LocalReferencedSourcesContext.Provider"
+      "usePromptInputReferencedSources must be used within a LocalReferencedSourcesContext.Provider",
     );
   }
 
@@ -442,7 +445,7 @@ export const PromptInputActionAddAttachments = ({
       e.preventDefault();
       attachments.openFileDialog();
     },
-    [attachments]
+    [attachments],
   );
 
   return (
@@ -490,7 +493,7 @@ export const PromptInputActionAddScreenshot = ({
         throw error;
       }
     },
-    [onSelect, attachments]
+    [onSelect, attachments],
   );
 
   return (
@@ -513,8 +516,6 @@ export type PromptInputProps = Omit<
   // e.g., "image/*" or leave undefined for any
   accept?: string;
   multiple?: boolean;
-  // When true, accepts drops anywhere on document. Default false (opt-in).
-  globalDrop?: boolean;
   // Render a hidden input with given name and keep it in sync for native form posts. Default false.
   syncHiddenInput?: boolean;
   // Minimal constraints
@@ -527,7 +528,7 @@ export type PromptInputProps = Omit<
   }) => void;
   onSubmit: (
     message: PromptInputMessage,
-    event: FormEvent<HTMLFormElement>
+    event: FormEvent<HTMLFormElement>,
   ) => void | Promise<void>;
 };
 
@@ -535,7 +536,6 @@ export const PromptInput = ({
   className,
   accept,
   multiple,
-  globalDrop,
   syncHiddenInput,
   maxFiles,
   maxFileSize,
@@ -550,7 +550,6 @@ export const PromptInput = ({
 
   // Refs
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const formRef = useRef<HTMLFormElement | null>(null);
 
   // ----- Local attachments (only used when no provider)
   const [items, setItems] = useState<(FileUIPart & { id: string })[]>([]);
@@ -594,7 +593,7 @@ export const PromptInput = ({
         return f.type === pattern;
       });
     },
-    [accept]
+    [accept],
   );
 
   const addLocal = useCallback(
@@ -654,7 +653,7 @@ export const PromptInput = ({
         return [...prev, ...next];
       });
     },
-    [matchesAccept, maxFiles, maxFileSize, onError]
+    [matchesAccept, maxFiles, maxFileSize, onError],
   );
 
   const removeLocal = useCallback(
@@ -668,7 +667,7 @@ export const PromptInput = ({
 
         return prev.filter((file) => file.id !== id);
       }),
-    []
+    [],
   );
 
   // Wrapper that validates files before calling provider's add
@@ -718,7 +717,7 @@ export const PromptInput = ({
         controller?.attachments.add(capped);
       }
     },
-    [matchesAccept, maxFileSize, maxFiles, onError, files.length, controller]
+    [matchesAccept, maxFileSize, maxFiles, onError, files.length, controller],
   );
 
   const clearAttachments = useCallback(
@@ -734,12 +733,12 @@ export const PromptInput = ({
 
             return [];
           }),
-    [usingProvider, controller]
+    [usingProvider, controller],
   );
 
   const clearReferencedSources = useCallback(
     () => setReferencedSources([]),
-    []
+    [],
   );
 
   const add = usingProvider ? addWithProviderValidation : addLocal;
@@ -770,70 +769,6 @@ export const PromptInput = ({
     }
   }, [files, syncHiddenInput]);
 
-  // Attach drop handlers on nearest form and document (opt-in)
-  useEffect(() => {
-    const form = formRef.current;
-
-    if (!form) {
-      return;
-    }
-
-    if (globalDrop) {
-      // when global drop is on, let the document-level handler own drops
-      return;
-    }
-
-    const onDragOver = (e: DragEvent) => {
-      if (e.dataTransfer?.types?.includes("Files")) {
-        e.preventDefault();
-      }
-    };
-    const onDrop = (e: DragEvent) => {
-      if (e.dataTransfer?.types?.includes("Files")) {
-        e.preventDefault();
-      }
-
-      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-        add(e.dataTransfer.files);
-      }
-    };
-    form.addEventListener("dragover", onDragOver);
-    form.addEventListener("drop", onDrop);
-
-    return () => {
-      form.removeEventListener("dragover", onDragOver);
-      form.removeEventListener("drop", onDrop);
-    };
-  }, [add, globalDrop]);
-
-  useEffect(() => {
-    if (!globalDrop) {
-      return;
-    }
-
-    const onDragOver = (e: DragEvent) => {
-      if (e.dataTransfer?.types?.includes("Files")) {
-        e.preventDefault();
-      }
-    };
-    const onDrop = (e: DragEvent) => {
-      if (e.dataTransfer?.types?.includes("Files")) {
-        e.preventDefault();
-      }
-
-      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-        add(e.dataTransfer.files);
-      }
-    };
-    document.addEventListener("dragover", onDragOver);
-    document.addEventListener("drop", onDrop);
-
-    return () => {
-      document.removeEventListener("dragover", onDragOver);
-      document.removeEventListener("drop", onDrop);
-    };
-  }, [add, globalDrop]);
-
   useEffect(
     () => () => {
       if (!usingProvider) {
@@ -844,7 +779,7 @@ export const PromptInput = ({
         }
       }
     },
-    [usingProvider]
+    [usingProvider],
   );
 
   const handleChange: ChangeEventHandler<HTMLInputElement> = useCallback(
@@ -856,7 +791,7 @@ export const PromptInput = ({
       // Reset input value to allow selecting files that were previously removed
       event.currentTarget.value = "";
     },
-    [add]
+    [add],
   );
 
   const attachmentsCtx = useMemo<AttachmentsContext>(
@@ -868,7 +803,7 @@ export const PromptInput = ({
       openFileDialog,
       remove,
     }),
-    [files, add, remove, clearAttachments, openFileDialog]
+    [files, add, remove, clearAttachments, openFileDialog],
   );
 
   const refsCtx = useMemo<ReferencedSourcesContext>(
@@ -886,7 +821,7 @@ export const PromptInput = ({
       },
       sources: referencedSources,
     }),
-    [referencedSources, clearReferencedSources]
+    [referencedSources, clearReferencedSources],
   );
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback(
@@ -902,9 +837,11 @@ export const PromptInput = ({
             return (formData.get("message") as string) || "";
           })();
 
-      // Reset form immediately after capturing text to avoid race condition
-      // where user input during async blob conversion would be lost
-      if (!usingProvider) {
+      // Clear input immediately after capturing text so anything typed during
+      // the async blob conversion below isn't wiped on a post-await clear.
+      if (usingProvider) {
+        controller.textInput.clear();
+      } else {
         form.reset();
       }
 
@@ -923,36 +860,26 @@ export const PromptInput = ({
             }
 
             return item;
-          })
+          }),
         );
 
         const result = onSubmit({ files: convertedFiles, text }, event);
 
-        // Handle both sync and async onSubmit
         if (result instanceof Promise) {
-          try {
-            await result;
-            clear();
-
-            if (usingProvider) {
-              controller.textInput.clear();
-            }
-          } catch {
-            // Don't clear on error - user may want to retry
-          }
-        } else {
-          // Sync function completed without throwing, clear inputs
-          clear();
-
-          if (usingProvider) {
-            controller.textInput.clear();
-          }
+          await result;
         }
+        clear();
       } catch {
-        // Don't clear on error - user may want to retry
+        // Caller threw — leave attachments intact for retry. SidebarChat
+        // throws "not-sent" when bailing on empty text / mid-stream, and
+        // the textarea was cleared synchronously above. Restore the draft
+        // unless the user already typed something new in the gap.
+        if (usingProvider && controller.textInput.value === "") {
+          controller.textInput.setInput(text);
+        }
       }
     },
-    [usingProvider, controller, files, onSubmit, clear]
+    [usingProvider, controller, files, onSubmit, clear],
   );
 
   // Render with or without local provider
@@ -971,10 +898,11 @@ export const PromptInput = ({
       <form
         className={cn("w-full", className)}
         onSubmit={handleSubmit}
-        ref={formRef}
         {...props}
       >
-        <InputGroup className="overflow-hidden bg-white dark:bg-neutral-950">{children}</InputGroup>
+        <InputGroup className="overflow-hidden bg-white dark:bg-neutral-950">
+          {children}
+        </InputGroup>
       </form>
     </>
   );
@@ -1014,7 +942,6 @@ export const PromptInputTextarea = ({
   ...props
 }: PromptInputTextareaProps) => {
   const controller = useOptionalPromptInputController();
-  const attachments = usePromptInputAttachments();
   const [isComposing, setIsComposing] = useState(false);
 
   const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = useCallback(
@@ -1041,7 +968,7 @@ export const PromptInputTextarea = ({
         // Check if the submit button is disabled before submitting
         const { form } = e.currentTarget;
         const submitButton = form?.querySelector(
-          'button[type="submit"]'
+          'button[type="submit"]',
         ) as HTMLButtonElement | null;
 
         if (submitButton?.disabled) {
@@ -1050,50 +977,8 @@ export const PromptInputTextarea = ({
 
         form?.requestSubmit();
       }
-
-      // Remove last attachment when Backspace is pressed and textarea is empty
-      if (
-        e.key === "Backspace" &&
-        e.currentTarget.value === "" &&
-        attachments.files.length > 0
-      ) {
-        e.preventDefault();
-        const lastAttachment = attachments.files.at(-1);
-
-        if (lastAttachment) {
-          attachments.remove(lastAttachment.id);
-        }
-      }
     },
-    [onKeyDown, isComposing, attachments]
-  );
-
-  const handlePaste: ClipboardEventHandler<HTMLTextAreaElement> = useCallback(
-    (event) => {
-      const items = event.clipboardData?.items;
-
-      if (!items) {
-        return;
-      }
-
-      const files: File[] = [];
-
-      for (const item of items) {
-        if (item.kind === "file") {
-          const file = item.getAsFile();
-
-          if (file) {
-            files.push(file);
-          }
-        }
-      }
-
-      if (files.length > 0) {
-        event.preventDefault();
-        attachments.add(files);
-      }
-    },
-    [attachments]
+    [onKeyDown, isComposing],
   );
 
   const handleCompositionEnd = useCallback(() => setIsComposing(false), []);
@@ -1118,7 +1003,6 @@ export const PromptInputTextarea = ({
       onCompositionEnd={handleCompositionEnd}
       onCompositionStart={handleCompositionStart}
       onKeyDown={handleKeyDown}
-      onPaste={handlePaste}
       placeholder={placeholder}
       {...props}
       {...controlledProps}
@@ -1217,7 +1101,7 @@ export const PromptInputButton = ({
       <TooltipContent side={side}>
         {tooltipContent}
         {shortcut && (
-          <span className="ml-2 text-muted-foreground">{shortcut}</span>
+          <span className="text-muted-foreground ml-2">{shortcut}</span>
         )}
       </TooltipContent>
     </Tooltip>
@@ -1314,7 +1198,7 @@ export const PromptInputSubmit = ({
 
       onClick?.(e);
     },
-    [isGenerating, onStop, onClick]
+    [isGenerating, onStop, onClick],
   );
 
   return (
@@ -1349,9 +1233,9 @@ export const PromptInputSelectTrigger = ({
 }: PromptInputSelectTriggerProps) => (
   <SelectTrigger
     className={cn(
-      "border-none bg-transparent font-medium text-muted-foreground shadow-none transition-colors",
+      "text-muted-foreground border-none bg-transparent font-medium shadow-none transition-colors",
       "hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground",
-      className
+      className,
     )}
     {...props}
   />
@@ -1401,7 +1285,7 @@ export type PromptInputHoverCardTriggerProps = ComponentProps<
 >;
 
 export const PromptInputHoverCardTrigger = (
-  props: PromptInputHoverCardTriggerProps
+  props: PromptInputHoverCardTriggerProps,
 ) => <HoverCardTrigger {...props} />;
 
 export type PromptInputHoverCardContentProps = ComponentProps<
@@ -1439,8 +1323,8 @@ export const PromptInputTabLabel = ({
   // oxlint-disable-next-line eslint-plugin-jsx-a11y(heading-has-content)
   <h3
     className={cn(
-      "mb-2 px-3 font-medium text-muted-foreground text-xs",
-      className
+      "text-muted-foreground mb-2 px-3 text-xs font-medium",
+      className,
     )}
     {...props}
   />
@@ -1463,8 +1347,8 @@ export const PromptInputTabItem = ({
 }: PromptInputTabItemProps) => (
   <div
     className={cn(
-      "flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent",
-      className
+      "hover:bg-accent flex items-center gap-2 px-3 py-2 text-xs",
+      className,
     )}
     {...props}
   />

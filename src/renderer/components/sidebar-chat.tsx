@@ -7,7 +7,7 @@ import {
   lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
 import type { UIMessage } from "ai";
-import { api_get, api_post, api_put, api_patch, api_delete } from "@/lib/api";
+import { api_get, api_patch, authedFetch } from "@/lib/api";
 import { CheckIcon, FileTextIcon, PlusIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GridLoader } from "react-spinners";
@@ -84,7 +84,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { DocumentData, EffortLevel, ImageData, ModelInfo } from "@/types/api";
+import type {
+  DocumentData,
+  EffortLevel,
+  ImageData,
+  ModelInfo,
+} from "@/types/api";
 
 const EFFORT_OPTIONS: Array<{ value: EffortLevel; label: string }> = [
   { value: "low", label: "Low" },
@@ -351,6 +356,7 @@ export function SidebarChat({
       id: conversationId,
       transport: new DefaultChatTransport({
         api: `/api/projects/${projectId}/chat`,
+        fetch: authedFetch,
         // Use a function so modelRef.current is read at send time (latest selection),
         // not frozen at transport construction.
         prepareSendMessagesRequest({ messages, body }) {
@@ -525,16 +531,40 @@ export function SidebarChat({
 
   const prevStatusRef = useRef(status);
   useEffect(() => {
-    if (prevStatusRef.current === "streaming" && status === "ready") {
-      if (chimeEnabledRef.current && !userStoppedRef.current) {
+    const wasActive =
+      prevStatusRef.current === "streaming" ||
+      prevStatusRef.current === "submitted";
+    const isActive = status === "streaming" || status === "submitted";
+
+    if (wasActive && status === "ready") {
+      // Only chime when the assistant actually streamed visible content.
+      // A submitted→ready transition with nothing streamed (e.g. aborted
+      // before any chunks arrived) shouldn't fire the "done" sound.
+      const lastMessage = messages[messages.length - 1];
+      const streamedContent =
+        lastMessage?.role === "assistant" &&
+        lastMessage.parts.some(
+          (p) =>
+            (p.type === "text" && p.text !== "") ||
+            p.type === "reasoning" ||
+            isToolUIPart(p),
+        );
+      if (
+        streamedContent &&
+        chimeEnabledRef.current &&
+        !userStoppedRef.current
+      ) {
         new Audio(agentChimeUrl).play().catch(() => {});
       }
-      userStoppedRef.current = false;
       onStreamingComplete?.();
     }
 
+    if (wasActive && !isActive) {
+      userStoppedRef.current = false;
+    }
+
     prevStatusRef.current = status;
-  }, [status, onStreamingComplete]);
+  }, [status, messages, onStreamingComplete]);
 
   const handleModelSelect = useCallback((id: string) => {
     setModel(id);
@@ -545,8 +575,11 @@ export function SidebarChat({
     async (message: { text: string }) => {
       const text = message.text.trim();
 
+      // Throw a sentinel error so PromptInput's submit catch keeps the
+      // user's draft instead of clearing it. See the catch at the bottom
+      // of PromptInput's handleSubmit.
       if (!text || isStreaming) {
-        return;
+        throw new Error("not-sent");
       }
 
       sendMessage(
@@ -631,6 +664,11 @@ export function SidebarChat({
     return false;
   }, [messages]);
 
+  const initialDraft = useMemo(
+    () => loadDraft(conversationId),
+    [conversationId],
+  );
+
   const toggleDocument = useCallback((docId: string) => {
     setSelectedDocumentIds((prev) => {
       const next = new Set(prev);
@@ -682,7 +720,10 @@ export function SidebarChat({
                 >
                   {message.parts.map((part, i) => {
                     if (part.type === "text") {
-                      const cleaned = cleanText(part.text);
+                      const cleaned =
+                        message.role === "user"
+                          ? cleanText(part.text)
+                          : part.text;
                       if (!cleaned.trim()) return null;
                       return (
                         <MessageResponse key={`${message.id}-${i}`}>
@@ -728,14 +769,28 @@ export function SidebarChat({
                       const input = part.input as
                         | Record<string, unknown>
                         | undefined;
-                      const output =
-                        typeof part.output === "string"
-                          ? JSON.parse(part.output)
-                          : (part.output as
-                              | Record<string, unknown>
-                              | undefined);
-                      const questionsData =
-                        input?.questions || output?.questions;
+                      let output: Record<string, unknown> | undefined;
+                      if (typeof part.output === "string") {
+                        try {
+                          output = JSON.parse(part.output);
+                        } catch {
+                          output = undefined;
+                        }
+                      } else {
+                        output = part.output as
+                          | Record<string, unknown>
+                          | undefined;
+                      }
+                      const questionsData = (input?.questions ||
+                        output?.questions) as
+                        | {
+                            question: string;
+                            options: Array<{
+                              label: string;
+                              description: string;
+                            }>;
+                          }[]
+                        | undefined;
 
                       if (questionsData) {
                         const isSubmitted =
@@ -875,12 +930,12 @@ export function SidebarChat({
 
       <div className="px-2 pb-2">
         {hasNoProviders && (
-          <div className="flex items-center justify-center rounded-lg border border-dashed border-border px-3 py-4">
-            <p className="text-center text-xs text-muted-foreground">
+          <div className="border-border flex items-center justify-center rounded-lg border border-dashed px-3 py-4">
+            <p className="text-muted-foreground text-center text-xs">
               Add an API key in{" "}
               <Link
                 to="/settings"
-                className="font-medium text-primary underline underline-offset-2"
+                className="text-primary font-medium underline underline-offset-2"
               >
                 Settings
               </Link>{" "}
@@ -892,11 +947,11 @@ export function SidebarChat({
           <div
             className={`relative ${isStreaming ? "chat-input-shimmer" : ""}`}
           >
-            <div className="pointer-events-none absolute -inset-6 rounded-full bg-primary/10 blur-3xl dark:bg-primary/20" />
+            <div className="bg-primary/10 dark:bg-primary/20 pointer-events-none absolute -inset-6 rounded-full blur-3xl" />
             <div className="relative">
               <PromptInputProvider
                 key={conversationId}
-                initialInput={loadDraft(conversationId)}
+                initialInput={initialDraft}
               >
                 <DraftPersister conversationId={conversationId} />
                 <PromptInput onSubmit={handleSubmit}>
@@ -916,7 +971,7 @@ export function SidebarChat({
                         <PromptInputButton
                           disabled
                           size="sm"
-                          className="h-7 px-2 text-xs opacity-60 cursor-default"
+                          className="h-7 cursor-default px-2 text-xs opacity-60"
                         >
                           {selectedModelData?.name && (
                             <ModelSelectorName>
@@ -930,7 +985,10 @@ export function SidebarChat({
                           open={modelSelectorOpen}
                         >
                           <ModelSelectorTrigger asChild>
-                            <PromptInputButton size="sm" className="h-7 px-2 text-xs">
+                            <PromptInputButton
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                            >
                               {selectedModelData?.name && (
                                 <ModelSelectorName>
                                   {selectedModelData.name}
@@ -988,7 +1046,7 @@ export function SidebarChat({
                             // Override the size variant with a matching variant so
                             // tailwind-merge actually strips the base's
                             // data-[size=sm]:h-8 instead of letting both apply.
-                            className="w-auto gap-1 rounded-4xl border-transparent bg-transparent bg-clip-padding px-2 py-0 text-xs font-medium text-muted-foreground shadow-none data-[size=sm]:h-7 hover:bg-muted focus:ring-0 dark:hover:bg-muted/50 [&>svg]:hidden"
+                            className="text-muted-foreground hover:bg-muted dark:hover:bg-muted/50 w-auto gap-1 rounded-4xl border-transparent bg-transparent bg-clip-padding px-2 py-0 text-xs font-medium shadow-none focus:ring-0 data-[size=sm]:h-7 [&>svg]:hidden"
                           >
                             <SelectValue />
                           </SelectTrigger>
@@ -1035,7 +1093,7 @@ export function SidebarChat({
                           >
                             <PlusIcon className="size-4" />
                             {selectedDocumentIds.size > 0 && (
-                              <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+                              <span className="bg-primary text-primary-foreground absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full text-[10px] font-medium">
                                 {selectedDocumentIds.size}
                               </span>
                             )}
@@ -1077,7 +1135,7 @@ export function SidebarChat({
 
                                 return sortedDirs.map((dir) => (
                                   <div key={dir}>
-                                    <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                                    <div className="px-2 py-1 text-[10px] font-semibold tracking-wider text-neutral-400 uppercase dark:text-neutral-500">
                                       {dir === "user" ? "Your Documents" : dir}
                                     </div>
                                     {groups[dir].map((doc) => (
@@ -1091,7 +1149,7 @@ export function SidebarChat({
                                             onClick={() =>
                                               toggleDocument(doc.id)
                                             }
-                                            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
+                                            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
                                               selectedDocumentIds.has(doc.id)
                                                 ? "bg-neutral-50 dark:bg-neutral-900"
                                                 : ""

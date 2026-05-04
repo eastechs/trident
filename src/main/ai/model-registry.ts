@@ -1,9 +1,9 @@
-import { getApiKey } from '../settings.js';
+import { getApiKey } from "../settings.js";
 
 export interface ModelInfo {
   id: string;
-  provider: 'Anthropic' | 'OpenAI' | 'Gemini';
-  providerSlug: 'anthropic' | 'openai' | 'google';
+  provider: "Anthropic" | "OpenAI" | "Gemini";
+  providerSlug: "anthropic" | "openai" | "google";
   name: string;
   // True when the model exposes a reasoning/thinking knob the chat surfaces
   // as the effort selector. Hidden in the UI and skipped server-side when
@@ -11,7 +11,7 @@ export interface ModelInfo {
   supportsReasoning: boolean;
 }
 
-type ProviderKey = 'anthropic' | 'openai' | 'gemini';
+type ProviderKey = "anthropic" | "openai" | "gemini";
 
 // Family-based capability check. Patterns:
 //   - OpenAI: o-series (o1/o3/o4...) and the GPT-5 line all support
@@ -22,16 +22,18 @@ type ProviderKey = 'anthropic' | 'openai' | 'gemini';
 //   - Gemini: thinking is on 2.5+ (and any 3+ family). Earlier 1.x / 2.0 don't.
 export function supportsReasoning(
   modelId: string,
-  providerSlug: 'anthropic' | 'openai' | 'google',
+  providerSlug: "anthropic" | "openai" | "google",
 ): boolean {
-  if (providerSlug === 'openai') {
+  if (providerSlug === "openai") {
     return /^o\d/.test(modelId) || /^gpt-5/.test(modelId);
   }
-  if (providerSlug === 'anthropic') {
-    return /^claude-(opus|sonnet|haiku)-/.test(modelId)
-      || /^claude-3-7/.test(modelId);
+  if (providerSlug === "anthropic") {
+    return (
+      /^claude-(opus|sonnet|haiku)-/.test(modelId) ||
+      /^claude-3-7/.test(modelId)
+    );
   }
-  if (providerSlug === 'google') {
+  if (providerSlug === "google") {
     return /^gemini-(2[-.]5|[3-9])/.test(modelId);
   }
   return false;
@@ -45,7 +47,7 @@ const cache = new Map<ProviderKey, { at: number; models: ModelInfo[] }>();
 // Intermediate row used by FALLBACK and the per-provider fetchers; the
 // reasoning capability is stamped in one place after fetch so we don't
 // have to repeat the predicate at every construction site.
-type ModelDescriptor = Omit<ModelInfo, 'supportsReasoning'>;
+type ModelDescriptor = Omit<ModelInfo, "supportsReasoning">;
 
 function stampCapabilities(models: ModelDescriptor[]): ModelInfo[] {
   return models.map((m) => ({
@@ -60,23 +62,63 @@ function stampCapabilities(models: ModelDescriptor[]): ModelInfo[] {
  */
 const FALLBACK: Record<ProviderKey, ModelDescriptor[]> = {
   anthropic: [
-    { id: 'claude-opus-4-7', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Opus 4.7' },
-    { id: 'claude-sonnet-4-6', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Sonnet 4.6' },
-    { id: 'claude-haiku-4-5', provider: 'Anthropic', providerSlug: 'anthropic', name: 'Haiku 4.5' },
+    {
+      id: "claude-opus-4-7",
+      provider: "Anthropic",
+      providerSlug: "anthropic",
+      name: "Opus 4.7",
+    },
+    {
+      id: "claude-sonnet-4-6",
+      provider: "Anthropic",
+      providerSlug: "anthropic",
+      name: "Sonnet 4.6",
+    },
+    {
+      id: "claude-haiku-4-5",
+      provider: "Anthropic",
+      providerSlug: "anthropic",
+      name: "Haiku 4.5",
+    },
   ],
   openai: [
-    { id: 'gpt-5.5', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5.5' },
-    { id: 'gpt-5-mini', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5 Mini' },
-    { id: 'gpt-5-nano', provider: 'OpenAI', providerSlug: 'openai', name: 'GPT-5 Nano' },
+    {
+      id: "gpt-5.5",
+      provider: "OpenAI",
+      providerSlug: "openai",
+      name: "GPT-5.5",
+    },
+    {
+      id: "gpt-5-mini",
+      provider: "OpenAI",
+      providerSlug: "openai",
+      name: "GPT-5 Mini",
+    },
+    {
+      id: "gpt-5-nano",
+      provider: "OpenAI",
+      providerSlug: "openai",
+      name: "GPT-5 Nano",
+    },
   ],
   gemini: [
-    { id: 'gemini-3.1-pro-preview', provider: 'Gemini', providerSlug: 'google', name: 'Gemini 3.1 Pro Preview' },
-    { id: 'gemini-3-flash-preview', provider: 'Gemini', providerSlug: 'google', name: 'Gemini 3 Flash Preview' },
+    {
+      id: "gemini-3.1-pro-preview",
+      provider: "Gemini",
+      providerSlug: "google",
+      name: "Gemini 3.1 Pro Preview",
+    },
+    {
+      id: "gemini-3-flash-preview",
+      provider: "Gemini",
+      providerSlug: "google",
+      name: "Gemini 3 Flash Preview",
+    },
   ],
 };
 
 export async function fetchAvailableModels(): Promise<ModelInfo[]> {
-  const providers: ProviderKey[] = ['anthropic', 'openai', 'gemini'];
+  const providers: ProviderKey[] = ["anthropic", "openai", "gemini"];
   const configured = providers.filter((p) => !!getApiKey(p));
 
   const results = await Promise.all(
@@ -86,8 +128,12 @@ export async function fetchAvailableModels(): Promise<ModelInfo[]> {
         return cached.models;
       }
 
-      const models = await fetchForProvider(provider);
-      cache.set(provider, { at: Date.now(), models });
+      const { models, isFallback } = await fetchForProvider(provider);
+      // Don't cache fallback results — otherwise a brief provider outage
+      // masks recovery for the full TTL after the next successful fetch.
+      if (!isFallback) {
+        cache.set(provider, { at: Date.now(), models });
+      }
       return models;
     }),
   );
@@ -113,25 +159,42 @@ export function displayNameFor(modelId: string): string {
     const m = cached.models.find((x) => x.id === modelId);
     if (m) return m.name;
   }
-  if (modelId.startsWith('claude-')) return deriveAnthropicName(modelId);
-  if (modelId.startsWith('gemini-')) return deriveGeminiName(modelId);
+  if (modelId.startsWith("claude-")) return deriveAnthropicName(modelId);
+  if (modelId.startsWith("gemini-")) return deriveGeminiName(modelId);
   if (/^(gpt-|o\d)/.test(modelId)) return deriveOpenAIName(modelId);
   return modelId;
 }
 
-async function fetchForProvider(provider: ProviderKey): Promise<ModelInfo[]> {
+async function fetchForProvider(
+  provider: ProviderKey,
+): Promise<{ models: ModelInfo[]; isFallback: boolean }> {
   const key = getApiKey(provider);
-  if (!key) return [];
+  if (!key) return { models: [], isFallback: false };
 
   try {
     switch (provider) {
-      case 'anthropic': return stampCapabilities(await fetchAnthropic(key));
-      case 'openai': return stampCapabilities(await fetchOpenAI(key));
-      case 'gemini': return stampCapabilities(await fetchGemini(key));
+      case "anthropic":
+        return {
+          models: stampCapabilities(await fetchAnthropic(key)),
+          isFallback: false,
+        };
+      case "openai":
+        return {
+          models: stampCapabilities(await fetchOpenAI(key)),
+          isFallback: false,
+        };
+      case "gemini":
+        return {
+          models: stampCapabilities(await fetchGemini(key)),
+          isFallback: false,
+        };
     }
   } catch (err) {
-    console.warn(`[model-registry] ${provider} fetch failed, using fallback:`, err);
-    return stampCapabilities(FALLBACK[provider]);
+    console.warn(
+      `[model-registry] ${provider} fetch failed, using fallback:`,
+      err,
+    );
+    return { models: stampCapabilities(FALLBACK[provider]), isFallback: true };
   }
 }
 
@@ -144,31 +207,38 @@ interface AnthropicModel {
 }
 
 async function fetchAnthropic(key: string): Promise<ModelDescriptor[]> {
-  const data = await getJson<{ data: AnthropicModel[] }>('https://api.anthropic.com/v1/models?limit=1000', {
-    headers: {
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
+  const data = await getJson<{ data: AnthropicModel[] }>(
+    "https://api.anthropic.com/v1/models?limit=1000",
+    {
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+      },
     },
-  });
+  );
 
   return data.data
-    .filter((m) => m.type === 'model' && m.id.startsWith('claude-'))
+    .filter((m) => m.type === "model" && m.id.startsWith("claude-"))
     .map((m) => ({
       id: m.id,
-      provider: 'Anthropic' as const,
-      providerSlug: 'anthropic' as const,
-      name: m.display_name?.replace(/^Claude\s+/i, '') ?? deriveAnthropicName(m.id),
+      provider: "Anthropic" as const,
+      providerSlug: "anthropic" as const,
+      name:
+        m.display_name?.replace(/^Claude\s+/i, "") ?? deriveAnthropicName(m.id),
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
 function deriveAnthropicName(id: string): string {
-  const family = id.includes('opus') ? 'Opus'
-    : id.includes('sonnet') ? 'Sonnet'
-    : id.includes('haiku') ? 'Haiku'
-    : 'Claude';
+  const family = id.includes("opus")
+    ? "Opus"
+    : id.includes("sonnet")
+      ? "Sonnet"
+      : id.includes("haiku")
+        ? "Haiku"
+        : "Claude";
   const versionMatch = id.match(/(\d+[-.]?\d*)/);
-  const version = versionMatch ? versionMatch[1].replace(/-/g, '.') : '';
+  const version = versionMatch ? versionMatch[1].replace(/-/g, ".") : "";
   return version ? `${family} ${version}` : family;
 }
 
@@ -180,16 +250,19 @@ interface OpenAIModel {
 }
 
 async function fetchOpenAI(key: string): Promise<ModelDescriptor[]> {
-  const data = await getJson<{ data: OpenAIModel[] }>('https://api.openai.com/v1/models', {
-    headers: { Authorization: `Bearer ${key}` },
-  });
+  const data = await getJson<{ data: OpenAIModel[] }>(
+    "https://api.openai.com/v1/models",
+    {
+      headers: { Authorization: `Bearer ${key}` },
+    },
+  );
 
   return data.data
     .filter((m) => isOpenAIChatModel(m.id))
     .map((m) => ({
       id: m.id,
-      provider: 'OpenAI' as const,
-      providerSlug: 'openai' as const,
+      provider: "OpenAI" as const,
+      providerSlug: "openai" as const,
       name: deriveOpenAIName(m.id),
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
@@ -204,27 +277,41 @@ function isOpenAIChatModel(id: string): boolean {
   if (/-\d{8}$/.test(id)) return false;
 
   // Exclude non-chat variants
-  const blocklist = ['instruct', 'audio', 'realtime', 'transcribe', 'tts', 'whisper', 'search', 'embedding', 'moderation', 'image'];
+  const blocklist = [
+    "instruct",
+    "audio",
+    "realtime",
+    "transcribe",
+    "tts",
+    "whisper",
+    "search",
+    "embedding",
+    "moderation",
+    "image",
+  ];
   if (blocklist.some((word) => id.includes(word))) return false;
 
   return true;
 }
 
 function deriveOpenAIName(id: string): string {
-  if (id.startsWith('gpt-')) {
+  if (id.startsWith("gpt-")) {
     // "gpt-5-mini" → "GPT-5 Mini"
     const rest = id.slice(4);
-    return 'GPT-' + rest
-      .split('-')
-      .map((seg, i) => (i === 0 ? seg : capitalize(seg)))
-      .join(' ');
+    return (
+      "GPT-" +
+      rest
+        .split("-")
+        .map((seg, i) => (i === 0 ? seg : capitalize(seg)))
+        .join(" ")
+    );
   }
   if (/^o\d/.test(id)) {
     // "o3-mini" → "o3 Mini"
     return id
-      .split('-')
+      .split("-")
       .map((seg, i) => (i === 0 ? seg : capitalize(seg)))
-      .join(' ');
+      .join(" ");
   }
   return id;
 }
@@ -242,48 +329,55 @@ function isGeminiChatModel(id: string): boolean {
   // gemini-3-flash-image-preview) and the marketing alias `nano-banana[*]`
   // (Google's image model codename) — share the generateContent method but
   // can't be used as conversational agents.
-  if (id.includes('image')) return false;
-  if (id.includes('nano-banana')) return false;
+  if (id.includes("image")) return false;
+  if (id.includes("nano-banana")) return false;
   // Vision/embedding/tts/aqa variants shouldn't appear in the chat picker.
-  const blocklist = ['vision', 'embedding', 'tts', 'aqa'];
+  const blocklist = ["vision", "embedding", "tts", "aqa"];
   if (blocklist.some((word) => id.includes(word))) return false;
   return true;
 }
 
 async function fetchGemini(key: string): Promise<ModelDescriptor[]> {
-  const url = new URL('https://generativelanguage.googleapis.com/v1beta/models');
-  url.searchParams.set('key', key);
-  url.searchParams.set('pageSize', '1000');
+  const url = new URL(
+    "https://generativelanguage.googleapis.com/v1beta/models",
+  );
+  url.searchParams.set("key", key);
+  url.searchParams.set("pageSize", "1000");
 
   const data = await getJson<{ models: GeminiModel[] }>(url.toString());
 
-  return data.models
-    .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
-    .filter((m) => m.name.includes('gemini'))
-    // Image / vision-only models share the generateContent method but aren't
-    // chat agents — gemini-*-image-*, the "nano-banana" image-gen aliases,
-    // gemini-*-vision, etc. Exclude them so they don't pollute the picker.
-    .filter((m) => isGeminiChatModel(m.name.replace(/^models\//, '')))
-    .map((m) => {
-      const id = m.name.replace(/^models\//, '');
-      return {
-        id,
-        provider: 'Gemini' as const,
-        providerSlug: 'google' as const,
-        name: m.displayName ?? deriveGeminiName(id),
-      };
-    })
-    .sort((a, b) => a.id.localeCompare(b.id));
+  return (
+    data.models
+      .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
+      .filter((m) => m.name.includes("gemini"))
+      // Image / vision-only models share the generateContent method but aren't
+      // chat agents — gemini-*-image-*, the "nano-banana" image-gen aliases,
+      // gemini-*-vision, etc. Exclude them so they don't pollute the picker.
+      .filter((m) => isGeminiChatModel(m.name.replace(/^models\//, "")))
+      .map((m) => {
+        const id = m.name.replace(/^models\//, "");
+        return {
+          id,
+          provider: "Gemini" as const,
+          providerSlug: "google" as const,
+          name: m.displayName ?? deriveGeminiName(id),
+        };
+      })
+      .sort((a, b) => a.id.localeCompare(b.id))
+  );
 }
 
 function deriveGeminiName(id: string): string {
   // "gemini-3.1-pro-preview" → "Gemini 3.1 Pro Preview"
-  if (!id.startsWith('gemini-')) return id;
+  if (!id.startsWith("gemini-")) return id;
   const rest = id.slice(7);
-  return 'Gemini ' + rest
-    .split('-')
-    .map((seg, i) => (i === 0 ? seg : capitalize(seg)))
-    .join(' ');
+  return (
+    "Gemini " +
+    rest
+      .split("-")
+      .map((seg, i) => (i === 0 ? seg : capitalize(seg)))
+      .join(" ")
+  );
 }
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -298,7 +392,7 @@ async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
   try {
     const res = await fetch(url, { ...init, signal: controller.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-    return await res.json() as T;
+    return (await res.json()) as T;
   } finally {
     clearTimeout(timeout);
   }

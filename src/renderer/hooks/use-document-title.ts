@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect } from "react";
 
-const APP_NAME = 'Trident';
+const APP_NAME = "Trident";
 
 export function useDocumentTitle(title?: string) {
   useEffect(() => {

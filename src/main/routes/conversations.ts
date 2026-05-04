@@ -1,13 +1,16 @@
-import { Router, type Request } from 'express';
-import { eq, and, desc, inArray, sql } from 'drizzle-orm';
-import { getDb } from '../database.js';
-import { conversations, messages } from '../db/schema.js';
-import { isEffortLevel, EFFORT_LEVELS } from '../ai/providers.js';
+import { Router, type Request } from "express";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { getDb } from "../database.js";
+import { conversations, messages } from "../db/schema.js";
+import { isEffortLevel, EFFORT_LEVELS } from "../ai/providers.js";
 
 const router = Router({ mergeParams: true });
 
 type ProjectRequest = Request<{ projectId: string }>;
-type ConversationRequest = Request<{ projectId: string; conversationId: string }>;
+type ConversationRequest = Request<{
+  projectId: string;
+  conversationId: string;
+}>;
 
 type ConversationRow = typeof conversations.$inferSelect;
 
@@ -30,7 +33,7 @@ function serializeConversation(
 
 // ─── Index ─────────────────────────────────────────────────
 
-router.get('/', async (req: ProjectRequest, res) => {
+router.get("/", async (req: ProjectRequest, res) => {
   const db = getDb();
   const projectConversations = await db
     .select()
@@ -50,35 +53,45 @@ router.get('/', async (req: ProjectRequest, res) => {
       count: sql<number>`count(*)::int`,
     })
     .from(messages)
-    .where(inArray(messages.conversationId, projectConversations.map((c) => c.id)))
+    .where(
+      inArray(
+        messages.conversationId,
+        projectConversations.map((c) => c.id),
+      ),
+    )
     .groupBy(messages.conversationId);
 
   const countByConv = new Map(counts.map((c) => [c.conversationId, c.count]));
 
-  res.json(projectConversations.map((conv) =>
-    serializeConversation(conv, countByConv.get(conv.id) ?? 0),
-  ));
+  res.json(
+    projectConversations.map((conv) =>
+      serializeConversation(conv, countByConv.get(conv.id) ?? 0),
+    ),
+  );
 });
 
 // ─── Store ─────────────────────────────────────────────────
 
-router.post('/', async (req: ProjectRequest, res) => {
+router.post("/", async (req: ProjectRequest, res) => {
   const db = getDb();
   const { title, side, model } = req.body;
 
-  const [conversation] = await db.insert(conversations).values({
-    projectId: req.params.projectId,
-    title: title ?? 'New Chat',
-    side: side ?? null,
-    model: model ?? null,
-  }).returning();
+  const [conversation] = await db
+    .insert(conversations)
+    .values({
+      projectId: req.params.projectId,
+      title: title ?? "New Chat",
+      side: side ?? null,
+      model: model ?? null,
+    })
+    .returning();
 
   res.json(serializeConversation(conversation, 0));
 });
 
 // ─── Update ────────────────────────────────────────────────
 
-router.patch('/:conversationId', async (req: ConversationRequest, res) => {
+router.patch("/:conversationId", async (req: ConversationRequest, res) => {
   const db = getDb();
   const { title, side, model, effort } = req.body;
 
@@ -88,7 +101,9 @@ router.patch('/:conversationId', async (req: ConversationRequest, res) => {
   if (model !== undefined) updates.model = model;
   if (effort !== undefined) {
     if (!isEffortLevel(effort)) {
-      res.status(422).json({ error: `effort must be one of: ${EFFORT_LEVELS.join(', ')}` });
+      res
+        .status(422)
+        .json({ error: `effort must be one of: ${EFFORT_LEVELS.join(", ")}` });
       return;
     }
     updates.effort = effort;
@@ -97,13 +112,18 @@ router.patch('/:conversationId', async (req: ConversationRequest, res) => {
   const [updated] = await db
     .update(conversations)
     .set(updates)
-    .where(and(
-      eq(conversations.id, req.params.conversationId),
-      eq(conversations.projectId, req.params.projectId),
-    ))
+    .where(
+      and(
+        eq(conversations.id, req.params.conversationId),
+        eq(conversations.projectId, req.params.projectId),
+      ),
+    )
     .returning();
 
-  if (!updated) { res.status(404).json({ error: 'Not found' }); return; }
+  if (!updated) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   const [count] = await db
     .select({ count: sql<number>`count(*)` })
@@ -115,13 +135,17 @@ router.patch('/:conversationId', async (req: ConversationRequest, res) => {
 
 // ─── Destroy ───────────────────────────────────────────────
 
-router.delete('/:conversationId', async (req: ConversationRequest, res) => {
+router.delete("/:conversationId", async (req: ConversationRequest, res) => {
   const db = getDb();
   // Cascade delete handles messages
-  await db.delete(conversations).where(and(
-    eq(conversations.id, req.params.conversationId),
-    eq(conversations.projectId, req.params.projectId),
-  ));
+  await db
+    .delete(conversations)
+    .where(
+      and(
+        eq(conversations.id, req.params.conversationId),
+        eq(conversations.projectId, req.params.projectId),
+      ),
+    );
 
   res.json({ success: true });
 });

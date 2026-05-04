@@ -1,13 +1,27 @@
-import { Router, type Request } from 'express';
-import { streamText, generateText, convertToModelMessages, stepCountIs, generateId, type UIMessage, type ToolSet } from 'ai';
-import { eq, asc, sql, inArray, and } from 'drizzle-orm';
-import { getDb } from '../database.js';
-import { conversations, messages, documents, projects } from '../db/schema.js';
-import { resolveModel, getProviderOptions, modelLabel, isEffortLevel, DEFAULT_EFFORT } from '../ai/providers.js';
-import { loadInstructions } from '../ai/instructions.js';
-import { createTools } from '../ai/tools/index.js';
-import { showNotification } from '../native/notifications.js';
-import { getApiKey } from '../settings.js';
+import { Router, type Request } from "express";
+import {
+  streamText,
+  generateText,
+  convertToModelMessages,
+  stepCountIs,
+  generateId,
+  type UIMessage,
+  type ToolSet,
+} from "ai";
+import { eq, asc, sql, inArray, and } from "drizzle-orm";
+import { getDb } from "../database.js";
+import { conversations, messages, documents, projects } from "../db/schema.js";
+import {
+  resolveModel,
+  getProviderOptions,
+  modelLabel,
+  isEffortLevel,
+  DEFAULT_EFFORT,
+} from "../ai/providers.js";
+import { loadInstructions } from "../ai/instructions.js";
+import { createTools } from "../ai/tools/index.js";
+import { showNotification } from "../native/notifications.js";
+import { getApiKey } from "../settings.js";
 
 const router = Router({ mergeParams: true });
 
@@ -15,25 +29,52 @@ type ProjectRequest = Request<{ projectId: string }>;
 
 // ─── Send message (streaming) ──────────────────────────────
 
-router.post('/', async (req: ProjectRequest, res) => {
+router.post("/", async (req: ProjectRequest, res) => {
   const db = getDb();
   const { projectId } = req.params;
-  const { messages: requestMessages, model_id, conversation_id, side, document_ids } = req.body;
+  const {
+    messages: requestMessages,
+    model_id,
+    conversation_id,
+    side,
+    document_ids,
+  } = req.body;
 
   if (!model_id || !conversation_id) {
-    res.status(422).json({ error: 'model_id and conversation_id are required' });
+    res
+      .status(422)
+      .json({ error: "model_id and conversation_id are required" });
     return;
   }
 
   // Load project + conversation (we need conversation.effort).
-  const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
-  if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.id, projectId));
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
 
-  const [conversation] = await db.select().from(conversations).where(eq(conversations.id, conversation_id));
-  if (!conversation) { res.status(404).json({ error: 'Conversation not found' }); return; }
+  const [conversation] = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.id, conversation_id),
+        eq(conversations.projectId, projectId),
+      ),
+    );
+  if (!conversation) {
+    res.status(404).json({ error: "Conversation not found" });
+    return;
+  }
   // Validate at read time — column is plain text with no DB-level CHECK,
   // and downstream provider mappers rely on the value being a known level.
-  const effort = isEffortLevel(conversation.effort) ? conversation.effort : DEFAULT_EFFORT;
+  const effort = isEffortLevel(conversation.effort)
+    ? conversation.effort
+    : DEFAULT_EFFORT;
 
   // Honor the conversation's saved model when it's been pinned. The renderer
   // disables the selector after the first message, so any divergence between
@@ -46,10 +87,12 @@ router.post('/', async (req: ProjectRequest, res) => {
 
   // The client (useChat) sends the full UIMessage[] including the new user message.
   // Use that directly; the DB history would miss the new message.
-  const history: UIMessage[] = Array.isArray(requestMessages) ? requestMessages : [];
+  const history: UIMessage[] = Array.isArray(requestMessages)
+    ? requestMessages
+    : [];
 
   if (history.length === 0) {
-    res.status(422).json({ error: 'messages must not be empty' });
+    res.status(422).json({ error: "messages must not be empty" });
     return;
   }
 
@@ -60,36 +103,51 @@ router.post('/', async (req: ProjectRequest, res) => {
   // media-type juggling.
   if (document_ids?.length) {
     const attachedDocs = await db
-      .select({ id: documents.id, name: documents.name, content: documents.content })
+      .select({
+        id: documents.id,
+        name: documents.name,
+        content: documents.content,
+      })
       .from(documents)
-      .where(and(eq(documents.projectId, projectId), inArray(documents.id, document_ids)));
+      .where(
+        and(
+          eq(documents.projectId, projectId),
+          inArray(documents.id, document_ids),
+        ),
+      );
 
     if (attachedDocs.length > 0) {
       let lastUserIndex = -1;
       for (let i = history.length - 1; i >= 0; i--) {
-        if (history[i].role === 'user') { lastUserIndex = i; break; }
+        if (history[i].role === "user") {
+          lastUserIndex = i;
+          break;
+        }
       }
       if (lastUserIndex >= 0) {
         const lastUser = history[lastUserIndex];
         const docParts = attachedDocs.map((d) => {
           // Escape XML-special characters in attributes so a doc titled
           // e.g. `Bob's "Notes" <draft>` doesn't break the delimiter.
-          const safeName = (d.name ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+          const safeName = (d.name ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
           // Disarm any literal closing tag inside the content so it doesn't
           // visually terminate the block early to the model. We zero-width-
           // space the `</` so the model still sees the text but the pattern
           // doesn't match the delimiter.
-          const safeContent = (d.content ?? '').replace(/<\/attached_document>/g, '<​/attached_document>');
+          const safeContent = (d.content ?? "").replace(
+            /<\/attached_document>/g,
+            "<​/attached_document>",
+          );
           // Include the doc id so the agent can call EditDocument directly.
           // Without this it would have to call SearchDocuments first, which
           // is scoped to the calling agent's own directory and won't find
           // docs created by a different model.
           return {
-            type: 'text' as const,
+            type: "text" as const,
             text: `<attached_document id="${d.id}" name="${safeName}">\n${safeContent}\n</attached_document>`,
           };
         });
@@ -103,26 +161,33 @@ router.post('/', async (req: ProjectRequest, res) => {
 
   // Resolve model and create tools
   const model = resolveModel(effectiveModelId);
-  const baseTools = createTools(projectId, project.path, effectiveModelId, project.filesystemRoot);
+  const baseTools = createTools(
+    projectId,
+    project.path,
+    effectiveModelId,
+    project.filesystemRoot,
+  );
 
   // Add a provider-native web search tool so the agent can look up current info.
-  const provider = effectiveModelId.startsWith('claude-')
-    ? 'anthropic'
-    : effectiveModelId.startsWith('gemini-')
-      ? 'gemini'
-      : 'openai';
+  const provider = effectiveModelId.startsWith("claude-")
+    ? "anthropic"
+    : effectiveModelId.startsWith("gemini-")
+      ? "gemini"
+      : "openai";
 
   let WebSearch: ToolSet[string] | undefined = undefined;
-  if (provider === 'anthropic') {
-    const anthropicKey = getApiKey('anthropic');
+  if (provider === "anthropic") {
+    const anthropicKey = getApiKey("anthropic");
     if (anthropicKey) {
-      const { createAnthropic } = await import('@ai-sdk/anthropic');
-      WebSearch = createAnthropic({ apiKey: anthropicKey }).tools.webSearch_20260209({ maxUses: 5 });
+      const { createAnthropic } = await import("@ai-sdk/anthropic");
+      WebSearch = createAnthropic({
+        apiKey: anthropicKey,
+      }).tools.webSearch_20260209({ maxUses: 5 });
     }
-  } else if (provider === 'openai') {
-    const openaiKey = getApiKey('openai');
+  } else if (provider === "openai") {
+    const openaiKey = getApiKey("openai");
     if (openaiKey) {
-      const { createOpenAI } = await import('@ai-sdk/openai');
+      const { createOpenAI } = await import("@ai-sdk/openai");
       WebSearch = createOpenAI({ apiKey: openaiKey }).tools.webSearch();
     }
   }
@@ -143,11 +208,14 @@ router.post('/', async (req: ProjectRequest, res) => {
   // a cache hit on every subsequent turn within the 1h TTL window. Cache
   // markers on non-Anthropic providers are silently ignored.
   const tools: ToolSet = (() => {
-    if (provider !== 'anthropic') return allTools;
+    if (provider !== "anthropic") return allTools;
     const entries = Object.entries(allTools);
     if (entries.length === 0) return allTools;
     const [lastKey, lastTool] = entries[entries.length - 1];
-    const existingAnthropic = (lastTool.providerOptions?.anthropic as Record<string, unknown> | undefined) ?? {};
+    const existingAnthropic =
+      (lastTool.providerOptions?.anthropic as
+        | Record<string, unknown>
+        | undefined) ?? {};
     return {
       ...allTools,
       [lastKey]: {
@@ -156,7 +224,7 @@ router.post('/', async (req: ProjectRequest, res) => {
           ...lastTool.providerOptions,
           anthropic: {
             ...existingAnthropic,
-            cacheControl: { type: 'ephemeral', ttl: '1h' },
+            cacheControl: { type: "ephemeral", ttl: "1h" },
           },
         },
       },
@@ -169,7 +237,7 @@ router.post('/', async (req: ProjectRequest, res) => {
   // this the provider keeps generating tokens we'd just discard, racking
   // up cost.
   const abortController = new AbortController();
-  req.on('close', () => {
+  req.on("close", () => {
     if (!res.writableEnded) abortController.abort();
   });
 
@@ -182,27 +250,30 @@ router.post('/', async (req: ProjectRequest, res) => {
     // needs an older turn's content.
     const lastUserIdx = (() => {
       for (let i = history.length - 1; i >= 0; i--) {
-        if (history[i].role === 'user') return i;
+        if (history[i].role === "user") return i;
       }
       return -1;
     })();
-    const ATTACHED_DOC_TAG_RE = /<attached_document\b([^>]*)>[\s\S]*?<\/attached_document>/g;
+    const ATTACHED_DOC_TAG_RE =
+      /<attached_document\b([^>]*)>[\s\S]*?<\/attached_document>/g;
     const redactedHistory = history.map((msg, i) => {
       if (i === lastUserIdx) return msg;
       return {
         ...msg,
         parts: msg.parts.map((part) => {
-          if (part.type !== 'text') return part;
+          if (part.type !== "text") return part;
           const replaced = part.text.replace(
             ATTACHED_DOC_TAG_RE,
-            '<attached_document$1>[content omitted from earlier turn — call ReadDocument with the id above if you need it]</attached_document>',
+            "<attached_document$1>[content omitted from earlier turn — call ReadDocument with the id above if you need it]</attached_document>",
           );
           return replaced === part.text ? part : { ...part, text: replaced };
         }),
       };
     });
 
-    const convertedMessages = await convertToModelMessages(redactedHistory, { tools });
+    const convertedMessages = await convertToModelMessages(redactedHistory, {
+      tools,
+    });
 
     // Pass the system prompt as a message rather than the top-level `system`
     // string so we can attach providerOptions to it. For Anthropic this marks
@@ -210,11 +281,13 @@ router.post('/', async (req: ProjectRequest, res) => {
     // 1h TTL is the max Anthropic offers and survives short user breaks.
     const modelMessages = [
       {
-        role: 'system' as const,
+        role: "system" as const,
         content: systemPrompt,
-        ...(provider === 'anthropic' && {
+        ...(provider === "anthropic" && {
           providerOptions: {
-            anthropic: { cacheControl: { type: 'ephemeral' as const, ttl: '1h' as const } },
+            anthropic: {
+              cacheControl: { type: "ephemeral" as const, ttl: "1h" as const },
+            },
           },
         }),
       },
@@ -226,7 +299,10 @@ router.post('/', async (req: ProjectRequest, res) => {
       messages: modelMessages,
       tools,
       stopWhen: stepCountIs(25),
-      providerOptions: getProviderOptions(effectiveModelId, { projectId, effort }),
+      providerOptions: getProviderOptions(effectiveModelId, {
+        projectId,
+        effort,
+      }),
       abortSignal: abortController.signal,
     });
 
@@ -251,15 +327,15 @@ router.post('/', async (req: ProjectRequest, res) => {
       // finish-step. Accumulate it across steps so the widget shows accurate
       // cache-write counts for Claude conversations too.
       messageMetadata: ({ part }) => {
-        if (part.type === 'finish-step') {
+        if (part.type === "finish-step") {
           const anthropicMeta = part.providerMetadata?.anthropic as
             | { cacheCreationInputTokens?: number }
             | undefined;
           const writes = anthropicMeta?.cacheCreationInputTokens;
-          if (typeof writes === 'number') anthropicCacheWrites += writes;
+          if (typeof writes === "number") anthropicCacheWrites += writes;
           return undefined;
         }
-        if (part.type === 'finish') {
+        if (part.type === "finish") {
           const u = part.totalUsage;
           return {
             model: effectiveModelId,
@@ -267,15 +343,20 @@ router.post('/', async (req: ProjectRequest, res) => {
               prompt_tokens: u.inputTokens,
               completion_tokens: u.outputTokens,
               cache_read_input_tokens: u.inputTokenDetails?.cacheReadTokens,
-              cache_write_input_tokens: u.inputTokenDetails?.cacheWriteTokens
-                ?? (anthropicCacheWrites > 0 ? anthropicCacheWrites : undefined),
+              cache_write_input_tokens:
+                u.inputTokenDetails?.cacheWriteTokens ??
+                (anthropicCacheWrites > 0 ? anthropicCacheWrites : undefined),
               reasoning_tokens: u.outputTokenDetails?.reasoningTokens,
             },
           };
         }
         return undefined;
       },
-      onFinish: async ({ messages: allMessages, responseMessage, isAborted }) => {
+      onFinish: async ({
+        messages: allMessages,
+        responseMessage,
+        isAborted,
+      }) => {
         try {
           const [maxOrder] = await db
             .select({ max: sql<number>`COALESCE(MAX(order_index), -1)` })
@@ -298,7 +379,9 @@ router.post('/', async (req: ProjectRequest, res) => {
                 parts: msg.parts as unknown as Record<string, unknown>,
                 // Assistant messages have usage attached via messageMetadata.
                 // User messages don't, so fall back to recording the model.
-                metadata: (msg.metadata as Record<string, unknown> | undefined) ?? { model: effectiveModelId },
+                metadata: (msg.metadata as
+                  | Record<string, unknown>
+                  | undefined) ?? { model: effectiveModelId },
                 orderIndex: nextIndex++,
               });
             } else if (msg.id === responseMessage.id) {
@@ -308,10 +391,12 @@ router.post('/', async (req: ProjectRequest, res) => {
                 .update(messages)
                 .set({
                   parts: msg.parts as unknown as Record<string, unknown>,
-                  metadata: (msg.metadata as Record<string, unknown> | undefined) ?? { model: effectiveModelId },
+                  metadata: (msg.metadata as
+                    | Record<string, unknown>
+                    | undefined) ?? { model: effectiveModelId },
                 })
                 .where(eq(messages.id, msg.id));
-            } else if (msg.role === 'assistant') {
+            } else if (msg.role === "assistant") {
               // Existing prior assistant message — its parts may have changed
               // client-side since we last saved (e.g. a client-side tool call
               // got fulfilled via addToolOutput between turns). Re-write parts
@@ -329,51 +414,98 @@ router.post('/', async (req: ProjectRequest, res) => {
           }
 
           // Update conversation title on first message
-          const [conv] = await db.select().from(conversations).where(eq(conversations.id, conversation_id));
-          if (conv?.title === 'New Chat') {
-            const firstUserMsg = allMessages.find((m) => m.role === 'user');
+          const [conv] = await db
+            .select()
+            .from(conversations)
+            .where(
+              and(
+                eq(conversations.id, conversation_id),
+                eq(conversations.projectId, projectId),
+              ),
+            );
+          if (conv?.title === "New Chat") {
+            const firstUserMsg = allMessages.find((m) => m.role === "user");
             const title = await generateConversationTitle(firstUserMsg);
             await db
               .update(conversations)
-              .set({ title, model: effectiveModelId, side: side ?? conv.side, updatedAt: new Date() })
-              .where(eq(conversations.id, conversation_id));
+              .set({
+                title,
+                model: effectiveModelId,
+                side: side ?? conv.side,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(conversations.id, conversation_id),
+                  eq(conversations.projectId, projectId),
+                ),
+              );
           } else {
             await db
               .update(conversations)
               .set({ updatedAt: new Date() })
-              .where(eq(conversations.id, conversation_id));
+              .where(
+                and(
+                  eq(conversations.id, conversation_id),
+                  eq(conversations.projectId, projectId),
+                ),
+              );
           }
 
           // Skip the "response complete" desktop notification when the user
           // clicked stop — the run didn't finish, it was cancelled.
           if (!isAborted) {
-            const assistantText = responseMessage.parts
-              ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-              .map((p) => p.text)
-              .join('\n') ?? '';
-            const preview = assistantText.split('\n').slice(0, 3).join('\n');
-            showNotification(modelLabel(effectiveModelId), preview || 'Agent response complete', {
-              projectId,
-              conversationId: conversation_id,
-            });
+            const assistantText =
+              responseMessage.parts
+                ?.filter(
+                  (p): p is { type: "text"; text: string } => p.type === "text",
+                )
+                .map((p) => p.text)
+                .join("\n") ?? "";
+            const preview = assistantText.split("\n").slice(0, 3).join("\n");
+            showNotification(
+              modelLabel(effectiveModelId),
+              preview || "Agent response complete",
+              {
+                projectId,
+                conversationId: conversation_id,
+              },
+            );
           }
         } catch (err) {
-          console.error('Error persisting messages:', err);
+          console.error("Error persisting messages:", err);
         }
       },
     });
   } catch (err) {
-    console.error('Chat error:', err);
+    console.error("Chat error:", err);
     res.status(500).json({ error: (err as Error).message });
   }
 });
 
 // ─── Get messages for a conversation ───────────────────────
 
-router.get('/messages', async (req, res) => {
+router.get("/messages", async (req: ProjectRequest, res) => {
   const db = getDb();
   const conversationId = req.query.conversation_id as string;
-  if (!conversationId) { res.json([]); return; }
+  if (!conversationId) {
+    res.json([]);
+    return;
+  }
+
+  const [conversation] = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.id, conversationId),
+        eq(conversations.projectId, req.params.projectId),
+      ),
+    );
+  if (!conversation) {
+    res.status(404).json({ error: "Conversation not found" });
+    return;
+  }
 
   const msgs = await db
     .select()
@@ -395,10 +527,9 @@ router.get('/messages', async (req, res) => {
 // ─── Clear messages in all project conversations ─────────
 // Matches Laravel: deletes messages but keeps the conversation records.
 
-router.delete('/', async (req: ProjectRequest, res) => {
+router.delete("/", async (req: ProjectRequest, res) => {
   const db = getDb();
   const { projectId } = req.params;
-  const { projects } = await import('../db/schema.js');
 
   const convIds = await db
     .select({ id: conversations.id })
@@ -420,23 +551,26 @@ router.delete('/', async (req: ProjectRequest, res) => {
 
 // ─── Title generation helper ───────────────────────────────
 
-async function generateConversationTitle(firstUserMessage?: UIMessage): Promise<string> {
-  if (!firstUserMessage) return 'New Chat';
+async function generateConversationTitle(
+  firstUserMessage?: UIMessage,
+): Promise<string> {
+  if (!firstUserMessage) return "New Chat";
 
   const textPart = firstUserMessage.parts?.find(
-    (p): p is { type: 'text'; text: string } => p.type === 'text',
+    (p): p is { type: "text"; text: string } => p.type === "text",
   );
-  const userText = textPart?.text ?? '';
-  if (!userText) return 'New Chat';
+  const userText = textPart?.text ?? "";
+  if (!userText) return "New Chat";
 
   try {
-    const openaiKey = getApiKey('openai');
+    const openaiKey = getApiKey("openai");
     if (openaiKey) {
-      const { createOpenAI } = await import('@ai-sdk/openai');
+      const { createOpenAI } = await import("@ai-sdk/openai");
       const openai = createOpenAI({ apiKey: openaiKey });
       const { text } = await generateText({
-        model: openai('gpt-5-nano'),
-        system: 'Generate a short, descriptive title for a conversation based on the user\'s first message. Max 50 characters. No quotes. Just the title.',
+        model: openai("gpt-5-nano"),
+        system:
+          "Generate a short, descriptive title for a conversation based on the user's first message. Max 50 characters. No quotes. Just the title.",
         prompt: userText,
       });
       const title = text.trim();
@@ -446,7 +580,7 @@ async function generateConversationTitle(firstUserMessage?: UIMessage): Promise<
     // Fall back to truncation
   }
 
-  return userText.length > 50 ? userText.substring(0, 47) + '...' : userText;
+  return userText.length > 50 ? userText.substring(0, 47) + "..." : userText;
 }
 
 export default router;

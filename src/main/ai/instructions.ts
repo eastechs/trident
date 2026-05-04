@@ -1,8 +1,10 @@
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import fs from "fs";
+import os from "os";
+import path from "path";
 
-const INSTRUCTIONS_DIR = path.join(os.homedir(), 'Trident', 'Instructions');
+const INSTRUCTIONS_DIR = path.join(os.homedir(), "Trident", "Instructions");
+
+export const VALID_AGENT_KEYS = new Set(["collaborator"]);
 
 const DEFAULT_INSTRUCTIONS = `You are a collaborative partner working with a user and potentially another AI model on projects, ideas, and shared documents.
 
@@ -63,10 +65,11 @@ When you name a document or image, always use natural, descriptive, human-readab
 
 The user may also explicitly attach documents to their messages for context.`;
 
-export function loadInstructions(agent: string = 'collaborator'): string {
+export function loadInstructions(agent: string = "collaborator"): string {
+  if (!VALID_AGENT_KEYS.has(agent)) return DEFAULT_INSTRUCTIONS;
   const filePath = path.join(INSTRUCTIONS_DIR, `${agent}.md`);
   try {
-    return fs.readFileSync(filePath, 'utf-8');
+    return fs.readFileSync(filePath, "utf-8");
   } catch {
     return DEFAULT_INSTRUCTIONS;
   }

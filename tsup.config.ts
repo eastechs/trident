@@ -1,6 +1,6 @@
-import { defineConfig } from 'tsup';
-import { readdirSync, statSync } from 'fs';
-import { join } from 'path';
+import { defineConfig } from "tsup";
+import { readdirSync, statSync } from "fs";
+import { join } from "path";
 
 // Collect all .ts files in src/main as separate entries (preserves module structure)
 function collectEntries(dir: string, base = dir): Record<string, string> {
@@ -9,8 +9,8 @@ function collectEntries(dir: string, base = dir): Record<string, string> {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) {
       Object.assign(entries, collectEntries(full, base));
-    } else if (name.endsWith('.ts')) {
-      const rel = full.substring(base.length + 1).replace(/\.ts$/, '');
+    } else if (name.endsWith(".ts")) {
+      const rel = full.substring(base.length + 1).replace(/\.ts$/, "");
       entries[rel] = full;
     }
   }
@@ -18,14 +18,14 @@ function collectEntries(dir: string, base = dir): Record<string, string> {
 }
 
 export default defineConfig({
-  entry: collectEntries('src/main'),
-  outDir: 'dist/main',
-  format: ['cjs'],
-  target: 'node20',
-  platform: 'node',
+  entry: collectEntries("src/main"),
+  outDir: "dist/main",
+  format: ["cjs"],
+  target: "node20",
+  platform: "node",
   splitting: false,
   sourcemap: true,
   clean: true,
   bundle: false, // Keep each file as its own module
-  outExtension: () => ({ js: '.js' }), // Output .js so relative imports resolve
+  outExtension: () => ({ js: ".js" }), // Output .js so relative imports resolve
 });

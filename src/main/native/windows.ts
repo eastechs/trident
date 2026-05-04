@@ -1,5 +1,5 @@
-import { BrowserWindow, app } from 'electron';
-import path from 'path';
+import { BrowserWindow, app } from "electron";
+import path from "path";
 
 const isDev = !app.isPackaged;
 const SERVER_PORT = 19274;
@@ -20,7 +20,7 @@ export function getMainWindow(): BrowserWindow | null {
 }
 
 function baseUrl(): string {
-  return isDev ? 'http://localhost:5173' : `http://localhost:${SERVER_PORT}`;
+  return isDev ? "http://localhost:5173" : `http://localhost:${SERVER_PORT}`;
 }
 
 export function openSecondaryWindow(
@@ -38,11 +38,11 @@ export function openSecondaryWindow(
     width: options.width,
     height: options.height,
     title: options.title,
-    titleBarStyle: 'hidden',
+    titleBarStyle: "hidden",
     trafficLightPosition: { x: 12, y: 12 },
     center: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -50,19 +50,19 @@ export function openSecondaryWindow(
 
   win.loadURL(`${baseUrl()}${route}`);
   secondaryWindows.set(key, win);
-  win.on('closed', () => secondaryWindows.delete(key));
+  win.on("closed", () => secondaryWindows.delete(key));
 }
 
 export function openDocumentationWindow(): void {
-  openSecondaryWindow('documentation', '/documentation', {
-    title: 'Trident Documentation',
+  openSecondaryWindow("documentation", "/documentation", {
+    title: "Trident Documentation",
     width: 1000,
     height: 700,
   });
 }
 
 export function openAboutWindow(): void {
-  const key = 'about';
+  const key = "about";
   const existing = secondaryWindows.get(key);
   if (existing && !existing.isDestroyed()) {
     existing.focus();
@@ -72,8 +72,8 @@ export function openAboutWindow(): void {
   const win = new BrowserWindow({
     width: 380,
     height: 420,
-    title: 'About Trident',
-    titleBarStyle: 'hidden',
+    title: "About Trident",
+    titleBarStyle: "hidden",
     trafficLightPosition: { x: 12, y: 12 },
     center: true,
     resizable: false,
@@ -81,14 +81,16 @@ export function openAboutWindow(): void {
     maximizable: false,
     fullscreenable: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
   win.setMenu(null);
-  win.loadURL(`${baseUrl()}/about?version=${encodeURIComponent(app.getVersion())}`);
+  win.loadURL(
+    `${baseUrl()}/about?version=${encodeURIComponent(app.getVersion())}`,
+  );
   secondaryWindows.set(key, win);
-  win.on('closed', () => secondaryWindows.delete(key));
+  win.on("closed", () => secondaryWindows.delete(key));
 }

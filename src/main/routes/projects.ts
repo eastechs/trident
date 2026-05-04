@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -206,11 +206,10 @@ router.post("/", async (req, res) => {
   const db = getDb();
   const { name, description, filesystem_root, initial_prompt } = req.body;
 
-  const dirName = projectDirName(name);
-  const directoryPath = `Trident/Projects/${dirName}`;
-  const fullPath = path.join(os.homedir(), directoryPath);
-
-  fs.mkdirSync(path.join(fullPath, "documents", "user"), { recursive: true });
+  if (typeof name !== "string" || !name.trim()) {
+    res.status(422).json({ errors: { name: ["Name is required"] } });
+    return;
+  }
 
   let resolvedRoot: string | null = null;
   if (filesystem_root) {
@@ -220,9 +219,34 @@ router.post("/", async (req, res) => {
         resolvedRoot = resolved;
       }
     } catch {
-      /* ignore */
+      /* fall through to 422 below */
+    }
+    if (!resolvedRoot) {
+      res.status(422).json({
+        errors: { filesystem_root: ["Directory does not exist"] },
+      });
+      return;
     }
   }
+
+  let dirName = projectDirName(name);
+  let directoryPath = `Trident/Projects/${dirName}`;
+  let counter = 2;
+  while (fs.existsSync(path.join(os.homedir(), directoryPath))) {
+    if (counter > 1000) {
+      res.status(500).json({
+        error:
+          "Too many name collisions; could not pick a unique directory name",
+      });
+      return;
+    }
+    dirName = `${projectDirName(name)} (${counter})`;
+    directoryPath = `Trident/Projects/${dirName}`;
+    counter++;
+  }
+  const fullPath = path.join(os.homedir(), directoryPath);
+
+  fs.mkdirSync(path.join(fullPath, "documents", "user"), { recursive: true });
 
   const [project] = await db
     .insert(projects)
@@ -256,7 +280,13 @@ router.post("/", async (req, res) => {
 
 router.patch("/:id", async (req, res) => {
   const db = getDb();
-  const { name, description, filesystem_root, embeddings_enabled, default_agent } = req.body;
+  const {
+    name,
+    description,
+    filesystem_root,
+    embeddings_enabled,
+    default_agent,
+  } = req.body;
 
   const [existing] = await db
     .select()
@@ -267,15 +297,27 @@ router.patch("/:id", async (req, res) => {
     return;
   }
 
+  // Only resolve filesystem_root when the field is present in the body. An
+  // explicit empty string/null clears it; undefined leaves it untouched.
   let resolvedRoot: string | null = null;
-  if (filesystem_root) {
+  if (
+    filesystem_root !== undefined &&
+    filesystem_root !== null &&
+    filesystem_root !== ""
+  ) {
     try {
       const resolved = fs.realpathSync(filesystem_root);
       if (fs.statSync(resolved).isDirectory()) {
         resolvedRoot = resolved;
       }
     } catch {
-      /* ignore */
+      /* fall through to 422 below */
+    }
+    if (!resolvedRoot) {
+      res.status(422).json({
+        errors: { filesystem_root: ["Directory does not exist"] },
+      });
+      return;
     }
   }
 
@@ -290,6 +332,13 @@ router.patch("/:id", async (req, res) => {
       newDirName !== oldDirName &&
       fs.existsSync(path.join(os.homedir(), candidatePath))
     ) {
+      if (counter > 1000) {
+        res.status(500).json({
+          error:
+            "Too many name collisions; could not pick a unique directory name",
+        });
+        return;
+      }
       newDirName = `${projectDirName(name)} (${counter})`;
       candidatePath = `Trident/Projects/${newDirName}`;
       counter++;
@@ -348,9 +397,11 @@ router.patch("/:id", async (req, res) => {
     .update(projects)
     .set({
       name,
-      description: description ?? "",
-      filesystemRoot: resolvedRoot,
       path: newProjectPath,
+      ...(description !== undefined ? { description } : {}),
+      ...(filesystem_root !== undefined
+        ? { filesystemRoot: resolvedRoot }
+        : {}),
       ...(typeof embeddings_enabled === "boolean"
         ? { embeddingsEnabled: embeddings_enabled }
         : {}),
@@ -406,6 +457,13 @@ router.post("/:id/duplicate", async (req, res) => {
   let counter = 2;
 
   while (fs.existsSync(path.join(os.homedir(), newPath))) {
+    if (counter > 1000) {
+      res.status(500).json({
+        error:
+          "Too many name collisions; could not pick a unique directory name",
+      });
+      return;
+    }
     newName = `${project.name} Copy ${counter}`;
     newDirName = projectDirName(newName);
     newPath = `Trident/Projects/${newDirName}`;

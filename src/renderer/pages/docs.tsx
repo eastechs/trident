@@ -80,11 +80,6 @@ interface Tab {
   title: string;
 }
 
-interface Props {
-  project: ProjectData;
-  documents: DocumentData[];
-}
-
 interface SortableDocTabProps {
   tab: Tab;
   isActive: boolean;
@@ -234,11 +229,20 @@ export default function Docs() {
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     api_get<{ project: ProjectData; documents: DocumentData[] }>(
       `/api/projects/${id}`,
     )
-      .then(setData)
-      .catch(console.error);
+      .then((data) => {
+        if (!cancelled) setData(data);
+      })
+      .catch((err) => {
+        if (!cancelled) console.error(err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useDocumentTitle(data ? `Docs - ${data.project.name}` : "Docs");
@@ -603,12 +607,35 @@ function DocsView({
   }, [isCreating, project.id]);
 
   const closeTab = useCallback(
-    (tabId: string, e: React.MouseEvent) => {
+    async (tabId: string, e: React.MouseEvent) => {
       e.stopPropagation();
 
       if (autosaveTimerRef.current[tabId]) {
         clearTimeout(autosaveTimerRef.current[tabId]);
         delete autosaveTimerRef.current[tabId];
+      }
+
+      // Flush unsaved edits before the editor unmounts: once the tab leaves
+      // the tabs.map() the editor instance is gone and getMarkdown() returns
+      // null, silently dropping the user's changes. Compare live editor
+      // content to last-saved (tabContent) directly rather than checking
+      // dirtyTabs — the dirty flag is set by the editor's 1s onChange poll,
+      // so closing within 1s of a keystroke would leave dirty=false and skip
+      // the save.
+      const editorRef = editorRefs.current[tabId];
+      if (editorRef) {
+        const liveContent = editorRef.getMarkdown();
+        const savedContent = tabContent[tabId] ?? "";
+        if (liveContent !== savedContent) {
+          try {
+            await api_put(
+              `/api/projects/${project.id}/documents/${tabId}/content`,
+              { content: liveContent },
+            );
+          } catch (error) {
+            console.error("Failed to flush unsaved changes on close:", error);
+          }
+        }
       }
 
       delete editorRefs.current[tabId];
@@ -649,7 +676,7 @@ function DocsView({
         return next;
       });
     },
-    [activeTabId],
+    [activeTabId, project.id, tabContent],
   );
 
   const handleFileListRename = useCallback((id: string, name: string) => {
@@ -824,9 +851,9 @@ function DocsView({
       </header>
       <TooltipProvider delayDuration={300}>
         <div className="flex flex-1 overflow-hidden bg-white select-none dark:bg-neutral-950">
-          <aside className="flex w-12 flex-col items-center border-r border-border bg-white py-2 dark:bg-neutral-950">
+          <aside className="border-border flex w-12 flex-col items-center border-r bg-white py-2 dark:bg-neutral-950">
             <Link to={`/projects/${project.id}`}>
-              <div className="flex size-8 items-center justify-center rounded-lg bg-neutral-50 text-black dark:bg-neutral-900 dark:text-primary">
+              <div className="dark:text-primary flex size-8 items-center justify-center rounded-lg bg-neutral-50 text-black dark:bg-neutral-900">
                 <ArrowLeftIcon className="size-4" />
               </div>
             </Link>
@@ -879,8 +906,8 @@ function DocsView({
 
           <div className="flex flex-1 overflow-hidden">
             {/* File tree */}
-            <div className="flex w-80 shrink-0 flex-col border-r border-border">
-              <div className="flex items-center justify-between border-b border-border px-3 py-2">
+            <div className="border-border flex w-80 shrink-0 flex-col border-r">
+              <div className="border-border flex items-center justify-between border-b px-3 py-2">
                 <div className="flex items-center gap-2">
                   <FileTextIcon className="size-5 text-neutral-400" />
                   <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
@@ -996,7 +1023,7 @@ function DocsView({
             {/* Editor area */}
             <div className="flex flex-1 flex-col overflow-hidden">
               {/* Tab bar */}
-              <div className="flex min-h-9 items-center border-b border-border">
+              <div className="border-border flex min-h-9 items-center border-b">
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
@@ -1087,7 +1114,7 @@ function DocsView({
 
               {/* Footer */}
               {activeTab && (
-                <div className="h-8 flex items-center justify-between border-t border-border bg-neutral-50 px-2 py-1 dark:bg-neutral-950">
+                <div className="border-border flex h-8 items-center justify-between border-t bg-neutral-50 px-2 py-1 dark:bg-neutral-950">
                   <div className="flex items-center gap-2">
                     <label
                       htmlFor="docs-autosave-toggle"

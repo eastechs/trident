@@ -62,7 +62,10 @@ const statusIcons: Record<ToolPart["state"], ReactNode> = {
 };
 
 export const getStatusBadge = (status: ToolPart["state"]) => (
-  <Badge className="gap-1 rounded-full px-1.5 py-0 text-[10px]" variant="secondary">
+  <Badge
+    className="gap-1 rounded-full px-1.5 py-0 text-[10px]"
+    variant="secondary"
+  >
     {statusIcons[status]}
     {statusLabels[status]}
   </Badge>
@@ -83,16 +86,18 @@ export const ToolHeader = ({
     <CollapsibleTrigger
       className={cn(
         "flex w-full min-w-0 items-center justify-between gap-2 p-2",
-        className
+        className,
       )}
       {...props}
     >
       <div className="flex min-w-0 items-center gap-1.5">
-        <WrenchIcon className="size-3 shrink-0 text-muted-foreground" />
-        <span className="truncate text-xs font-medium">{title ?? derivedName}</span>
+        <WrenchIcon className="text-muted-foreground size-3 shrink-0" />
+        <span className="truncate text-xs font-medium">
+          {title ?? derivedName}
+        </span>
         {getStatusBadge(state)}
       </div>
-      <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+      <ChevronDownIcon className="text-muted-foreground size-3 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
     </CollapsibleTrigger>
   );
 };
@@ -102,10 +107,9 @@ export type ToolContentProps = ComponentProps<typeof CollapsibleContent>;
 export const ToolContent = ({ className, ...props }: ToolContentProps) => (
   <CollapsibleContent
     className={cn(
-      "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 space-y-4 p-4 text-popover-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
-      className
+      "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-popover-foreground data-[state=closed]:animate-out data-[state=open]:animate-in space-y-4 p-4 outline-none",
+      className,
     )}
     {...props}
   />
 );
-

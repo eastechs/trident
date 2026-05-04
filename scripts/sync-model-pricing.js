@@ -12,26 +12,34 @@
 // At runtime the app also tries to fetch the live file in the background
 // and falls back to this bundle if the network is unreachable.
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const SOURCE_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
-const KEEP_MODES = new Set(['chat', 'completion', 'responses', 'embedding']);
+const SOURCE_URL =
+  "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
+const KEEP_MODES = new Set(["chat", "completion", "responses", "embedding"]);
 const KEEP_FIELDS = [
-  'litellm_provider',
-  'mode',
-  'input_cost_per_token',
-  'output_cost_per_token',
-  'cache_read_input_token_cost',
-  'cache_creation_input_token_cost',
-  'max_input_tokens',
-  'max_output_tokens',
+  "litellm_provider",
+  "mode",
+  "input_cost_per_token",
+  "output_cost_per_token",
+  "cache_read_input_token_cost",
+  "cache_creation_input_token_cost",
+  "max_input_tokens",
+  "max_output_tokens",
 ];
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OUTPUT_DIR = path.resolve(__dirname, '..', 'src', 'main', 'ai', 'pricing');
-const OUTPUT_TS = path.join(OUTPUT_DIR, 'bundled-pricing.ts');
+const OUTPUT_DIR = path.resolve(
+  __dirname,
+  "..",
+  "src",
+  "main",
+  "ai",
+  "pricing",
+);
+const OUTPUT_TS = path.join(OUTPUT_DIR, "bundled-pricing.ts");
 
 async function main() {
   console.log(`Fetching ${SOURCE_URL}`);
@@ -43,10 +51,19 @@ async function main() {
   let kept = 0;
   let dropped = 0;
   for (const [key, value] of Object.entries(raw)) {
-    if (key === 'sample_spec') { dropped++; continue; }
-    if (!value || typeof value !== 'object') { dropped++; continue; }
+    if (key === "sample_spec") {
+      dropped++;
+      continue;
+    }
+    if (!value || typeof value !== "object") {
+      dropped++;
+      continue;
+    }
     const mode = value.mode;
-    if (mode && !KEEP_MODES.has(mode)) { dropped++; continue; }
+    if (mode && !KEEP_MODES.has(mode)) {
+      dropped++;
+      continue;
+    }
 
     const slimEntry = {};
     for (const field of KEEP_FIELDS) {
@@ -54,7 +71,10 @@ async function main() {
         slimEntry[field] = value[field];
       }
     }
-    if (Object.keys(slimEntry).length === 0) { dropped++; continue; }
+    if (Object.keys(slimEntry).length === 0) {
+      dropped++;
+      continue;
+    }
     slim[key] = slimEntry;
     kept++;
   }
@@ -78,7 +98,7 @@ export const BUNDLED_PRICING: RawPricingData = ${JSON.stringify({
   await fs.writeFile(OUTPUT_TS, tsContent);
 
   // Remove the legacy .json output if it exists from earlier runs.
-  await fs.rm(path.join(OUTPUT_DIR, 'bundled-pricing.json'), { force: true });
+  await fs.rm(path.join(OUTPUT_DIR, "bundled-pricing.json"), { force: true });
 
   const sizeKB = (tsContent.length / 1024).toFixed(1);
   console.log(`Wrote ${OUTPUT_TS}`);
