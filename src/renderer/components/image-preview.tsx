@@ -80,16 +80,6 @@ export function qualityLabel(q: string | undefined): string | undefined {
     return q.charAt(0).toUpperCase() + q.slice(1);
 }
 
-function formatCreatedAt(iso: string | undefined): string | undefined {
-    if (!iso) return undefined;
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return undefined;
-    return d.toLocaleString(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-    });
-}
-
 // ─── Zoomable / pannable image canvas ───────────────────────
 
 const ZOOM_MIN = 0.2;
@@ -329,7 +319,6 @@ function MetadataPanel({
 }) {
     const meta: ImageMetadata = image.metadata ?? {};
     const aspect = aspectInfo(meta.size);
-    const provider = imageProviderFor(meta.model);
     const [copied, setCopied] = useState(false);
     const [open, setOpen] = useState(defaultOpen);
 
@@ -351,8 +340,6 @@ function MetadataPanel({
         },
         [meta.prompt],
     );
-
-    const createdAt = formatCreatedAt(image.created_at);
 
     return (
         <Collapsible
@@ -406,13 +393,7 @@ function MetadataPanel({
                         </p>
                     )}
                 </div>
-                <div className="grid grid-cols-2 gap-1.5 border-t border-border px-4 py-3 sm:grid-cols-3 lg:grid-cols-[auto_auto_auto_auto_auto_1fr]">
-                    <MetadataPill
-                        label="Provider"
-                        value={
-                            provider !== 'unknown' ? PROVIDER_NAMES[provider] : undefined
-                        }
-                    />
+                <div className="grid grid-cols-2 gap-1.5 border-t border-border px-4 py-3 sm:grid-cols-3 lg:grid-cols-[auto_auto_auto_1fr]">
                     <MetadataPill label="Model" value={meta.model} mono />
                     <MetadataPill label="Aspect" value={aspect.label} mono />
                     <MetadataPill label="Quality" value={qualityLabel(meta.quality)} />
@@ -421,7 +402,6 @@ function MetadataPanel({
                         value={image.mime_type?.replace('image/', '')}
                         mono
                     />
-                    <MetadataPill label="Created" value={createdAt} />
                 </div>
             </CollapsibleContent>
         </Collapsible>
