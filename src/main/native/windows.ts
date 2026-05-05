@@ -94,7 +94,7 @@ export function openSecondaryWindow(
     height: options.height,
     title: options.title,
     titleBarStyle: "hidden",
-    trafficLightPosition: { x: 12, y: 12 },
+    trafficLightPosition: { x: 12, y: 8 },
     center: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -130,7 +130,7 @@ export function openAboutWindow(): void {
     height: 420,
     title: "About Trident",
     titleBarStyle: "hidden",
-    trafficLightPosition: { x: 12, y: 12 },
+    trafficLightPosition: { x: 12, y: 8 },
     center: true,
     resizable: false,
     minimizable: false,

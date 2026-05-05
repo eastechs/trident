@@ -44,7 +44,7 @@ async function createWindow() {
     width: 1200,
     height: 800,
     titleBarStyle: "hidden",
-    trafficLightPosition: { x: 12, y: 12 },
+    trafficLightPosition: { x: 12, y: 8 },
     icon: appIconPath(),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
