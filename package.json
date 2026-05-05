@@ -12,6 +12,7 @@
     "start": "node scripts/launch-electron.js",
     "build": "tsup && vite build --config vite.config.ts",
     "build:all": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
     "format": "prettier --write src/ scripts/ vite.config.ts tsup.config.ts",
     "format:check": "prettier --check src/ scripts/ vite.config.ts tsup.config.ts",
     "lint": "eslint . --fix",
