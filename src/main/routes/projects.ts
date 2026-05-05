@@ -204,7 +204,14 @@ router.get("/:id", async (req, res) => {
 
 router.post("/", async (req, res) => {
   const db = getDb();
-  const { name, description, filesystem_root, initial_prompt } = req.body;
+  const {
+    name,
+    description,
+    filesystem_root,
+    initial_prompt,
+    embeddings_enabled,
+    default_agent,
+  } = req.body;
 
   if (typeof name !== "string" || !name.trim()) {
     res.status(422).json({ errors: { name: ["Name is required"] } });
@@ -256,6 +263,12 @@ router.post("/", async (req, res) => {
       path: directoryPath,
       filesystemRoot: resolvedRoot,
       initialPrompt: initial_prompt ?? null,
+      ...(typeof embeddings_enabled === "boolean"
+        ? { embeddingsEnabled: embeddings_enabled }
+        : {}),
+      ...(typeof default_agent === "string" && default_agent
+        ? { defaultAgent: default_agent }
+        : {}),
     })
     .returning();
 

@@ -38,7 +38,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import type { ModelInfo } from "@/types/api";
 import {
   Tooltip,
   TooltipContent,
@@ -109,18 +120,23 @@ export default function Main() {
     description: "",
     filesystem_root: "",
     initial_prompt: "",
+    default_agent: "",
+    embeddings_enabled: true,
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [formProcessing, setFormProcessing] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
   const navigate = useNavigate();
 
   // Provide form.data / form.setData / form.errors / form.processing compatibility
   const form = {
     data: formData,
-    setData: (key: string, value: string) =>
-      setFormData((prev) => ({ ...prev, [key]: value })),
+    setData: <K extends keyof typeof formData>(
+      key: K,
+      value: (typeof formData)[K],
+    ) => setFormData((prev) => ({ ...prev, [key]: value })),
     errors: formErrors,
     processing: formProcessing,
     reset: () => {
@@ -129,11 +145,26 @@ export default function Main() {
         description: "",
         filesystem_root: "",
         initial_prompt: "",
+        default_agent: "",
+        embeddings_enabled: true,
       });
       setFormErrors({});
       setFormError(null);
     },
   };
+
+  useEffect(() => {
+    if (!isCreateDialogOpen || availableModels.length > 0) return;
+    api_get<ModelInfo[]>("/api/settings/models")
+      .then(setAvailableModels)
+      .catch(() => {});
+  }, [isCreateDialogOpen, availableModels.length]);
+
+  const availableProviders = Array.from(
+    new Set(availableModels.map((m) => m.provider)),
+  );
+
+  const AGENT_INHERIT = "__inherit__";
 
   useEffect(() => {
     api_get<{ enabled: boolean }>("/api/settings/trash")
@@ -505,6 +536,73 @@ export default function Main() {
                   {form.errors.initial_prompt}
                 </p>
               )}
+            </div>
+            <div className="grid gap-2">
+              <label
+                htmlFor="create-default-agent"
+                className="text-sm font-medium"
+              >
+                Default agent{" "}
+                <span className="font-normal text-neutral-400">
+                  (for new conversations)
+                </span>
+              </label>
+              <Select
+                value={form.data.default_agent || AGENT_INHERIT}
+                onValueChange={(value) =>
+                  form.setData(
+                    "default_agent",
+                    value === AGENT_INHERIT ? "" : value,
+                  )
+                }
+              >
+                <SelectTrigger id="create-default-agent" className="w-full">
+                  <SelectValue placeholder="Use the panel default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={AGENT_INHERIT}>
+                    <span className="text-muted-foreground">
+                      Use the panel default
+                    </span>
+                  </SelectItem>
+                  {availableProviders.map((provider) => (
+                    <SelectGroup key={provider}>
+                      <SelectLabel>{provider}</SelectLabel>
+                      {availableModels
+                        .filter((m) => m.provider === provider)
+                        .map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            <span className="flex items-center gap-2">
+                              <ModelSelectorLogo provider={m.providerSlug} />
+                              {m.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="border-border flex items-start justify-between gap-4 rounded-lg border p-3">
+              <div className="grid gap-1">
+                <label
+                  htmlFor="create-embeddings-toggle"
+                  className="text-sm font-medium"
+                >
+                  Semantic search
+                </label>
+                <p className="text-muted-foreground text-xs">
+                  Embed this project&apos;s documents with OpenAI so the agent
+                  and the command palette can search them by meaning.
+                </p>
+              </div>
+              <Switch
+                id="create-embeddings-toggle"
+                checked={form.data.embeddings_enabled}
+                onCheckedChange={(checked) =>
+                  form.setData("embeddings_enabled", checked)
+                }
+              />
             </div>
             {formError && (
               <p className="text-destructive text-sm">{formError}</p>
