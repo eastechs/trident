@@ -25,6 +25,9 @@ mac:
     - target: dmg
       arch: [arm64]
 
+dmg:
+  icon: resources/images/app-icon.png
+
 win:
   icon: resources/images/app-icon.png
   target:
