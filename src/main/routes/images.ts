@@ -1,12 +1,13 @@
 import { Router, type Request } from "express";
 import { experimental_generateImage as generateImageFn } from "ai";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import fs from "fs";
 import os from "os";
 import path from "path";
 import { shell } from "electron";
 import { getDb } from "../database.js";
 import { images, projects } from "../db/schema.js";
+import { safePathInside } from "../safe-paths.js";
 import { getSetting, getApiKey } from "../settings.js";
 import { embedImage } from "../ai/embeddings.js";
 
@@ -140,10 +141,11 @@ router.post("/generate", async (req: ProjectRequest, res) => {
 
     const dirPath = `${project.path}/images`;
     const imagePath = `${dirPath}/${safeName}.${extension}`;
-    const fullDir = path.join(os.homedir(), dirPath);
-    const fullPath = path.join(os.homedir(), imagePath);
+    // Realpath the images dir before writing so a symlink at the leaf can't
+    // divert the write outside the project. safePathInside also mkdir's the
+    // boundary, so a separate fs.mkdirSync isn't needed.
+    const fullPath = safePathInside(dirPath, imagePath);
 
-    fs.mkdirSync(fullDir, { recursive: true });
     fs.writeFileSync(fullPath, generated.uint8Array);
 
     const [image] = await db
@@ -244,7 +246,15 @@ router.get("/:imageId", async (req: ImageRequest, res) => {
     return;
   }
 
-  const fullPath = path.join(os.homedir(), image.path);
+  // Realpath before serving so a symlink at the leaf can't be used to read
+  // arbitrary files via this endpoint.
+  let fullPath: string;
+  try {
+    fullPath = safePathInside(path.dirname(image.path), image.path);
+  } catch {
+    res.status(404).json({ error: "File not found" });
+    return;
+  }
   if (!fs.existsSync(fullPath)) {
     res.status(404).json({ error: "File not found" });
     return;
@@ -287,8 +297,27 @@ router.patch("/:imageId", async (req: ImageRequest, res) => {
   const dir = path.dirname(image.path);
   const newImagePath = `${dir}/${safeName}${ext}`;
 
-  const oldFullPath = path.join(os.homedir(), image.path);
-  const newFullPath = path.join(os.homedir(), newImagePath);
+  // Reject when another image already occupies the target path. Without
+  // this, fs.renameSync silently overwrites the existing file on POSIX and
+  // both DB rows end up pointing to the same path.
+  const conflict = await db
+    .select({ id: images.id })
+    .from(images)
+    .where(
+      and(
+        eq(images.projectId, req.params.projectId),
+        eq(sql`LOWER(${images.path})`, newImagePath.toLowerCase()),
+      ),
+    );
+  if (conflict.length > 0 && conflict[0].id !== image.id) {
+    res.status(409).json({
+      error: `An image named '${safeName}' already exists.`,
+    });
+    return;
+  }
+
+  const oldFullPath = safePathInside(dir, image.path);
+  const newFullPath = safePathInside(dir, newImagePath);
 
   if (fs.existsSync(oldFullPath)) {
     fs.renameSync(oldFullPath, newFullPath);

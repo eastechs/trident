@@ -8,7 +8,11 @@ import { buildMenu, setEnabledMenuActions } from "./native/menus.js";
 import { initDatabase } from "./database.js";
 import { initSettings, getSetting } from "./settings.js";
 import { selectDirectory } from "./native/dialogs.js";
-import { openDocumentationWindow, setMainWindow } from "./native/windows.js";
+import {
+  attachExternalLinkHandlers,
+  openDocumentationWindow,
+  setMainWindow,
+} from "./native/windows.js";
 import { appIconPath } from "./native/app-icon.js";
 import { getServerAuth } from "./auth.js";
 
@@ -49,6 +53,7 @@ async function createWindow() {
     },
   });
 
+  attachExternalLinkHandlers(mainWindow);
   setMainWindow(mainWindow);
   Menu.setApplicationMenu(buildMenu(mainWindow));
 

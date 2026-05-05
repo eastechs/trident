@@ -2,12 +2,12 @@ import { tool } from "ai";
 import { z } from "zod";
 import { eq, and, ilike, sql } from "drizzle-orm";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import readline from "readline";
 import ignore, { type Ignore } from "ignore";
 import { getDb } from "../../database.js";
 import { documents, images, projects } from "../../db/schema.js";
+import { safePathInside } from "../../safe-paths.js";
 import { getApiKey } from "../../settings.js";
 import {
   embedDocument,
@@ -91,17 +91,10 @@ function sanitizeDocumentName(raw: string): string {
 }
 
 // Confirms a composed document path stays under the project's documents
-// root. The root and target file may not exist yet (CreateDocument mkdir's
-// the bucket directory); realpath the home dir so symlinks in the home path
-// can't be used to escape, then resolve from there.
+// root, with full symlink resolution. Thin wrapper over the shared helper so
+// the tool call sites read naturally.
 function safeDocumentFullPath(projectPath: string, relPath: string): string {
-  const realHome = fs.realpathSync(os.homedir());
-  const root = path.resolve(realHome, projectPath, "documents");
-  const full = path.resolve(realHome, relPath);
-  if (full !== root && !full.startsWith(root + path.sep)) {
-    throw new Error("Document path escapes project documents root.");
-  }
-  return full;
+  return safePathInside(`${projectPath}/documents`, relPath);
 }
 
 // ─── Hierarchical .gitignore handling ────────────────────────
@@ -793,6 +786,28 @@ export function createTools(
 
         const safeName = sanitizeDocumentName(newName);
         const newDocPath = `${projectPath}/documents/${doc.directory}/${safeName}.md`;
+
+        // Reject when another document already occupies the target path.
+        // Without this, fs.renameSync would silently overwrite the existing
+        // file on POSIX and both DB rows would point to the same path, mixing
+        // content between documents on subsequent edits. The check matches
+        // CreateDocument's case-insensitive shape.
+        const conflict = await db
+          .select({ id: documents.id })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.projectId, projectId),
+              eq(sql`LOWER(${documents.path})`, newDocPath.toLowerCase()),
+            ),
+          );
+        if (conflict.length > 0 && conflict[0].id !== document_id) {
+          return {
+            status: "error",
+            message: `A document named '${safeName}' already exists. Choose a different name.`,
+          };
+        }
+
         const oldFullPath = safeDocumentFullPath(projectPath, doc.path);
         const newFullPath = safeDocumentFullPath(projectPath, newDocPath);
 

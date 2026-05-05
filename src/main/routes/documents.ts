@@ -1,11 +1,12 @@
 import { Router, type Request } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import fs from "fs";
 import os from "os";
 import path from "path";
 import { shell } from "electron";
 import { getDb } from "../database.js";
 import { documents } from "../db/schema.js";
+import { safePathInside } from "../safe-paths.js";
 import { getSetting } from "../settings.js";
 import { embedDocument } from "../ai/embeddings.js";
 
@@ -132,9 +133,36 @@ router.patch("/:docId", async (req: DocRequest, res) => {
     return;
   }
 
-  const oldFullPath = path.join(os.homedir(), document.path);
   const newDocPath = `${project.path}/documents/${document.directory}/${safeName}.md`;
-  const newFullPath = path.join(os.homedir(), newDocPath);
+
+  // Reject when another document already occupies the target path. Without
+  // this, fs.renameSync silently overwrites the existing file on POSIX and
+  // both DB rows end up pointing to the same path, mixing content between
+  // documents on subsequent edits.
+  const conflict = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.projectId, req.params.projectId),
+        eq(sql`LOWER(${documents.path})`, newDocPath.toLowerCase()),
+      ),
+    );
+  if (conflict.length > 0 && conflict[0].id !== document.id) {
+    res.status(409).json({
+      error: `A document named '${safeName}' already exists.`,
+    });
+    return;
+  }
+
+  const oldFullPath = safePathInside(
+    `${project.path}/documents`,
+    document.path,
+  );
+  const newFullPath = safePathInside(
+    `${project.path}/documents`,
+    newDocPath,
+  );
 
   // Rename file on disk
   if (fs.existsSync(oldFullPath)) {
@@ -190,19 +218,32 @@ router.put("/:docId/content", async (req: DocRequest, res) => {
     return;
   }
 
+  const { projects } = await import("../db/schema.js");
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.id, req.params.projectId));
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+
   await db
     .update(documents)
     .set({ content, lastEditedBy: "user", updatedAt: new Date() })
     .where(eq(documents.id, document.id));
 
-  // Write to disk with frontmatter
+  // Write to disk with frontmatter. Boundary at the documents tree so a
+  // symlink planted anywhere on the path (bucket dir, leaf file) can't
+  // divert the write outside the project.
   const createdBy = document.createdBy ?? "user";
   const now = new Date().toISOString();
   const frontMatter = `---\nuuid: ${document.id}\nname: ${document.name}\ncreated_by: ${createdBy}\nlast_edited_by: user\nupdated_at: ${now}\n---\n`;
-  fs.writeFileSync(
-    path.join(os.homedir(), document.path),
-    frontMatter + content,
+  const fullPath = safePathInside(
+    `${project.path}/documents`,
+    document.path,
   );
+  fs.writeFileSync(fullPath, frontMatter + content);
 
   res.json({ success: true });
 
