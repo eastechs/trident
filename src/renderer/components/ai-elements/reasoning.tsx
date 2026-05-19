@@ -74,9 +74,10 @@ export const Reasoning = memo(
       prop: durationProp,
     });
 
-    // Once the user manually toggles, stop mirroring isStreaming so their
-    // choice sticks.
-    const hasUserToggledRef = useRef(false);
+    // Mirroring isStreaming is skipped if the caller passed an explicit
+    // defaultOpen (treated as a pre-set preference) or once the user manually
+    // toggles, so their choice sticks.
+    const hasUserToggledRef = useRef(defaultOpen !== undefined);
     const startTimeRef = useRef<number | null>(null);
 
     // Track when streaming starts and compute duration on end.
