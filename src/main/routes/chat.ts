@@ -27,6 +27,16 @@ const router = Router({ mergeParams: true });
 
 type ProjectRequest = Request<{ projectId: string }>;
 
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "An unknown chat error occurred.";
+  }
+}
+
 // ─── Send message (streaming) ──────────────────────────────
 
 router.post("/", async (req: ProjectRequest, res) => {
@@ -318,6 +328,11 @@ router.post("/", async (req: ProjectRequest, res) => {
       sendReasoning: true,
       originalMessages: history,
       generateMessageId: generateId,
+      onError: (error) => {
+        const message = formatErrorMessage(error);
+        console.error(`Chat stream error for ${effectiveModelId}:`, error);
+        return message;
+      },
       // Attach token usage to assistant messages on finish so the client can
       // render the usage widget. Without this the AI SDK doesn't ship usage
       // data through the UI stream and `metadata.usage` stays undefined.
