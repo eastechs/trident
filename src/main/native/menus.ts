@@ -1,5 +1,6 @@
 import { Menu, BrowserWindow, app } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
+import { checkForUpdatesFromMenu } from "./updater.js";
 import { openAboutWindow, openDocumentationWindow } from "./windows.js";
 
 export function buildMenu(mainWindow: BrowserWindow): Menu {
@@ -12,6 +13,12 @@ export function buildMenu(mainWindow: BrowserWindow): Menu {
             label: app.name,
             submenu: [
               { label: `About ${app.name}`, click: () => openAboutWindow() },
+              {
+                label: "Check for Updates...",
+                click: () => {
+                  void checkForUpdatesFromMenu();
+                },
+              },
               { type: "separator" as const },
               { role: "services" as const },
               { type: "separator" as const },
@@ -93,6 +100,17 @@ export function buildMenu(mainWindow: BrowserWindow): Menu {
     {
       label: "Help",
       submenu: [
+        ...(!isMac
+          ? [
+              {
+                label: "Check for Updates...",
+                click: () => {
+                  void checkForUpdatesFromMenu();
+                },
+              },
+              { type: "separator" as const },
+            ]
+          : []),
         {
           label: "Documentation",
           click: () => openDocumentationWindow(),
