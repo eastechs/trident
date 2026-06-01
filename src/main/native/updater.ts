@@ -8,7 +8,9 @@ const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 // the main process so a window opened after the download (e.g. on macOS the app
 // stays alive with no windows) can still learn the update is ready.
 let updateReady = false;
-let manualCheckInProgress = false;
+let updateCheckInProgress = false;
+let updateDownloadInProgress = false;
+let notifyOnDownloadFailure = false;
 
 function isAutoUpdaterSupported(): boolean {
   return (
@@ -30,11 +32,55 @@ function showUpdateDialog(options: Electron.MessageBoxOptions): void {
   }
 }
 
+function showUpdateDownloadFailedDialog(err: unknown): void {
+  const detail = err instanceof Error ? err.message : String(err);
+  showUpdateDialog({
+    type: "error",
+    title: "Update Download Failed",
+    message: "Trident found an update but could not download it.",
+    detail,
+  });
+}
+
+async function startUpdateCheck(options?: {
+  notifyOnDownloadFailure?: boolean;
+}) {
+  if (updateCheckInProgress || updateDownloadInProgress || updateReady) {
+    return null;
+  }
+
+  updateCheckInProgress = true;
+  try {
+    const result = await autoUpdater.checkForUpdates();
+
+    if (result?.downloadPromise) {
+      updateDownloadInProgress = true;
+      notifyOnDownloadFailure ||= options?.notifyOnDownloadFailure ?? false;
+
+      void result.downloadPromise
+        .catch((err: unknown) => {
+          console.error("[updater] download error:", err);
+          if (notifyOnDownloadFailure) {
+            showUpdateDownloadFailedDialog(err);
+          }
+        })
+        .finally(() => {
+          updateDownloadInProgress = false;
+          notifyOnDownloadFailure = false;
+        });
+    }
+
+    return result;
+  } finally {
+    updateCheckInProgress = false;
+  }
+}
+
 function runCheck(): void {
   // checkForUpdates() both emits an "error" event (logged below) and rejects
   // its returned promise. Catch the rejection so a transient/offline failure or
   // a misconfigured feed doesn't surface as an unhandled rejection at startup.
-  autoUpdater.checkForUpdates().catch(() => {});
+  startUpdateCheck().catch(() => {});
 }
 
 export async function checkForUpdatesFromMenu(): Promise<void> {
@@ -60,7 +106,7 @@ export async function checkForUpdatesFromMenu(): Promise<void> {
     return;
   }
 
-  if (manualCheckInProgress) {
+  if (updateCheckInProgress) {
     showUpdateDialog({
       type: "info",
       title: "Checking for Updates",
@@ -69,9 +115,20 @@ export async function checkForUpdatesFromMenu(): Promise<void> {
     return;
   }
 
-  manualCheckInProgress = true;
+  if (updateDownloadInProgress) {
+    notifyOnDownloadFailure = true;
+    showUpdateDialog({
+      type: "info",
+      title: "Update Downloading",
+      message: "Trident is already downloading an update.",
+      detail:
+        "Trident will show an install button in the sidebar when the update is ready.",
+    });
+    return;
+  }
+
   try {
-    const result = await autoUpdater.checkForUpdates();
+    const result = await startUpdateCheck({ notifyOnDownloadFailure: true });
 
     if (result?.isUpdateAvailable) {
       showUpdateDialog({
@@ -98,8 +155,6 @@ export async function checkForUpdatesFromMenu(): Promise<void> {
       message: "Trident could not check for updates.",
       detail,
     });
-  } finally {
-    manualCheckInProgress = false;
   }
 }
 
@@ -118,6 +173,8 @@ export function initAutoUpdater(): void {
 
   autoUpdater.on("update-downloaded", () => {
     updateReady = true;
+    updateDownloadInProgress = false;
+    notifyOnDownloadFailure = false;
     getMainWindow()?.webContents.send("update-ready");
   });
 
