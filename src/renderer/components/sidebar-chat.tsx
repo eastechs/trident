@@ -8,7 +8,14 @@ import {
 } from "ai";
 import type { UIMessage } from "ai";
 import { api_get, api_patch, authedFetch } from "@/lib/api";
-import { CheckIcon, FileTextIcon, PlusIcon } from "lucide-react";
+import {
+  AlertCircleIcon,
+  CheckIcon,
+  FileTextIcon,
+  PlusIcon,
+  RotateCcwIcon,
+  XIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GridLoader } from "react-spinners";
 import agentChimeUrl from "@/../audio/agent-chime-2.mp3";
@@ -66,6 +73,7 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Popover,
   PopoverContent,
@@ -112,6 +120,28 @@ const ATTACHED_DOC_RE =
 
 function cleanText(text: string): string {
   return text.replace(ATTACHED_DOC_RE, "");
+}
+
+function formatChatError(error: Error | undefined): string {
+  if (!error) return "";
+
+  const rawMessage = error.message || "The chat request failed.";
+  try {
+    const parsed = JSON.parse(rawMessage) as {
+      error?: unknown;
+      message?: unknown;
+    };
+    if (typeof parsed.error === "string" && parsed.error.trim()) {
+      return parsed.error;
+    }
+    if (typeof parsed.message === "string" && parsed.message.trim()) {
+      return parsed.message;
+    }
+  } catch {
+    // Non-JSON transport errors are already human-readable enough to show.
+  }
+
+  return rawMessage;
 }
 
 // Curated set; every entry here is a known reasoning-capable model so the
@@ -357,73 +387,92 @@ export function SidebarChat({
     selectedModelData?.pricing?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
 
   const [messagesLoaded, setMessagesLoaded] = useState(false);
+  const [visibleChatError, setVisibleChatError] = useState("");
 
-  const { messages, setMessages, sendMessage, stop, status, addToolOutput } =
-    useChat({
-      id: conversationId,
-      transport: new DefaultChatTransport({
-        api: `/api/projects/${projectId}/chat`,
-        fetch: authedFetch,
-        // Use a function so modelRef.current is read at send time (latest selection),
-        // not frozen at transport construction.
-        prepareSendMessagesRequest({ messages, body }) {
-          return {
-            body: {
-              messages,
-              model_id: modelRef.current,
-              conversation_id: conversationId,
-              side: side ?? undefined,
-              ...body,
-            },
-          };
-        },
-      }),
-      // After the user submits the image-config card, addToolOutput fulfills
-      // the pending GenerateImage call client-side. This helper detects that
-      // and triggers the next agent turn automatically so the assistant can
-      // acknowledge the generated image.
-      sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-      onFinish({ message }) {
-        if (message.role !== "assistant") {
-          return;
-        }
-
-        for (const part of message.parts) {
-          if (!isToolUIPart(part) || part.state !== "output-available") {
-            continue;
-          }
-
-          const toolName = getToolName(part);
-          const output = part.output as Record<string, unknown> | undefined;
-
-          if (output?.document_id) {
-            if (toolName === "EditDocument") {
-              onDocumentEdited?.(output.document_id as string);
-            } else if (toolName === "CreateDocument") {
-              onDocumentCreated?.(
-                output.document_id as string,
-                (output.document_name as string) ?? "",
-                {
-                  directory: output.directory as string | undefined,
-                  created_by:
-                    (output.created_by as string | null | undefined) ?? null,
-                  last_edited_by:
-                    (output.last_edited_by as string | null | undefined) ??
-                    null,
-                },
-              );
-            }
-          }
-          // GenerateImage is now a client-side tool; the image-config
-          // card calls onImageCreated directly when the server endpoint
-          // returns. Nothing to do here for it.
-        }
+  const {
+    messages,
+    setMessages,
+    sendMessage,
+    regenerate,
+    stop,
+    status,
+    error: chatError,
+    clearError,
+    addToolOutput,
+  } = useChat({
+    id: conversationId,
+    transport: new DefaultChatTransport({
+      api: `/api/projects/${projectId}/chat`,
+      fetch: authedFetch,
+      // Use a function so modelRef.current is read at send time (latest selection),
+      // not frozen at transport construction.
+      prepareSendMessagesRequest({ messages, body }) {
+        return {
+          body: {
+            messages,
+            model_id: modelRef.current,
+            conversation_id: conversationId,
+            side: side ?? undefined,
+            ...body,
+          },
+        };
       },
-    });
+    }),
+    // After the user submits the image-config card, addToolOutput fulfills
+    // the pending GenerateImage call client-side. This helper detects that
+    // and triggers the next agent turn automatically so the assistant can
+    // acknowledge the generated image.
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    onError(error) {
+      console.error(`Chat request failed for ${modelRef.current}:`, error);
+      setVisibleChatError(formatChatError(error));
+    },
+    onFinish({ message }) {
+      if (message.role !== "assistant") {
+        return;
+      }
+
+      for (const part of message.parts) {
+        if (!isToolUIPart(part) || part.state !== "output-available") {
+          continue;
+        }
+
+        const toolName = getToolName(part);
+        const output = part.output as Record<string, unknown> | undefined;
+
+        if (output?.document_id) {
+          if (toolName === "EditDocument") {
+            onDocumentEdited?.(output.document_id as string);
+          } else if (toolName === "CreateDocument") {
+            onDocumentCreated?.(
+              output.document_id as string,
+              (output.document_name as string) ?? "",
+              {
+                directory: output.directory as string | undefined,
+                created_by:
+                  (output.created_by as string | null | undefined) ?? null,
+                last_edited_by:
+                  (output.last_edited_by as string | null | undefined) ?? null,
+              },
+            );
+          }
+        }
+        // GenerateImage is now a client-side tool; the image-config
+        // card calls onImageCreated directly when the server endpoint
+        // returns. Nothing to do here for it.
+      }
+    },
+  });
 
   const isStreaming = status === "streaming" || status === "submitted";
   const isModelLocked = lockedModel != null || messages.length > 0;
   const hasNoProviders = availableModels.length === 0;
+  const chatErrorMessage = visibleChatError || formatChatError(chatError);
+  const lastSendBodyRef = useRef<{ document_ids: string[] } | null>(null);
+  const clearChatError = useCallback(() => {
+    setVisibleChatError("");
+    clearError();
+  }, [clearError]);
 
   // Aggregate per-message usage off `messages` directly — the AI SDK attaches
   // each turn's `messageMetadata` (set in src/main/routes/chat.ts on the
@@ -589,13 +638,13 @@ export function SidebarChat({
         throw new Error("not-sent");
       }
 
-      sendMessage(
-        { text },
-        { body: { document_ids: Array.from(selectedDocumentIds) } },
-      );
+      clearChatError();
+      const body = { document_ids: Array.from(selectedDocumentIds) };
+      lastSendBodyRef.current = body;
+      void sendMessage({ text }, { body });
       setSelectedDocumentIds(new Set());
     },
-    [isStreaming, sendMessage, selectedDocumentIds],
+    [clearChatError, isStreaming, sendMessage, selectedDocumentIds],
   );
 
   const handleQuestionsSubmit = useCallback(
@@ -609,14 +658,21 @@ export function SidebarChat({
         .map((a) => `**${a.question}**\n${a.answer}`)
         .join("\n\n");
 
-      sendMessage(
-        { text: formattedMessage },
-        { body: { document_ids: Array.from(selectedDocumentIds) } },
-      );
+      clearChatError();
+      const body = { document_ids: Array.from(selectedDocumentIds) };
+      lastSendBodyRef.current = body;
+      void sendMessage({ text: formattedMessage }, { body });
       setSelectedDocumentIds(new Set());
     },
-    [sendMessage, selectedDocumentIds],
+    [clearChatError, sendMessage, selectedDocumentIds],
   );
+
+  const handleRetryLastMessage = useCallback(() => {
+    clearChatError();
+    void regenerate({
+      body: lastSendBodyRef.current ?? { document_ids: [] },
+    });
+  }, [clearChatError, regenerate]);
 
   // Lock the input while the user has an unfulfilled prompt: an
   // unanswered AskQuestions or a pending GenerateImage call awaiting
@@ -936,6 +992,34 @@ export function SidebarChat({
       </Conversation>
 
       <div className="px-2 pb-2">
+        {chatErrorMessage && (
+          <Alert variant="destructive" className="mb-2 rounded-lg">
+            <AlertCircleIcon className="size-4" />
+            <AlertTitle>Message failed</AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p className="break-words">{chatErrorMessage}</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleRetryLastMessage}
+                  disabled={isStreaming}
+                  className="border-destructive/30 text-destructive hover:bg-destructive/10 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RotateCcwIcon className="size-3" />
+                  Retry
+                </button>
+                <button
+                  type="button"
+                  onClick={clearChatError}
+                  className="border-border text-muted-foreground hover:bg-muted inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium"
+                >
+                  <XIcon className="size-3" />
+                  Dismiss
+                </button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
         {hasNoProviders && (
           <div className="border-border flex items-center justify-center rounded-lg border border-dashed px-3 py-4">
             <p className="text-muted-foreground text-center text-xs">
