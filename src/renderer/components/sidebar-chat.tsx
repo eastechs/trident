@@ -393,6 +393,7 @@ export function SidebarChat({
     messages,
     setMessages,
     sendMessage,
+    regenerate,
     stop,
     status,
     error: chatError,
@@ -668,10 +669,10 @@ export function SidebarChat({
 
   const handleRetryLastMessage = useCallback(() => {
     clearChatError();
-    void sendMessage(undefined, {
+    void regenerate({
       body: lastSendBodyRef.current ?? { document_ids: [] },
     });
-  }, [clearChatError, sendMessage]);
+  }, [clearChatError, regenerate]);
 
   // Lock the input while the user has an unfulfilled prompt: an
   // unanswered AskQuestions or a pending GenerateImage call awaiting
