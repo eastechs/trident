@@ -8,6 +8,8 @@ declare global {
           conversationId: string;
         }) => void,
       ) => () => void;
+      onUpdateReady: (callback: () => void) => () => void;
+      installUpdate: () => Promise<void>;
       selectDirectory: () => Promise<string | null>;
       openDocumentation: () => Promise<void>;
       setMenuEnabled: (actions: string[]) => void;

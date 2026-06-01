@@ -22,6 +22,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("notification-navigate", handler);
     return () => ipcRenderer.removeListener("notification-navigate", handler);
   },
+  onUpdateReady: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on("update-ready", handler);
+    return () => ipcRenderer.removeListener("update-ready", handler);
+  },
+  installUpdate: (): Promise<void> => ipcRenderer.invoke("install-update"),
   selectDirectory: () => ipcRenderer.invoke("select-directory"),
   openDocumentation: () => ipcRenderer.invoke("open-documentation"),
   setMenuEnabled: (actions: string[]) =>

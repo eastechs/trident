@@ -48,6 +48,7 @@ import { HelpSidebarButton } from "@/components/help-sidebar-button";
 import { ImagePreview } from "@/components/image-preview";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
 import { ProjectTour } from "@/components/project-tour";
+import { UpdateSidebarButton } from "@/components/update-sidebar-button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1264,8 +1265,11 @@ function ProjectView({
                 onUpdated={onProjectUpdated}
               />
             </nav>
-            <div data-tour="help" className="mt-auto">
-              <HelpSidebarButton />
+            <div className="mt-auto flex flex-col items-center gap-1">
+              <UpdateSidebarButton />
+              <div data-tour="help">
+                <HelpSidebarButton />
+              </div>
             </div>
           </aside>
 

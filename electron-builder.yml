@@ -8,6 +8,12 @@ directories:
 
 afterAllArtifactBuild: scripts/notarize-dmg.js
 
+publish:
+  provider: github
+  owner: eastechs
+  repo: trident-releases
+  releaseType: draft
+
 files:
   - dist/**/*
   - node_modules/**/*
@@ -23,6 +29,8 @@ mac:
   notarize: true
   target:
     - target: dmg
+      arch: [arm64]
+    - target: zip
       arch: [arm64]
 
 dmg:
