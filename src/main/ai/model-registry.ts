@@ -63,6 +63,12 @@ function stampCapabilities(models: ModelDescriptor[]): ModelInfo[] {
 const FALLBACK: Record<ProviderKey, ModelDescriptor[]> = {
   anthropic: [
     {
+      id: "claude-opus-4-8",
+      provider: "Anthropic",
+      providerSlug: "anthropic",
+      name: "Opus 4.8",
+    },
+    {
       id: "claude-opus-4-7",
       provider: "Anthropic",
       providerSlug: "anthropic",

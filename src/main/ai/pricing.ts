@@ -128,16 +128,20 @@ export function lookupPricing(modelId: string): ModelPricing | undefined {
   const expectedProvider = guessProvider(modelId);
   const candidates = generateCandidates(modelId);
 
-  for (const candidate of candidates) {
-    const entry = activeData.models[candidate];
-    if (!entry) continue;
-    if (expectedProvider && entry.litellm_provider === expectedProvider) {
-      return toPricing(entry);
+  const lookupSources = [activeData, BUNDLED_PRICING];
+
+  for (const source of lookupSources) {
+    for (const candidate of candidates) {
+      const entry = source.models[candidate];
+      if (!entry) continue;
+      if (expectedProvider && entry.litellm_provider === expectedProvider) {
+        return toPricing(entry);
+      }
     }
-  }
-  for (const candidate of candidates) {
-    const entry = activeData.models[candidate];
-    if (entry) return toPricing(entry);
+    for (const candidate of candidates) {
+      const entry = source.models[candidate];
+      if (entry) return toPricing(entry);
+    }
   }
   return undefined;
 }

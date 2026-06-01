@@ -1299,7 +1299,7 @@ function ProjectView({
                   conversations={localConversations}
                   otherSideActiveId={rightActiveId}
                   documents={localDocuments}
-                  defaultModel={project.default_agent ?? "claude-opus-4-7"}
+                  defaultModel={project.default_agent ?? "claude-opus-4-8"}
                   initialPrompt={initialPromptRef.current}
                   requestedActiveId={leftRequestedId}
                   onConversationCreated={handleConversationCreated}
