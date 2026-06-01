@@ -19,7 +19,8 @@
     "format:check": "prettier --check src/ scripts/ vite.config.ts tsup.config.ts",
     "lint": "eslint . --fix",
     "lint:check": "eslint .",
-    "types:check": "tsc --noEmit"
+    "types:check": "tsc --noEmit",
+    "release": "node scripts/release.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.71",
@@ -51,6 +52,7 @@
     "drizzle-orm": "^0.45.2",
     "electron-context-menu": "^4.1.2",
     "electron-store": "^10.0.0",
+    "electron-updater": "^6.8.3",
     "embla-carousel-react": "^8.6.0",
     "express": "^5.1.0",
     "lucide-react": "^0.577.0",

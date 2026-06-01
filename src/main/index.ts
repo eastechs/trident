@@ -14,6 +14,7 @@ import {
   setMainWindow,
 } from "./native/windows.js";
 import { appIconPath } from "./native/app-icon.js";
+import { initAutoUpdater } from "./native/updater.js";
 import { getServerAuth } from "./auth.js";
 
 app.setName("Trident");
@@ -122,6 +123,9 @@ app.whenReady().then(async () => {
 
   // Create the main window
   await createWindow();
+
+  // Start background update checks (no-op unless packaged)
+  initAutoUpdater();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
