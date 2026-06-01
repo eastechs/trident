@@ -16,7 +16,7 @@ const router = Router({ mergeParams: true });
 type ProjectRequest = Request<{ projectId: string }>;
 type ImageRequest = Request<{ projectId: string; imageId: string }>;
 
-// OpenAI image models (gpt-image-1, gpt-image-1.5) accept size in "WxH" and
+// OpenAI image models (gpt-image-1, gpt-image-1.5, gpt-image-2) accept size in "WxH" and
 // only support specific resolutions. Map common aspect ratios to those.
 function sizeFromAspect(aspect: string): `${number}x${number}` {
   switch (aspect) {

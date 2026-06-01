@@ -14,6 +14,18 @@ interface ImageModel {
 
 const imageModels: ImageModel[] = [
   {
+    id: "gpt-image-2",
+    name: "GPT Image 2",
+    provider: "openai",
+    dimensions: ["1:1", "3:2", "2:3"],
+    qualityOptions: [
+      { value: "low", label: "Low" },
+      { value: "medium", label: "Medium" },
+      { value: "high", label: "High" },
+    ],
+    qualityLabel: "Quality",
+  },
+  {
     id: "gpt-image-1.5",
     name: "GPT Image 1.5",
     provider: "openai",
