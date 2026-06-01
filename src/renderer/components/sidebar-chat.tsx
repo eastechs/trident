@@ -126,6 +126,13 @@ const FALLBACK_MODELS: ModelInfo[] = [
     supportsReasoning: true,
   },
   {
+    id: "claude-opus-4-7",
+    provider: "Anthropic",
+    providerSlug: "anthropic",
+    name: "Opus 4.7",
+    supportsReasoning: true,
+  },
+  {
     id: "claude-sonnet-4-6",
     provider: "Anthropic",
     providerSlug: "anthropic",
