@@ -119,10 +119,10 @@ function cleanText(text: string): string {
 // list arrives, each entry carries its own server-stamped flag.
 const FALLBACK_MODELS: ModelInfo[] = [
   {
-    id: "claude-opus-4-7",
+    id: "claude-opus-4-8",
     provider: "Anthropic",
     providerSlug: "anthropic",
-    name: "Opus 4.7",
+    name: "Opus 4.8",
     supportsReasoning: true,
   },
   {
@@ -286,7 +286,7 @@ export function SidebarChat({
     // the only data we have at first render and it's Anthropic-only, so
     // checking membership here would silently snap any non-Anthropic id
     // (e.g. a project default of gpt-5.4) to FALLBACK_MODELS[0]
-    // (claude-opus-4-7) — and the catch-up effect below wouldn't correct
+    // (claude-opus-4-8) — and the catch-up effect below wouldn't correct
     // it because opus is in the eventually-loaded list. The reconciliation
     // effect handles truly-invalid ids by snapping to availableModels[0]
     // once the real list lands.

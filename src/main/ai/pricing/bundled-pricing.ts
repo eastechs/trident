@@ -4091,6 +4091,16 @@ export const BUNDLED_PRICING: RawPricingData = {
       max_input_tokens: 1000000,
       max_output_tokens: 128000,
     },
+    "claude-opus-4-8": {
+      litellm_provider: "anthropic",
+      mode: "chat",
+      input_cost_per_token: 0.000005,
+      output_cost_per_token: 0.000025,
+      cache_read_input_token_cost: 5e-7,
+      cache_creation_input_token_cost: 0.00000625,
+      max_input_tokens: 1000000,
+      max_output_tokens: 128000,
+    },
     "claude-sonnet-4-20250514": {
       litellm_provider: "anthropic",
       mode: "chat",
