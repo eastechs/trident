@@ -10,6 +10,7 @@ export default function About() {
   useDocumentTitle("About Trident");
   const [searchParams] = useSearchParams();
   const version = searchParams.get("version") ?? "0.0.0";
+  const year = new Date().getFullYear();
 
   return (
     <div
@@ -49,9 +50,9 @@ export default function About() {
         </div>
 
         <div className="mt-auto flex flex-col items-center gap-4">
-          {/* <p className="text-[10.5px] text-muted-foreground/75">
-                        © {year} Eastechs
-                    </p> */}
+          <p className="text-muted-foreground/75 text-[10.5px]">
+            © {year} Eastechs
+          </p>
         </div>
       </div>
     </div>
