@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("update-ready", handler);
     return () => ipcRenderer.removeListener("update-ready", handler);
   },
+  getUpdateReady: (): Promise<boolean> =>
+    ipcRenderer.invoke("get-update-ready"),
   installUpdate: (): Promise<void> => ipcRenderer.invoke("install-update"),
   selectDirectory: () => ipcRenderer.invoke("select-directory"),
   openDocumentation: () => ipcRenderer.invoke("open-documentation"),

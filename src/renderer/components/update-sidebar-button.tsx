@@ -15,9 +15,15 @@ export function UpdateSidebarButton() {
 
   useEffect(() => {
     const api = window.electronAPI;
-    if (!api?.onUpdateReady) return;
-    const unsubscribe = api.onUpdateReady(() => setReady(true));
-    return unsubscribe;
+    if (!api) return;
+    // Catch up on an update that downloaded before this window existed, then
+    // subscribe for any that arrive while it's open. The query rejects when the
+    // updater isn't running (dev / unsupported platform) — ignore that.
+    api.getUpdateReady?.().then(
+      (r) => r && setReady(true),
+      () => {},
+    );
+    return api.onUpdateReady?.(() => setReady(true));
   }, []);
 
   if (!ready) return null;

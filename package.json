@@ -19,7 +19,8 @@
     "format:check": "prettier --check src/ scripts/ vite.config.ts tsup.config.ts",
     "lint": "eslint . --fix",
     "lint:check": "eslint .",
-    "types:check": "tsc --noEmit"
+    "types:check": "tsc --noEmit",
+    "release": "node scripts/release.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.71",

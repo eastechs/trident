@@ -9,6 +9,7 @@ declare global {
         }) => void,
       ) => () => void;
       onUpdateReady: (callback: () => void) => () => void;
+      getUpdateReady: () => Promise<boolean>;
       installUpdate: () => Promise<void>;
       selectDirectory: () => Promise<string | null>;
       openDocumentation: () => Promise<void>;
