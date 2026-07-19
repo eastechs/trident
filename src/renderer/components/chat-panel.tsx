@@ -21,6 +21,7 @@ interface ChatPanelProps {
   conversations: ConversationData[];
   otherSideActiveId: string | null;
   documents: DocumentData[];
+  images: ImageData[];
   defaultModel?: string;
   initialPrompt?: string;
   // When set, force the panel to open this conversation (the chat tab) on
@@ -94,6 +95,7 @@ export function ChatPanel({
   conversations,
   otherSideActiveId,
   documents,
+  images,
   defaultModel,
   initialPrompt,
   requestedActiveId,
@@ -321,6 +323,7 @@ export function ChatPanel({
               projectId={projectId}
               conversationId={activeConversationId}
               documents={documents}
+              images={images}
               defaultModel={defaultModel}
               lockedModel={activeConversation?.model ?? null}
               initialEffort={activeConversation?.effort ?? "medium"}

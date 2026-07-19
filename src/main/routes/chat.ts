@@ -1,3 +1,4 @@
+import fs from "fs";
 import { Router, type Request } from "express";
 import {
   streamText,
@@ -6,11 +7,18 @@ import {
   stepCountIs,
   generateId,
   type UIMessage,
+  type FileUIPart,
   type ToolSet,
 } from "ai";
 import { eq, asc, sql, inArray, and } from "drizzle-orm";
 import { getDb } from "../database.js";
-import { conversations, messages, documents, projects } from "../db/schema.js";
+import {
+  conversations,
+  messages,
+  documents,
+  images,
+  projects,
+} from "../db/schema.js";
 import {
   resolveModel,
   getProviderOptions,
@@ -22,6 +30,7 @@ import { loadInstructions } from "../ai/instructions.js";
 import { createTools } from "../ai/tools/index.js";
 import { showNotification } from "../native/notifications.js";
 import { getApiKey } from "../settings.js";
+import { safePathInside } from "../safe-paths.js";
 
 const router = Router({ mergeParams: true });
 
@@ -48,6 +57,7 @@ router.post("/", async (req: ProjectRequest, res) => {
     conversation_id,
     side,
     document_ids,
+    image_ids,
   } = req.body;
 
   if (!model_id || !conversation_id) {
@@ -169,6 +179,67 @@ router.post("/", async (req: ProjectRequest, res) => {
     }
   }
 
+  // Persist only a lightweight image reference with the user message. The
+  // actual data URL is added to the model-only history below, which keeps
+  // large base64 payloads out of the messages table while still giving the
+  // selected model native vision input for this turn.
+  const attachedImageParts: FileUIPart[] = [];
+  if (Array.isArray(image_ids) && image_ids.length > 0) {
+    const attachedImages = await db
+      .select({
+        id: images.id,
+        name: images.name,
+        path: images.path,
+        mimeType: images.mimeType,
+      })
+      .from(images)
+      .where(
+        and(eq(images.projectId, projectId), inArray(images.id, image_ids)),
+      );
+
+    const imageReferences: Array<{ type: "text"; text: string }> = [];
+    for (const image of attachedImages) {
+      let fullPath: string;
+      try {
+        fullPath = safePathInside(`${project.path}/images`, image.path);
+      } catch {
+        continue;
+      }
+      if (!fs.existsSync(fullPath)) continue;
+
+      const mediaType = /^image\/[a-z0-9.+-]+$/i.test(image.mimeType)
+        ? image.mimeType
+        : "image/png";
+      attachedImageParts.push({
+        type: "file",
+        mediaType,
+        filename: image.name,
+        url: `data:${mediaType};base64,${fs.readFileSync(fullPath).toString("base64")}`,
+      });
+
+      const safeName = image.name
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+      imageReferences.push({
+        type: "text",
+        text: `<attached_image id="${image.id}" name="${safeName}">[image attached]</attached_image>`,
+      });
+    }
+
+    if (imageReferences.length > 0) {
+      for (let i = history.length - 1; i >= 0; i--) {
+        if (history[i].role !== "user") continue;
+        history[i] = {
+          ...history[i],
+          parts: [...imageReferences, ...history[i].parts],
+        };
+        break;
+      }
+    }
+  }
+
   // Resolve model and create tools
   const model = resolveModel(effectiveModelId);
   const baseTools = createTools(
@@ -280,6 +351,13 @@ router.post("/", async (req: ProjectRequest, res) => {
         }),
       };
     });
+
+    if (lastUserIdx >= 0 && attachedImageParts.length > 0) {
+      redactedHistory[lastUserIdx] = {
+        ...redactedHistory[lastUserIdx],
+        parts: [...attachedImageParts, ...redactedHistory[lastUserIdx].parts],
+      };
+    }
 
     const convertedMessages = await convertToModelMessages(redactedHistory, {
       tools,
