@@ -1,6 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { eq, and, ilike, sql } from "drizzle-orm";
+import { eq, and, or, ilike, sql } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import readline from "readline";
@@ -592,6 +592,15 @@ export function createTools(
       }),
       execute: async ({ query }, { abortSignal }) => {
         throwIfAborted(abortSignal);
+        const trimmedQuery = query.trim();
+
+        if (!trimmedQuery) {
+          return {
+            status: "success",
+            images: [],
+            message: "Enter an image name or topic to search for.",
+          };
+        }
 
         // Prefer semantic match; fall through to ILIKE on the name when no
         // OpenAI key, embeddings disabled, or the call fails. The two paths
@@ -603,25 +612,22 @@ export function createTools(
             .where(eq(projects.id, projectId));
           if (project?.embeddingsEnabled) {
             try {
-              const semantic = await searchImagesProject(projectId, query, {
-                topK: 10,
-              });
-              if (semantic.length === 0) {
+              const semantic = await searchImagesProject(
+                projectId,
+                trimmedQuery,
+                { topK: 10 },
+              );
+              if (semantic.length > 0) {
                 return {
                   status: "success",
-                  images: [],
-                  message: "No images found matching that query.",
+                  images: semantic.map((i) => ({
+                    image_id: i.id,
+                    image_name: i.name,
+                    prompt: i.prompt,
+                    snippet: i.snippet,
+                  })),
                 };
               }
-              return {
-                status: "success",
-                images: semantic.map((i) => ({
-                  image_id: i.id,
-                  image_name: i.name,
-                  prompt: i.prompt,
-                  snippet: i.snippet,
-                })),
-              };
             } catch (err) {
               if (!(err instanceof NoOpenAIKeyError)) {
                 console.error(
@@ -634,14 +640,25 @@ export function createTools(
         }
 
         const results = await db
-          .select({ id: images.id, name: images.name })
+          .select({
+            id: images.id,
+            name: images.name,
+            metadata: images.metadata,
+          })
           .from(images)
           .where(
             and(
               eq(images.projectId, projectId),
-              ilike(images.name, `%${query}%`),
+              or(
+                ilike(images.name, `%${trimmedQuery}%`),
+                ilike(
+                  sql<string>`${images.metadata}->>'prompt'`,
+                  `%${trimmedQuery}%`,
+                ),
+              ),
             ),
-          );
+          )
+          .limit(10);
 
         if (results.length === 0) {
           return {
@@ -653,7 +670,18 @@ export function createTools(
 
         return {
           status: "success",
-          images: results.map((i) => ({ image_id: i.id, image_name: i.name })),
+          images: results.map((i) => {
+            const prompt = ((i.metadata ?? {}) as { prompt?: string }).prompt;
+            return {
+              image_id: i.id,
+              image_name: i.name,
+              prompt,
+              snippet:
+                prompt && prompt.length > 240
+                  ? `${prompt.slice(0, 240)}…`
+                  : (prompt ?? ""),
+            };
+          }),
         };
       },
     }),
