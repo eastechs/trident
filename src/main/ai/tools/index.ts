@@ -582,7 +582,7 @@ export function createTools(
 
     SearchImages: tool({
       description:
-        "Search for images in this project by name or by the prompt they were generated from. Returns matching images with their generation prompt as a snippet. Unlike SearchDocuments this is project-wide — the user picks the generation model on a per-image card, so images aren't owned by the conversational agent that requested them.",
+        "Search for images in this project by name or by the prompt they were generated from. Returns matching images with their generation prompt as a snippet. Call ReadImage with a result's image_id when you need to inspect the actual pixels. Unlike SearchDocuments this is project-wide — the user picks the generation model on a per-image card, so images aren't owned by the conversational agent that requested them.",
       inputSchema: z.object({
         query: z
           .string()
@@ -655,6 +655,114 @@ export function createTools(
           status: "success",
           images: results.map((i) => ({ image_id: i.id, image_name: i.name })),
         };
+      },
+    }),
+
+    ReadImage: tool({
+      description:
+        "Inspect the visual contents of a project image by UUID. Use SearchImages first when you do not know the image_id. The image is returned to you as multimodal content, so describe or analyze what is actually visible rather than relying only on its name or generation prompt.",
+      inputSchema: z.object({
+        image_id: z.string().describe("The UUID of the project image to view."),
+      }),
+      execute: async ({ image_id }, { abortSignal }) => {
+        throwIfAborted(abortSignal);
+        const [image] = await db
+          .select({
+            id: images.id,
+            name: images.name,
+            path: images.path,
+            mimeType: images.mimeType,
+          })
+          .from(images)
+          .where(and(eq(images.id, image_id), eq(images.projectId, projectId)));
+
+        if (!image) {
+          return {
+            status: "error" as const,
+            message: "Image not found or does not belong to this project.",
+          };
+        }
+
+        try {
+          const fullPath = safePathInside(path.dirname(image.path), image.path);
+          const stat = fs.statSync(fullPath);
+          if (!stat.isFile()) throw new Error("Image path is not a file.");
+        } catch {
+          return {
+            status: "error" as const,
+            message: "The image file is missing or cannot be read safely.",
+          };
+        }
+
+        return {
+          status: "success" as const,
+          image_id: image.id,
+          image_name: image.name,
+          mime_type: image.mimeType,
+        };
+      },
+      toModelOutput: async ({ output }) => {
+        if (output.status !== "success") {
+          return {
+            type: "content" as const,
+            value: [{ type: "text" as const, text: output.message }],
+          };
+        }
+
+        const [image] = await db
+          .select({
+            id: images.id,
+            name: images.name,
+            path: images.path,
+            mimeType: images.mimeType,
+          })
+          .from(images)
+          .where(
+            and(
+              eq(images.id, output.image_id),
+              eq(images.projectId, projectId),
+            ),
+          );
+
+        if (!image) {
+          return {
+            type: "content" as const,
+            value: [
+              {
+                type: "text" as const,
+                text: "The image is no longer available.",
+              },
+            ],
+          };
+        }
+
+        try {
+          const fullPath = safePathInside(path.dirname(image.path), image.path);
+          return {
+            type: "content" as const,
+            value: [
+              {
+                type: "text" as const,
+                text: `Project image: ${image.name} (${image.id})`,
+              },
+              {
+                type: "media" as const,
+                data: fs.readFileSync(fullPath).toString("base64"),
+                mediaType: image.mimeType,
+              },
+            ],
+          };
+        } catch {
+          return {
+            type: "content" as const,
+            value: [
+              {
+                type: "text" as const,
+                text: "The image file is missing or cannot be read safely.",
+              },
+            ],
+          };
+        }
       },
     }),
 
