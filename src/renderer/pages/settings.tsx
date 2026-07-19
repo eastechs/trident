@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ModelSelectorLogo } from "@/components/ai-elements/model-selector";
 import type { EditorHandle } from "@/components/editor";
 import { MilkdownEditorWrapper } from "@/components/editor";
+import { UpdateSidebarButton } from "@/components/update-sidebar-button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -311,6 +312,9 @@ export default function Settings() {
                 <TooltipContent side="right">Settings</TooltipContent>
               </Tooltip>
             </nav>
+            <div className="mt-auto">
+              <UpdateSidebarButton />
+            </div>
           </aside>
         </TooltipProvider>
 
