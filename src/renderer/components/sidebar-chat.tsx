@@ -388,6 +388,7 @@ export function SidebarChat({
 
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [visibleChatError, setVisibleChatError] = useState("");
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   const {
     messages,
@@ -896,6 +897,7 @@ export function SidebarChat({
                           projectId={projectId}
                           prompt={promptText}
                           name={nameText}
+                          onGeneratingChange={setIsGeneratingImage}
                           onGenerated={(result) => {
                             addToolOutput({
                               tool: "GenerateImage",
@@ -1036,7 +1038,7 @@ export function SidebarChat({
         )}
         {!hasNoProviders && (
           <div
-            className={`relative ${isStreaming ? "chat-input-shimmer" : ""}`}
+            className={`relative ${isStreaming || isGeneratingImage ? "chat-input-shimmer" : ""}`}
           >
             <div className="bg-primary/10 dark:bg-primary/20 pointer-events-none absolute -inset-6 rounded-full blur-3xl" />
             <div className="relative">

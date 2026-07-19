@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { authedFetch } from "@/lib/api";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ImageData } from "@/types/api";
 
 interface ImageModel {
@@ -135,6 +135,7 @@ interface ImageConfigCardProps {
   prompt: string;
   name: string;
   onGenerated: (result: ImageGenerationResult) => void | Promise<void>;
+  onGeneratingChange: (generating: boolean) => void;
   onCancel: () => void;
 }
 
@@ -143,6 +144,7 @@ export function ImageConfigCard({
   prompt,
   name,
   onGenerated,
+  onGeneratingChange,
   onCancel,
 }: ImageConfigCardProps) {
   const [selectedModelId, setSelectedModelId] = useState<string>(
@@ -155,6 +157,13 @@ export function ImageConfigCard({
   const [editableName, setEditableName] = useState<string>(name);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onGeneratingChange(generating);
+    return () => {
+      if (generating) onGeneratingChange(false);
+    };
+  }, [generating, onGeneratingChange]);
 
   const selectedModel =
     imageModels.find((m) => m.id === selectedModelId) ?? imageModels[0];
