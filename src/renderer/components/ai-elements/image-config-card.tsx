@@ -225,25 +225,25 @@ export function ImageConfigCard({
   ]);
 
   return (
-    <div className="not-prose border-border bg-card w-full rounded-xl border p-5">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="not-prose border-border bg-card w-full rounded-xl border p-4">
+      <div className="mb-3 flex items-center justify-between">
         <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
           Image Generation
         </span>
       </div>
 
       {/* Prompt (read-only) */}
-      <div className="mb-4">
+      <div className="mb-3">
         <label className="text-muted-foreground mb-1 block text-xs font-medium tracking-wide uppercase">
           Prompt
         </label>
-        <p className="border-border bg-muted/40 text-foreground rounded-lg border p-3 text-sm">
+        <p className="border-border bg-muted/40 text-foreground rounded-lg border px-2.5 py-2 text-sm">
           {prompt}
         </p>
       </div>
 
       {/* Name (editable) */}
-      <div className="mb-4">
+      <div className="mb-3">
         <label className="text-muted-foreground mb-1 block text-xs font-medium tracking-wide uppercase">
           Name
         </label>
@@ -252,16 +252,16 @@ export function ImageConfigCard({
           value={editableName}
           onChange={(e) => setEditableName(e.target.value)}
           disabled={generating}
-          className="border-border bg-background text-foreground focus:border-ring focus:ring-ring/20 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none disabled:opacity-60"
+          className="border-border bg-background text-foreground focus:border-ring focus:ring-ring/20 w-full rounded-lg border px-2.5 py-1.5 text-sm focus:ring-2 focus:outline-none disabled:opacity-60"
         />
       </div>
 
       {/* Model Selector */}
-      <div className="mb-4">
-        <label className="text-foreground mb-2 block text-sm font-medium">
+      <div className="mb-3">
+        <label className="text-foreground mb-1 block text-sm font-medium">
           Model
         </label>
-        <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           {imageModels.map((model) => {
             const isSelected = model.id === selectedModelId;
             return (
@@ -271,7 +271,7 @@ export function ImageConfigCard({
                 onClick={() => handleModelChange(model.id)}
                 disabled={generating}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 text-left transition-colors disabled:opacity-60",
+                  "flex min-w-0 items-center gap-2 rounded-lg border p-2 text-left transition-colors disabled:opacity-60",
                   isSelected
                     ? "border-green-500 bg-green-500/5 dark:border-green-400 dark:bg-green-400/5"
                     : "border-border hover:border-muted-foreground/30 hover:bg-accent/50",
@@ -292,7 +292,7 @@ export function ImageConfigCard({
                 <div className="min-w-0 flex-1">
                   <div
                     className={cn(
-                      "text-sm font-semibold",
+                      "truncate text-xs font-semibold",
                       isSelected
                         ? "text-green-700 dark:text-green-300"
                         : "text-foreground",
@@ -302,7 +302,7 @@ export function ImageConfigCard({
                   </div>
                   <div
                     className={cn(
-                      "text-xs",
+                      "text-[10px]",
                       isSelected
                         ? "text-green-600 dark:text-green-400"
                         : "text-muted-foreground",
@@ -318,11 +318,11 @@ export function ImageConfigCard({
       </div>
 
       {/* Dimensions */}
-      <div className="mb-4">
-        <label className="text-foreground mb-2 block text-sm font-medium">
+      <div className="mb-3">
+        <label className="text-foreground mb-1 block text-sm font-medium">
           Dimensions
         </label>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {selectedModel.dimensions.map((dim) => (
             <button
               key={dim}
@@ -330,7 +330,7 @@ export function ImageConfigCard({
               onClick={() => setSelectedDimension(dim)}
               disabled={generating}
               className={cn(
-                "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60",
+                "rounded-lg border px-2 py-1 text-xs font-medium transition-colors disabled:opacity-60",
                 dim === selectedDimension
                   ? "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-400/10 dark:text-green-300"
                   : "border-border text-muted-foreground hover:border-muted-foreground/30 hover:bg-accent/50",
@@ -343,11 +343,11 @@ export function ImageConfigCard({
       </div>
 
       {/* Quality / Resolution */}
-      <div className="mb-5">
-        <label className="text-foreground mb-2 block text-sm font-medium">
+      <div className="mb-4">
+        <label className="text-foreground mb-1 block text-sm font-medium">
           {selectedModel.qualityLabel}
         </label>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {selectedModel.qualityOptions.map((opt) => {
             const isSelected = selectedQuality === opt.value;
             return (
@@ -357,7 +357,7 @@ export function ImageConfigCard({
                 onClick={() => setSelectedQuality(opt.value)}
                 disabled={generating}
                 className={cn(
-                  "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60",
+                  "rounded-lg border px-2 py-1 text-xs font-medium transition-colors disabled:opacity-60",
                   isSelected
                     ? "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-400/10 dark:text-green-300"
                     : "border-border text-muted-foreground hover:border-muted-foreground/30 hover:bg-accent/50",
@@ -382,7 +382,7 @@ export function ImageConfigCard({
           type="button"
           onClick={onCancel}
           disabled={generating}
-          className="text-muted-foreground hover:bg-accent rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60"
+          className="text-muted-foreground hover:bg-accent rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60"
         >
           Cancel
         </button>
@@ -390,7 +390,7 @@ export function ImageConfigCard({
           type="button"
           onClick={handleSubmit}
           disabled={generating}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg px-5 py-2 text-sm font-semibold transition-colors disabled:opacity-60"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors disabled:opacity-60"
         >
           {generating ? "Generating…" : "Generate"}
         </button>
