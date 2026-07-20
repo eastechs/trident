@@ -1,6 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { eq, and, ilike, sql } from "drizzle-orm";
+import { eq, and, or, ilike, sql, desc } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import readline from "readline";
@@ -592,10 +592,22 @@ export function createTools(
       }),
       execute: async ({ query }, { abortSignal }) => {
         throwIfAborted(abortSignal);
+        const trimmedQuery = query.trim();
 
-        // Prefer semantic match; fall through to ILIKE on the name when no
-        // OpenAI key, embeddings disabled, or the call fails. The two paths
-        // return the same shape so callers don't have to branch.
+        if (!trimmedQuery) {
+          return {
+            status: "success",
+            images: [],
+            message: "Enter an image name or topic to search for.",
+          };
+        }
+
+        // Semantic search only covers rows that have embeddings, so always
+        // run the literal lookup too and merge the two result sets below.
+        // This keeps exact matches for older or duplicated images visible
+        // even when another embedded image clears the similarity threshold.
+        let semanticMatches: Awaited<ReturnType<typeof searchImagesProject>> =
+          [];
         if (getApiKey("openai")) {
           const [project] = await db
             .select({ embeddingsEnabled: projects.embeddingsEnabled })
@@ -603,25 +615,11 @@ export function createTools(
             .where(eq(projects.id, projectId));
           if (project?.embeddingsEnabled) {
             try {
-              const semantic = await searchImagesProject(projectId, query, {
-                topK: 10,
-              });
-              if (semantic.length === 0) {
-                return {
-                  status: "success",
-                  images: [],
-                  message: "No images found matching that query.",
-                };
-              }
-              return {
-                status: "success",
-                images: semantic.map((i) => ({
-                  image_id: i.id,
-                  image_name: i.name,
-                  prompt: i.prompt,
-                  snippet: i.snippet,
-                })),
-              };
+              semanticMatches = await searchImagesProject(
+                projectId,
+                trimmedQuery,
+                { topK: 10 },
+              );
             } catch (err) {
               if (!(err instanceof NoOpenAIKeyError)) {
                 console.error(
@@ -633,17 +631,67 @@ export function createTools(
           }
         }
 
-        const results = await db
-          .select({ id: images.id, name: images.name })
+        const literalPattern = `%${trimmedQuery}%`;
+        const literalRelevance = sql<number>`CASE
+          WHEN LOWER(${images.name}) = LOWER(${trimmedQuery}) THEN 0
+          WHEN ${images.name} ILIKE ${literalPattern} THEN 1
+          ELSE 2
+        END`;
+        const literalMatches = await db
+          .select({
+            id: images.id,
+            name: images.name,
+            metadata: images.metadata,
+          })
           .from(images)
           .where(
             and(
               eq(images.projectId, projectId),
-              ilike(images.name, `%${query}%`),
+              or(
+                ilike(images.name, literalPattern),
+                ilike(
+                  sql<string>`${images.metadata}->>'prompt'`,
+                  literalPattern,
+                ),
+              ),
             ),
-          );
+          )
+          .orderBy(literalRelevance, desc(images.createdAt), images.id)
+          .limit(10);
 
-        if (results.length === 0) {
+        const literalImages = literalMatches.map((image) => {
+          const prompt = ((image.metadata ?? {}) as { prompt?: string }).prompt;
+          return {
+            image_id: image.id,
+            image_name: image.name,
+            prompt,
+            snippet:
+              prompt && prompt.length > 240
+                ? `${prompt.slice(0, 240)}…`
+                : (prompt ?? ""),
+          };
+        });
+        const semanticImages = semanticMatches.map((image) => ({
+          image_id: image.id,
+          image_name: image.name,
+          prompt: image.prompt,
+          snippet: image.snippet,
+        }));
+
+        // Literal matches are already ordered by exact name, name fragment,
+        // prompt fragment, and recency. Put them first so a direct match can
+        // never be displaced by a merely similar embedded image, then fill
+        // remaining slots with semantic results and deduplicate by image id.
+        const seenImageIds = new Set<string>();
+        const mergedImages = [...literalImages, ...semanticImages]
+          .filter((image) => {
+            if (seenImageIds.has(image.image_id)) return false;
+            seenImageIds.add(image.image_id);
+            return true;
+          })
+          .slice(0, 10);
+
+        if (mergedImages.length === 0) {
           return {
             status: "success",
             images: [],
@@ -653,7 +701,7 @@ export function createTools(
 
         return {
           status: "success",
-          images: results.map((i) => ({ image_id: i.id, image_name: i.name })),
+          images: mergedImages,
         };
       },
     }),
