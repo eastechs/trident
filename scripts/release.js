@@ -85,6 +85,14 @@ run(
   `npx --no-install electron-builder --mac --publish always --config.releaseInfo.releaseName="Trident v${version}" --config.releaseInfo.releaseNotesFile="release/release-notes.md"`,
 );
 
+// electron-builder uses releaseInfo for updater metadata, but its GitHub
+// publisher does not apply that metadata to the GitHub release page. Update
+// the draft explicitly so the public release title and body contain the same
+// self-contained details before a maintainer publishes it.
+run(
+  `gh release edit v${version} --repo eastechs/trident-releases --title "Trident v${version}" --notes-file release/release-notes.md`,
+);
+
 // 5. Push the `npm version` commit + tag to the source repo.
 run("git push --follow-tags");
 
