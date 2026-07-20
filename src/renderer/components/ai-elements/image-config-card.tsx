@@ -131,15 +131,17 @@ export interface ImageGenerationResult {
 }
 
 interface ImageConfigCardProps {
+  generationId: string;
   projectId: string;
   prompt: string;
   name: string;
   onGenerated: (result: ImageGenerationResult) => void | Promise<void>;
-  onGeneratingChange: (generating: boolean) => void;
+  onGeneratingChange: (generationId: string, generating: boolean) => void;
   onCancel: () => void;
 }
 
 export function ImageConfigCard({
+  generationId,
   projectId,
   prompt,
   name,
@@ -159,11 +161,11 @@ export function ImageConfigCard({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    onGeneratingChange(generating);
+    onGeneratingChange(generationId, generating);
     return () => {
-      if (generating) onGeneratingChange(false);
+      if (generating) onGeneratingChange(generationId, false);
     };
-  }, [generating, onGeneratingChange]);
+  }, [generationId, generating, onGeneratingChange]);
 
   const selectedModel =
     imageModels.find((m) => m.id === selectedModelId) ?? imageModels[0];

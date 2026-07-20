@@ -388,7 +388,26 @@ export function SidebarChat({
 
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [visibleChatError, setVisibleChatError] = useState("");
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [activeImageGenerationIds, setActiveImageGenerationIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const isGeneratingImage = activeImageGenerationIds.size > 0;
+  const handleImageGeneratingChange = useCallback(
+    (generationId: string, generating: boolean) => {
+      setActiveImageGenerationIds((previous) => {
+        if (previous.has(generationId) === generating) return previous;
+
+        const next = new Set(previous);
+        if (generating) {
+          next.add(generationId);
+        } else {
+          next.delete(generationId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const {
     messages,
@@ -894,10 +913,11 @@ export function SidebarChat({
                       return (
                         <ImageConfigCard
                           key={`${message.id}-${i}`}
+                          generationId={part.toolCallId}
                           projectId={projectId}
                           prompt={promptText}
                           name={nameText}
-                          onGeneratingChange={setIsGeneratingImage}
+                          onGeneratingChange={handleImageGeneratingChange}
                           onGenerated={(result) => {
                             addToolOutput({
                               tool: "GenerateImage",
