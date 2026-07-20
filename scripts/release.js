@@ -28,34 +28,18 @@ function writeReleaseNotes(version) {
   const previousTag = captureOptional("git describe --tags --abbrev=0 HEAD^");
   const range = previousTag ? `${previousTag}..HEAD` : "HEAD";
   const log = captureOptional(
-    `git log ${range} --no-merges --pretty=format:%s%x09%H`,
+    `git log ${range} --no-merges --pretty=format:%s`,
   );
-  const changes = (log ? log.split("\n") : [])
-    .map((line) => {
-      const separator = line.lastIndexOf("\t");
-      if (separator === -1) return null;
-      return {
-        subject: line.slice(0, separator),
-        sha: line.slice(separator + 1),
-      };
-    })
-    .filter(
-      (entry) =>
-        entry && entry.subject !== version && entry.subject !== currentTag,
-    );
+  const changes = (log ? log.split("\n") : []).filter(
+    (subject) => subject !== version && subject !== currentTag,
+  );
 
-  const notes = changes.map(
-    ({ subject, sha }) =>
-      `- ${subject} ([${sha.slice(0, 7)}](https://github.com/eastechs/trident/commit/${sha}))`,
-  );
-  if (notes.length === 0) notes.push("- Maintenance release");
-
-  notes.push("");
-  notes.push(
-    previousTag
-      ? `[Full changelog](https://github.com/eastechs/trident/compare/${previousTag}...${currentTag})`
-      : `[Source commit](https://github.com/eastechs/trident/tree/${currentTag})`,
-  );
+  const notes = ["## What's changed", ""];
+  if (changes.length > 0) {
+    notes.push(...changes.map((subject) => `- ${subject}`));
+  } else {
+    notes.push("- Maintenance and reliability improvements");
+  }
 
   fs.mkdirSync("release", { recursive: true });
   fs.writeFileSync("release/release-notes.md", `${notes.join("\n")}\n`);
@@ -92,7 +76,9 @@ run("npm run build");
 // 4. Package, notarize (afterAllArtifactBuild hook), and upload assets to a
 //    DRAFT release in eastechs/trident-releases (releaseType: draft). Supply
 //    release metadata explicitly: the public binary repository has no source
-//    history, so GitHub's generated notes otherwise link to its Initial commit.
+//    history, so GitHub's generated notes otherwise show only its Initial
+//    commit. The generated body is self-contained and does not link to the
+//    private source repository.
 const { version } = require("../package.json");
 writeReleaseNotes(version);
 run(
