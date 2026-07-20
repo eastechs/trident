@@ -157,6 +157,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "anthropic",
     name: "Opus 4.8",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "claude-opus-4-7",
@@ -164,6 +165,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "anthropic",
     name: "Opus 4.7",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "claude-sonnet-4-6",
@@ -171,6 +173,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "anthropic",
     name: "Sonnet 4.6",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "claude-haiku-4-5",
@@ -178,6 +181,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "anthropic",
     name: "Haiku 4.5",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "gpt-5.5",
@@ -185,6 +189,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "openai",
     name: "GPT-5.5",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "gpt-5-mini",
@@ -192,6 +197,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "openai",
     name: "GPT-5 Mini",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "gpt-5-nano",
@@ -199,6 +205,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "openai",
     name: "GPT-5 Nano",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "gemini-3.1-pro-preview",
@@ -206,6 +213,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "google",
     name: "Gemini 3.1 Pro Preview",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "gemini-3-flash-preview",
@@ -213,6 +221,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "google",
     name: "Gemini 3 Flash Preview",
     supportsReasoning: true,
+    supportsImages: true,
   },
 ];
 
@@ -391,6 +400,8 @@ export function SidebarChat({
   >(new Map());
 
   const selectedModelData = availableModels.find((m) => m.id === model);
+  const selectedModelSupportsImages =
+    selectedModelData?.supportsImages ?? false;
   const maxTokens =
     selectedModelData?.pricing?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
 
@@ -633,10 +644,19 @@ export function SidebarChat({
     prevStatusRef.current = status;
   }, [status, messages, onStreamingComplete]);
 
-  const handleModelSelect = useCallback((id: string) => {
-    setModel(id);
-    setModelSelectorOpen(false);
-  }, []);
+  const handleModelSelect = useCallback(
+    (id: string) => {
+      setModel(id);
+      if (
+        !availableModels.find((candidate) => candidate.id === id)
+          ?.supportsImages
+      ) {
+        setSelectedImageIds(new Set());
+      }
+      setModelSelectorOpen(false);
+    },
+    [availableModels],
+  );
 
   const handleSubmit = useCallback(
     async (message: { text: string }) => {
@@ -1323,48 +1343,56 @@ export function SidebarChat({
                                 <div className="px-2 py-1 text-[10px] font-semibold tracking-wider text-neutral-400 uppercase dark:text-neutral-500">
                                   Images
                                 </div>
-                                {images.map((image) => (
-                                  <Tooltip key={image.id}>
-                                    <TooltipTrigger
-                                      asChild
-                                      onFocus={(e) => e.preventDefault()}
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => toggleImage(image.id)}
-                                        className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
-                                          selectedImageIds.has(image.id)
-                                            ? "bg-neutral-50 dark:bg-neutral-900"
-                                            : ""
-                                        }`}
-                                      >
-                                        <div
-                                          className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                                            selectedImageIds.has(image.id)
-                                              ? "border-primary bg-primary text-primary-foreground"
-                                              : "border-neutral-300 dark:border-neutral-600"
-                                          }`}
-                                        >
-                                          {selectedImageIds.has(image.id) && (
-                                            <CheckIcon className="size-3" />
-                                          )}
-                                        </div>
-                                        <ImageIcon className="size-4 shrink-0 text-neutral-400" />
-                                        <span className="truncate">
-                                          {image.name}
-                                        </span>
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="left">
-                                      {image.name}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                ))}
-                                {images.length === 0 && (
+                                {!selectedModelSupportsImages && (
                                   <p className="px-2 py-1.5 text-sm text-neutral-400">
-                                    No images
+                                    The selected model does not support image
+                                    input
                                   </p>
                                 )}
+                                {selectedModelSupportsImages &&
+                                  images.map((image) => (
+                                    <Tooltip key={image.id}>
+                                      <TooltipTrigger
+                                        asChild
+                                        onFocus={(e) => e.preventDefault()}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleImage(image.id)}
+                                          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
+                                            selectedImageIds.has(image.id)
+                                              ? "bg-neutral-50 dark:bg-neutral-900"
+                                              : ""
+                                          }`}
+                                        >
+                                          <div
+                                            className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                                              selectedImageIds.has(image.id)
+                                                ? "border-primary bg-primary text-primary-foreground"
+                                                : "border-neutral-300 dark:border-neutral-600"
+                                            }`}
+                                          >
+                                            {selectedImageIds.has(image.id) && (
+                                              <CheckIcon className="size-3" />
+                                            )}
+                                          </div>
+                                          <ImageIcon className="size-4 shrink-0 text-neutral-400" />
+                                          <span className="truncate">
+                                            {image.name}
+                                          </span>
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="left">
+                                        {image.name}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ))}
+                                {selectedModelSupportsImages &&
+                                  images.length === 0 && (
+                                    <p className="px-2 py-1.5 text-sm text-neutral-400">
+                                      No images
+                                    </p>
+                                  )}
                               </div>
                             </div>
                           </TooltipProvider>

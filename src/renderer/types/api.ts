@@ -65,5 +65,7 @@ export interface ModelInfo {
   // hides the effort selector when this is false so we don't 4xx by sending
   // a reasoning param to a chat-only model.
   supportsReasoning: boolean;
+  // True when image file parts can be sent as conversational input.
+  supportsImages: boolean;
   pricing?: ModelPricing;
 }

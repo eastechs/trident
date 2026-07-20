@@ -9,6 +9,10 @@ export interface ModelInfo {
   // as the effort selector. Hidden in the UI and skipped server-side when
   // false so we don't 4xx by sending reasoning_effort to a chat-only model.
   supportsReasoning: boolean;
+  // True when the model accepts image file parts as conversational input.
+  // This is separate from image generation: it controls whether saved project
+  // images may be attached to a user message for visual analysis.
+  supportsImages: boolean;
 }
 
 type ProviderKey = "anthropic" | "openai" | "gemini";
@@ -39,6 +43,29 @@ export function supportsReasoning(
   return false;
 }
 
+export function supportsImageInput(
+  modelId: string,
+  providerSlug: "anthropic" | "openai" | "google",
+): boolean {
+  if (providerSlug === "anthropic") {
+    return (
+      /^claude-3(?:[-.]|$)/.test(modelId) ||
+      /^claude-(opus|sonnet|haiku)-/.test(modelId)
+    );
+  }
+  if (providerSlug === "openai") {
+    return (
+      /^gpt-4(?:o|\.\d|-turbo|-vision)/.test(modelId) ||
+      /^gpt-[5-9]/.test(modelId) ||
+      /^o[1345](?:-|$)/.test(modelId)
+    );
+  }
+  if (providerSlug === "google") {
+    return /^gemini-(?:1[.-]5|[2-9])/.test(modelId);
+  }
+  return false;
+}
+
 const FETCH_TIMEOUT_MS = 8_000;
 const CACHE_TTL_MS = 5 * 60_000;
 
@@ -47,12 +74,13 @@ const cache = new Map<ProviderKey, { at: number; models: ModelInfo[] }>();
 // Intermediate row used by FALLBACK and the per-provider fetchers; the
 // reasoning capability is stamped in one place after fetch so we don't
 // have to repeat the predicate at every construction site.
-type ModelDescriptor = Omit<ModelInfo, "supportsReasoning">;
+type ModelDescriptor = Omit<ModelInfo, "supportsReasoning" | "supportsImages">;
 
 function stampCapabilities(models: ModelDescriptor[]): ModelInfo[] {
   return models.map((m) => ({
     ...m,
     supportsReasoning: supportsReasoning(m.id, m.providerSlug),
+    supportsImages: supportsImageInput(m.id, m.providerSlug),
   }));
 }
 
