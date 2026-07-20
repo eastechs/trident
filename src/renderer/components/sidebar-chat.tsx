@@ -388,6 +388,26 @@ export function SidebarChat({
 
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [visibleChatError, setVisibleChatError] = useState("");
+  const [activeImageGenerationIds, setActiveImageGenerationIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const isGeneratingImage = activeImageGenerationIds.size > 0;
+  const handleImageGeneratingChange = useCallback(
+    (generationId: string, generating: boolean) => {
+      setActiveImageGenerationIds((previous) => {
+        if (previous.has(generationId) === generating) return previous;
+
+        const next = new Set(previous);
+        if (generating) {
+          next.add(generationId);
+        } else {
+          next.delete(generationId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const {
     messages,
@@ -893,9 +913,11 @@ export function SidebarChat({
                       return (
                         <ImageConfigCard
                           key={`${message.id}-${i}`}
+                          generationId={part.toolCallId}
                           projectId={projectId}
                           prompt={promptText}
                           name={nameText}
+                          onGeneratingChange={handleImageGeneratingChange}
                           onGenerated={(result) => {
                             addToolOutput({
                               tool: "GenerateImage",
@@ -1036,7 +1058,7 @@ export function SidebarChat({
         )}
         {!hasNoProviders && (
           <div
-            className={`relative ${isStreaming ? "chat-input-shimmer" : ""}`}
+            className={`relative ${isStreaming || isGeneratingImage ? "chat-input-shimmer" : ""}`}
           >
             <div className="bg-primary/10 dark:bg-primary/20 pointer-events-none absolute -inset-6 rounded-full blur-3xl" />
             <div className="relative">
