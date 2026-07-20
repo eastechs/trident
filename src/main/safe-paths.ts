@@ -17,10 +17,7 @@ import path from "path";
  * DB-stored or user-supplied data and then performs a write/rename/unlink. A
  * symlink planted anywhere on the path is caught here before fs follows it.
  */
-export function safePathInside(
-  boundaryRel: string,
-  targetRel: string,
-): string {
+export function safePathInside(boundaryRel: string, targetRel: string): string {
   const realHome = fs.realpathSync(os.homedir());
   const rawBoundary = path.resolve(realHome, boundaryRel);
   fs.mkdirSync(rawBoundary, { recursive: true });

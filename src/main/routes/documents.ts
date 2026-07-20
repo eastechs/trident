@@ -159,10 +159,7 @@ router.patch("/:docId", async (req: DocRequest, res) => {
     `${project.path}/documents`,
     document.path,
   );
-  const newFullPath = safePathInside(
-    `${project.path}/documents`,
-    newDocPath,
-  );
+  const newFullPath = safePathInside(`${project.path}/documents`, newDocPath);
 
   // Rename file on disk
   if (fs.existsSync(oldFullPath)) {
@@ -239,10 +236,7 @@ router.put("/:docId/content", async (req: DocRequest, res) => {
   const createdBy = document.createdBy ?? "user";
   const now = new Date().toISOString();
   const frontMatter = `---\nuuid: ${document.id}\nname: ${document.name}\ncreated_by: ${createdBy}\nlast_edited_by: user\nupdated_at: ${now}\n---\n`;
-  const fullPath = safePathInside(
-    `${project.path}/documents`,
-    document.path,
-  );
+  const fullPath = safePathInside(`${project.path}/documents`, document.path);
   fs.writeFileSync(fullPath, frontMatter + content);
 
   res.json({ success: true });
