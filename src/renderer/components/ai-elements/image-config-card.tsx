@@ -292,7 +292,7 @@ export function ImageConfigCard({
                 <div className="min-w-0 flex-1">
                   <div
                     className={cn(
-                      "truncate text-xs font-semibold",
+                      "text-xs leading-tight font-semibold break-words",
                       isSelected
                         ? "text-green-700 dark:text-green-300"
                         : "text-foreground",
