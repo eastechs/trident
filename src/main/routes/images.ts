@@ -128,7 +128,14 @@ router.post("/generate", async (req: ProjectRequest, res) => {
       genOptions.size = sizeFromAspect(size);
     }
     genOptions.providerOptions = isGemini
-      ? { google: { quality } }
+      ? {
+          google: {
+            imageConfig: {
+              aspectRatio: size,
+              imageSize: quality,
+            },
+          },
+        }
       : { openai: { quality } };
 
     const result = await generateImageFn(

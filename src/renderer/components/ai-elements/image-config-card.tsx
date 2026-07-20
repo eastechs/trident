@@ -62,7 +62,7 @@ const imageModels: ImageModel[] = [
     qualityLabel: "Quality",
   },
   {
-    id: "gemini-3.1-flash-image-preview",
+    id: "gemini-3.1-flash-image",
     name: "Nano Banana 2",
     provider: "gemini",
     dimensions: [
@@ -83,13 +83,37 @@ const imageModels: ImageModel[] = [
     ],
     qualityOptions: [
       { value: "1K", label: "1K" },
+      { value: "512", label: "0.5K" },
       { value: "2K", label: "2K" },
       { value: "4K", label: "4K" },
     ],
     qualityLabel: "Resolution",
   },
   {
-    id: "gemini-3-pro-image-preview",
+    id: "gemini-3.1-flash-lite-image",
+    name: "Nano Banana 2 Lite",
+    provider: "gemini",
+    dimensions: [
+      "1:1",
+      "2:3",
+      "3:2",
+      "3:4",
+      "4:3",
+      "4:5",
+      "5:4",
+      "9:16",
+      "16:9",
+      "1:4",
+      "4:1",
+      "1:8",
+      "8:1",
+      "21:9",
+    ],
+    qualityOptions: [{ value: "1K", label: "1K" }],
+    qualityLabel: "Resolution",
+  },
+  {
+    id: "gemini-3-pro-image",
     name: "Nano Banana Pro",
     provider: "gemini",
     dimensions: [
