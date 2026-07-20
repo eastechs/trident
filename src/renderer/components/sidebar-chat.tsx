@@ -12,6 +12,7 @@ import {
   AlertCircleIcon,
   CheckIcon,
   FileTextIcon,
+  ImageIcon,
   PlusIcon,
   RotateCcwIcon,
   XIcon,
@@ -117,9 +118,11 @@ function toolLabel(toolName: string): string {
 // attached. Tag attribute order isn't fixed, so match anything up to `>`.
 const ATTACHED_DOC_RE =
   /<attached_document\b[^>]*>[\s\S]*?<\/attached_document>\n?/g;
+const ATTACHED_IMAGE_RE =
+  /<attached_image\b[^>]*>[\s\S]*?<\/attached_image>\n?/g;
 
 function cleanText(text: string): string {
-  return text.replace(ATTACHED_DOC_RE, "");
+  return text.replace(ATTACHED_DOC_RE, "").replace(ATTACHED_IMAGE_RE, "");
 }
 
 function formatChatError(error: Error | undefined): string {
@@ -154,6 +157,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "anthropic",
     name: "Opus 4.8",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "claude-opus-4-7",
@@ -161,6 +165,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "anthropic",
     name: "Opus 4.7",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "claude-sonnet-4-6",
@@ -168,6 +173,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "anthropic",
     name: "Sonnet 4.6",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "claude-haiku-4-5",
@@ -175,6 +181,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "anthropic",
     name: "Haiku 4.5",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "gpt-5.5",
@@ -182,6 +189,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "openai",
     name: "GPT-5.5",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "gpt-5-mini",
@@ -189,6 +197,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "openai",
     name: "GPT-5 Mini",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "gpt-5-nano",
@@ -196,6 +205,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "openai",
     name: "GPT-5 Nano",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "gemini-3.1-pro-preview",
@@ -203,6 +213,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "google",
     name: "Gemini 3.1 Pro Preview",
     supportsReasoning: true,
+    supportsImages: true,
   },
   {
     id: "gemini-3-flash-preview",
@@ -210,6 +221,7 @@ const FALLBACK_MODELS: ModelInfo[] = [
     providerSlug: "google",
     name: "Gemini 3 Flash Preview",
     supportsReasoning: true,
+    supportsImages: true,
   },
 ];
 
@@ -264,6 +276,7 @@ interface SidebarChatProps {
   projectId: string;
   conversationId: string;
   documents: DocumentData[];
+  images: ImageData[];
   defaultModel?: string;
   lockedModel?: string | null;
   initialEffort?: EffortLevel;
@@ -289,6 +302,7 @@ export function SidebarChat({
   projectId,
   conversationId,
   documents,
+  images,
   defaultModel,
   lockedModel,
   initialEffort = "medium",
@@ -354,6 +368,9 @@ export function SidebarChat({
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(
     new Set(),
   );
+  const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [attachmentSelectorOpen, setAttachmentSelectorOpen] = useState(false);
 
   // Sequence counter so an older in-flight effort PATCH that fails can't
@@ -383,6 +400,8 @@ export function SidebarChat({
   >(new Map());
 
   const selectedModelData = availableModels.find((m) => m.id === model);
+  const selectedModelSupportsImages =
+    selectedModelData?.supportsImages ?? false;
   const maxTokens =
     selectedModelData?.pricing?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
 
@@ -488,7 +507,10 @@ export function SidebarChat({
   const isModelLocked = lockedModel != null || messages.length > 0;
   const hasNoProviders = availableModels.length === 0;
   const chatErrorMessage = visibleChatError || formatChatError(chatError);
-  const lastSendBodyRef = useRef<{ document_ids: string[] } | null>(null);
+  const lastSendBodyRef = useRef<{
+    document_ids: string[];
+    image_ids: string[];
+  } | null>(null);
   const clearChatError = useCallback(() => {
     setVisibleChatError("");
     clearError();
@@ -642,10 +664,19 @@ export function SidebarChat({
     prevStatusRef.current = status;
   }, [status, messages, onStreamingComplete]);
 
-  const handleModelSelect = useCallback((id: string) => {
-    setModel(id);
-    setModelSelectorOpen(false);
-  }, []);
+  const handleModelSelect = useCallback(
+    (id: string) => {
+      setModel(id);
+      if (
+        !availableModels.find((candidate) => candidate.id === id)
+          ?.supportsImages
+      ) {
+        setSelectedImageIds(new Set());
+      }
+      setModelSelectorOpen(false);
+    },
+    [availableModels],
+  );
 
   const handleSubmit = useCallback(
     async (message: { text: string }) => {
@@ -659,12 +690,22 @@ export function SidebarChat({
       }
 
       clearChatError();
-      const body = { document_ids: Array.from(selectedDocumentIds) };
+      const body = {
+        document_ids: Array.from(selectedDocumentIds),
+        image_ids: Array.from(selectedImageIds),
+      };
       lastSendBodyRef.current = body;
       void sendMessage({ text }, { body });
       setSelectedDocumentIds(new Set());
+      setSelectedImageIds(new Set());
     },
-    [clearChatError, isStreaming, sendMessage, selectedDocumentIds],
+    [
+      clearChatError,
+      isStreaming,
+      sendMessage,
+      selectedDocumentIds,
+      selectedImageIds,
+    ],
   );
 
   const handleQuestionsSubmit = useCallback(
@@ -679,18 +720,22 @@ export function SidebarChat({
         .join("\n\n");
 
       clearChatError();
-      const body = { document_ids: Array.from(selectedDocumentIds) };
+      const body = {
+        document_ids: Array.from(selectedDocumentIds),
+        image_ids: Array.from(selectedImageIds),
+      };
       lastSendBodyRef.current = body;
       void sendMessage({ text: formattedMessage }, { body });
       setSelectedDocumentIds(new Set());
+      setSelectedImageIds(new Set());
     },
-    [clearChatError, sendMessage, selectedDocumentIds],
+    [clearChatError, sendMessage, selectedDocumentIds, selectedImageIds],
   );
 
   const handleRetryLastMessage = useCallback(() => {
     clearChatError();
     void regenerate({
-      body: lastSendBodyRef.current ?? { document_ids: [] },
+      body: lastSendBodyRef.current ?? { document_ids: [], image_ids: [] },
     });
   }, [clearChatError, regenerate]);
 
@@ -760,6 +805,20 @@ export function SidebarChat({
         next.delete(docId);
       } else {
         next.add(docId);
+      }
+
+      return next;
+    });
+  }, []);
+
+  const toggleImage = useCallback((imageId: string) => {
+    setSelectedImageIds((prev) => {
+      const next = new Set(prev);
+
+      if (next.has(imageId)) {
+        next.delete(imageId);
+      } else {
+        next.add(imageId);
       }
 
       return next;
@@ -1205,9 +1264,11 @@ export function SidebarChat({
                             className="relative flex shrink-0 items-center justify-center rounded p-1.5 text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
                           >
                             <PlusIcon className="size-4" />
-                            {selectedDocumentIds.size > 0 && (
+                            {selectedDocumentIds.size + selectedImageIds.size >
+                              0 && (
                               <span className="bg-primary text-primary-foreground absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full text-[10px] font-medium">
-                                {selectedDocumentIds.size}
+                                {selectedDocumentIds.size +
+                                  selectedImageIds.size}
                               </span>
                             )}
                           </button>
@@ -1215,7 +1276,7 @@ export function SidebarChat({
                         <PopoverContent align="end" className="w-64 gap-1 p-2">
                           <div className="mb-2 flex items-center justify-between px-2">
                             <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                              Attach Documents
+                              Attach Project Files
                             </span>
                           </div>
                           <TooltipProvider
@@ -1300,6 +1361,61 @@ export function SidebarChat({
                                   No documents
                                 </p>
                               )}
+                              <div className="mt-1 border-t border-neutral-100 pt-1 dark:border-neutral-800">
+                                <div className="px-2 py-1 text-[10px] font-semibold tracking-wider text-neutral-400 uppercase dark:text-neutral-500">
+                                  Images
+                                </div>
+                                {!selectedModelSupportsImages && (
+                                  <p className="px-2 py-1.5 text-sm text-neutral-400">
+                                    The selected model does not support image
+                                    input
+                                  </p>
+                                )}
+                                {selectedModelSupportsImages &&
+                                  images.map((image) => (
+                                    <Tooltip key={image.id}>
+                                      <TooltipTrigger
+                                        asChild
+                                        onFocus={(e) => e.preventDefault()}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleImage(image.id)}
+                                          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
+                                            selectedImageIds.has(image.id)
+                                              ? "bg-neutral-50 dark:bg-neutral-900"
+                                              : ""
+                                          }`}
+                                        >
+                                          <div
+                                            className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                                              selectedImageIds.has(image.id)
+                                                ? "border-primary bg-primary text-primary-foreground"
+                                                : "border-neutral-300 dark:border-neutral-600"
+                                            }`}
+                                          >
+                                            {selectedImageIds.has(image.id) && (
+                                              <CheckIcon className="size-3" />
+                                            )}
+                                          </div>
+                                          <ImageIcon className="size-4 shrink-0 text-neutral-400" />
+                                          <span className="truncate">
+                                            {image.name}
+                                          </span>
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="left">
+                                        {image.name}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ))}
+                                {selectedModelSupportsImages &&
+                                  images.length === 0 && (
+                                    <p className="px-2 py-1.5 text-sm text-neutral-400">
+                                      No images
+                                    </p>
+                                  )}
+                              </div>
                             </div>
                           </TooltipProvider>
                         </PopoverContent>

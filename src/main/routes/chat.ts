@@ -1,3 +1,4 @@
+import fs from "fs";
 import { Router, type Request } from "express";
 import {
   streamText,
@@ -6,11 +7,18 @@ import {
   stepCountIs,
   generateId,
   type UIMessage,
+  type FileUIPart,
   type ToolSet,
 } from "ai";
 import { eq, asc, sql, inArray, and } from "drizzle-orm";
 import { getDb } from "../database.js";
-import { conversations, messages, documents, projects } from "../db/schema.js";
+import {
+  conversations,
+  messages,
+  documents,
+  images,
+  projects,
+} from "../db/schema.js";
 import {
   resolveModel,
   getProviderOptions,
@@ -22,6 +30,8 @@ import { loadInstructions } from "../ai/instructions.js";
 import { createTools } from "../ai/tools/index.js";
 import { showNotification } from "../native/notifications.js";
 import { getApiKey } from "../settings.js";
+import { safePathInside } from "../safe-paths.js";
+import { supportsImageInput } from "../ai/model-registry.js";
 
 const router = Router({ mergeParams: true });
 
@@ -37,6 +47,30 @@ function formatErrorMessage(error: unknown): string {
   }
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function attachedImageIds(message: UIMessage): string[] {
+  const ids = new Set<string>();
+  for (const part of message.parts) {
+    if (part.type !== "text") continue;
+    for (const match of part.text.matchAll(
+      /<attached_image\b[^>]*\bid="([^"]+)"[^>]*>/g,
+    )) {
+      if (UUID_RE.test(match[1])) ids.add(match[1]);
+    }
+  }
+  return [...ids];
+}
+
+function escapedAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 // ─── Send message (streaming) ──────────────────────────────
 
 router.post("/", async (req: ProjectRequest, res) => {
@@ -48,6 +82,7 @@ router.post("/", async (req: ProjectRequest, res) => {
     conversation_id,
     side,
     document_ids,
+    image_ids,
   } = req.body;
 
   if (!model_id || !conversation_id) {
@@ -94,6 +129,11 @@ router.post("/", async (req: ProjectRequest, res) => {
   // First message in a new conversation has model=null, so we trust the
   // request id then.
   const effectiveModelId: string = conversation.model || model_id;
+  const providerSlug = effectiveModelId.startsWith("claude-")
+    ? "anthropic"
+    : effectiveModelId.startsWith("gemini-")
+      ? "google"
+      : "openai";
 
   // The client (useChat) sends the full UIMessage[] including the new user message.
   // Use that directly; the DB history would miss the new message.
@@ -169,6 +209,140 @@ router.post("/", async (req: ProjectRequest, res) => {
     }
   }
 
+  // Persist only lightweight image references. On every request we resolve
+  // references from the complete history and add file parts to model-only
+  // messages. That keeps base64 out of the DB without losing images on a
+  // follow-up, retry, or app reload.
+  const requestedImageIds = Array.isArray(image_ids)
+    ? [
+        ...new Set(
+          image_ids.filter((id): id is string => typeof id === "string"),
+        ),
+      ]
+    : [];
+  if (requestedImageIds.some((id) => !UUID_RE.test(id))) {
+    res.status(422).json({ error: "One or more selected images are invalid." });
+    return;
+  }
+
+  let lastUserIndex = -1;
+  const imageIdsByMessage = new Map<number, string[]>();
+  const persistedUserMessages = await db
+    .select({ id: messages.id, parts: messages.parts })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.conversationId, conversation_id),
+        eq(messages.role, "user"),
+      ),
+    );
+  const persistedImageIdsByMessageId = new Map(
+    persistedUserMessages.map((message) => [
+      message.id,
+      attachedImageIds({
+        id: message.id,
+        role: "user",
+        parts: message.parts as UIMessage["parts"],
+      }),
+    ]),
+  );
+  for (let i = 0; i < history.length; i++) {
+    if (history[i].role !== "user") continue;
+    lastUserIndex = i;
+    const ids = [
+      ...new Set([
+        ...attachedImageIds(history[i]),
+        ...(persistedImageIdsByMessageId.get(history[i].id) ?? []),
+      ]),
+    ];
+    if (ids.length > 0) imageIdsByMessage.set(i, ids);
+  }
+
+  const allReferencedImageIds = new Set([...imageIdsByMessage.values()].flat());
+  for (const id of requestedImageIds) allReferencedImageIds.add(id);
+
+  const filePartByImageId = new Map<string, FileUIPart>();
+  if (allReferencedImageIds.size > 0) {
+    if (!supportsImageInput(effectiveModelId, providerSlug)) {
+      res.status(422).json({
+        error: `The selected model (${effectiveModelId}) does not support image input.`,
+      });
+      return;
+    }
+
+    const attachedImages = await db
+      .select({
+        id: images.id,
+        name: images.name,
+        path: images.path,
+        mimeType: images.mimeType,
+      })
+      .from(images)
+      .where(
+        and(
+          eq(images.projectId, projectId),
+          inArray(images.id, [...allReferencedImageIds]),
+        ),
+      );
+
+    const imageById = new Map(attachedImages.map((image) => [image.id, image]));
+    if (requestedImageIds.some((id) => !imageById.has(id))) {
+      res.status(422).json({
+        error: "One or more selected images are no longer available.",
+      });
+      return;
+    }
+
+    const requestedIdSet = new Set(requestedImageIds);
+    for (const image of attachedImages) {
+      try {
+        const fullPath = safePathInside(`${project.path}/images`, image.path);
+        const mediaType = /^image\/[a-z0-9.+-]+$/i.test(image.mimeType)
+          ? image.mimeType
+          : "image/png";
+        filePartByImageId.set(image.id, {
+          type: "file",
+          mediaType,
+          filename: image.name,
+          url: `data:${mediaType};base64,${fs.readFileSync(fullPath).toString("base64")}`,
+        });
+      } catch {
+        if (requestedIdSet.has(image.id)) {
+          res.status(422).json({
+            error: `The selected image "${image.name}" could not be read.`,
+          });
+          return;
+        }
+        // A missing historical image must not permanently brick the chat.
+        // Its lightweight reference remains visible to the model as context.
+        continue;
+      }
+    }
+
+    if (requestedImageIds.length > 0 && lastUserIndex >= 0) {
+      const existingIds = new Set(imageIdsByMessage.get(lastUserIndex) ?? []);
+      const newIds = requestedImageIds.filter((id) => !existingIds.has(id));
+      const imageReferences = newIds.map((id) => {
+        const image = imageById.get(id)!;
+        return {
+          type: "text" as const,
+          text: `<attached_image id="${image.id}" name="${escapedAttribute(image.name)}">[image attached]</attached_image>`,
+        };
+      });
+      if (imageReferences.length > 0) {
+        history[lastUserIndex] = {
+          ...history[lastUserIndex],
+          // Keep the user's own text first so title generation is based on
+          // their prompt rather than the synthetic attachment marker.
+          parts: [...history[lastUserIndex].parts, ...imageReferences],
+        };
+      }
+      imageIdsByMessage.set(lastUserIndex, [
+        ...new Set([...existingIds, ...requestedImageIds]),
+      ]);
+    }
+  }
+
   // Resolve model and create tools
   const model = resolveModel(effectiveModelId);
   const baseTools = createTools(
@@ -179,11 +353,7 @@ router.post("/", async (req: ProjectRequest, res) => {
   );
 
   // Add a provider-native web search tool so the agent can look up current info.
-  const provider = effectiveModelId.startsWith("claude-")
-    ? "anthropic"
-    : effectiveModelId.startsWith("gemini-")
-      ? "gemini"
-      : "openai";
+  const provider = providerSlug === "google" ? "gemini" : providerSlug;
 
   let WebSearch: ToolSet[string] | undefined = undefined;
   if (provider === "anthropic") {
@@ -280,6 +450,17 @@ router.post("/", async (req: ProjectRequest, res) => {
         }),
       };
     });
+
+    for (const [messageIndex, imageIds] of imageIdsByMessage) {
+      const imageParts = imageIds
+        .map((id) => filePartByImageId.get(id))
+        .filter((part): part is FileUIPart => part != null);
+      if (imageParts.length === 0) continue;
+      redactedHistory[messageIndex] = {
+        ...redactedHistory[messageIndex],
+        parts: [...imageParts, ...redactedHistory[messageIndex].parts],
+      };
+    }
 
     const convertedMessages = await convertToModelMessages(redactedHistory, {
       tools,
@@ -571,10 +752,13 @@ async function generateConversationTitle(
 ): Promise<string> {
   if (!firstUserMessage) return "New Chat";
 
-  const textPart = firstUserMessage.parts?.find(
-    (p): p is { type: "text"; text: string } => p.type === "text",
-  );
-  const userText = textPart?.text ?? "";
+  const userText = firstUserMessage.parts
+    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+    .map((part) => part.text)
+    .join("\n")
+    .replace(/<attached_document\b[^>]*>[\s\S]*?<\/attached_document>/g, "")
+    .replace(/<attached_image\b[^>]*>[\s\S]*?<\/attached_image>/g, "")
+    .trim();
   if (!userText) return "New Chat";
 
   try {

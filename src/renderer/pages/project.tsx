@@ -1299,6 +1299,7 @@ function ProjectView({
                   conversations={localConversations}
                   otherSideActiveId={rightActiveId}
                   documents={localDocuments}
+                  images={localImages}
                   defaultModel={project.default_agent ?? "claude-opus-4-8"}
                   initialPrompt={initialPromptRef.current}
                   requestedActiveId={leftRequestedId}
@@ -1797,6 +1798,7 @@ function ProjectView({
                   conversations={localConversations}
                   otherSideActiveId={leftActiveId}
                   documents={localDocuments}
+                  images={localImages}
                   defaultModel={project.default_agent ?? "gpt-5.5"}
                   initialPrompt={initialPromptRef.current}
                   requestedActiveId={rightRequestedId}
