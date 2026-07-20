@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 
 import { ModelSelectorLogo } from "@/components/ai-elements/model-selector";
 import { HelpSidebarButton } from "@/components/help-sidebar-button";
+import { UpdateSidebarButton } from "@/components/update-sidebar-button";
 
 import {
   AlertDialog,
@@ -271,7 +272,8 @@ export default function Main() {
                 <TooltipContent side="right">Settings</TooltipContent>
               </Tooltip>
             </nav>
-            <div className="mt-auto">
+            <div className="mt-auto flex flex-col items-center gap-1">
+              <UpdateSidebarButton />
               <HelpSidebarButton />
             </div>
           </aside>

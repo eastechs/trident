@@ -34,6 +34,7 @@ import React, {
 } from "react";
 import { ProjectSearchTrigger } from "@/components/command-palette";
 import { HelpSidebarButton } from "@/components/help-sidebar-button";
+import { UpdateSidebarButton } from "@/components/update-sidebar-button";
 import {
   ImagePreview,
   ModelSelectorLogo,
@@ -622,7 +623,8 @@ function GalleryView({
                 onUpdated={onProjectUpdated}
               />
             </nav>
-            <div className="mt-auto">
+            <div className="mt-auto flex flex-col items-center gap-1">
+              <UpdateSidebarButton />
               <HelpSidebarButton />
             </div>
           </aside>
