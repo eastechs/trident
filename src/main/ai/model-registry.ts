@@ -54,6 +54,10 @@ export function supportsImageInput(
     );
   }
   if (providerSlug === "openai") {
+    // The legacy small reasoning aliases are text-only even though the full
+    // o1/o3 models accept images. o4-mini is multimodal, so do not exclude
+    // every `-mini` suffix generically.
+    if (/^o(?:1|3)-mini(?:-|$)/.test(modelId)) return false;
     return (
       /^gpt-4(?:o|\.\d|-turbo|-vision)/.test(modelId) ||
       /^gpt-[5-9]/.test(modelId) ||
