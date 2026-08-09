@@ -21,10 +21,12 @@ import {
 } from "../db/schema.js";
 import {
   resolveModel,
+  resolveModelReference,
   getProviderOptions,
   modelLabel,
   isEffortLevel,
   DEFAULT_EFFORT,
+  ModelReferenceError,
 } from "../ai/providers.js";
 import { loadInstructions } from "../ai/instructions.js";
 import { createTools } from "../ai/tools/index.js";
@@ -128,12 +130,32 @@ router.post("/", async (req: ProjectRequest, res) => {
   // routing to a different model than what the conversation history shows.
   // First message in a new conversation has model=null, so we trust the
   // request id then.
-  const effectiveModelId: string = conversation.model || model_id;
-  const providerSlug = effectiveModelId.startsWith("claude-")
-    ? "anthropic"
-    : effectiveModelId.startsWith("gemini-")
-      ? "google"
-      : "openai";
+  const effectiveModelId: unknown = conversation.model || model_id;
+  if (typeof effectiveModelId !== "string") {
+    res.status(422).json({ error: "The selected model is invalid." });
+    return;
+  }
+
+  let resolvedModelReference;
+  let model;
+  try {
+    resolvedModelReference = resolveModelReference(effectiveModelId);
+    model = resolveModel(effectiveModelId);
+  } catch (error) {
+    if (error instanceof ModelReferenceError) {
+      res.status(422).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
+  const capabilityProviderSlug =
+    resolvedModelReference.modelFamily === "anthropic"
+      ? "anthropic"
+      : resolvedModelReference.modelFamily === "openai"
+        ? "openai"
+        : resolvedModelReference.modelFamily === "google"
+          ? "google"
+          : null;
 
   // The client (useChat) sends the full UIMessage[] including the new user message.
   // Use that directly; the DB history would miss the new message.
@@ -263,7 +285,13 @@ router.post("/", async (req: ProjectRequest, res) => {
 
   const filePartByImageId = new Map<string, FileUIPart>();
   if (allReferencedImageIds.size > 0) {
-    if (!supportsImageInput(effectiveModelId, providerSlug)) {
+    if (
+      !capabilityProviderSlug ||
+      !supportsImageInput(
+        resolvedModelReference.capabilityModelId,
+        capabilityProviderSlug,
+      )
+    ) {
       res.status(422).json({
         error: `The selected model (${effectiveModelId}) does not support image input.`,
       });
@@ -344,16 +372,18 @@ router.post("/", async (req: ProjectRequest, res) => {
   }
 
   // Resolve model and create tools
-  const model = resolveModel(effectiveModelId);
   const baseTools = createTools(
     projectId,
     project.path,
-    effectiveModelId,
+    {
+      bucket: resolvedModelReference.agentBucket,
+      author: resolvedModelReference.author,
+    },
     project.filesystemRoot,
   );
 
   // Add a provider-native web search tool so the agent can look up current info.
-  const provider = providerSlug === "google" ? "gemini" : providerSlug;
+  const provider = resolvedModelReference.providerId;
 
   let WebSearch: ToolSet[string] | undefined = undefined;
   if (provider === "anthropic") {
@@ -621,11 +651,30 @@ router.post("/", async (req: ProjectRequest, res) => {
             );
           if (conv?.title === "New Chat") {
             const firstUserMsg = allMessages.find((m) => m.role === "user");
-            const title = await generateConversationTitle(firstUserMsg);
+            const title = await generateConversationTitle(
+              firstUserMsg,
+              resolvedModelReference.providerId === "openai",
+            );
             await db
               .update(conversations)
               .set({
                 title,
+                model: effectiveModelId,
+                side: side ?? conv.side,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(conversations.id, conversation_id),
+                  eq(conversations.projectId, projectId),
+                ),
+              );
+          } else if (conv && !conv.model) {
+            // Model identity is independent of title generation. An empty
+            // conversation may have been renamed before its first message.
+            await db
+              .update(conversations)
+              .set({
                 model: effectiveModelId,
                 side: side ?? conv.side,
                 updatedAt: new Date(),
@@ -749,6 +798,7 @@ router.delete("/", async (req: ProjectRequest, res) => {
 
 async function generateConversationTitle(
   firstUserMessage?: UIMessage,
+  useOpenAI = false,
 ): Promise<string> {
   if (!firstUserMessage) return "New Chat";
 
@@ -762,7 +812,9 @@ async function generateConversationTitle(
   if (!userText) return "New Chat";
 
   try {
-    const openaiKey = getApiKey("openai");
+    // Never send a prompt to a second provider just to title a conversation.
+    // Non-OpenAI conversations use the local truncation fallback below.
+    const openaiKey = useOpenAI ? getApiKey("openai") : undefined;
     if (openaiKey) {
       const { createOpenAI } = await import("@ai-sdk/openai");
       const openai = createOpenAI({ apiKey: openaiKey });

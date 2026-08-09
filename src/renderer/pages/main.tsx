@@ -52,6 +52,11 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { ModelInfo } from "@/types/api";
 import {
+  PROVIDER_CATALOG,
+  type ProviderId,
+  type ProviderSettingsResponse,
+} from "@/lib/providers";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -59,7 +64,7 @@ import {
 } from "@/components/ui/tooltip";
 import appIcon from "../../images/app-icon.png";
 
-type UsedProvider = "anthropic" | "openai" | "gemini";
+type UsedProvider = ProviderId;
 
 interface Project {
   id: string;
@@ -74,43 +79,25 @@ interface Project {
   used_providers: UsedProvider[];
 }
 
-interface ConfiguredProviders {
-  anthropic: boolean;
-  openai: boolean;
-  gemini: boolean;
-}
-
-const PROVIDER_LABELS: Record<keyof ConfiguredProviders, string> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-  gemini: "Gemini",
-};
-
 export default function Main() {
   useDocumentTitle("Home");
   const [projects, setProjects] = useState<Project[]>([]);
-  const [configuredProviders, setConfiguredProviders] =
-    useState<ConfiguredProviders>({
-      anthropic: false,
-      openai: false,
-      gemini: false,
-    });
+  const [anyProviderConfigured, setAnyProviderConfigured] = useState(false);
+  const [providerStatusLoaded, setProviderStatusLoaded] = useState(false);
   useEffect(() => {
-    api_get<{ projects: Project[]; configuredProviders: ConfiguredProviders }>(
-      "/api/projects",
-    )
+    api_get<{ projects: Project[] }>("/api/projects")
       .then((data) => {
         setProjects(data.projects);
-        setConfiguredProviders(data.configuredProviders);
       })
       .catch((err) => console.error("Failed to load projects:", err));
-  }, []);
 
-  const missingProviders = (
-    Object.keys(PROVIDER_LABELS) as Array<keyof ConfiguredProviders>
-  )
-    .filter((provider) => !configuredProviders[provider])
-    .map((provider) => PROVIDER_LABELS[provider]);
+    api_get<ProviderSettingsResponse>("/api/settings/providers")
+      .then((data) => {
+        setAnyProviderConfigured(data.anyConfigured);
+        setProviderStatusLoaded(true);
+      })
+      .catch((err) => console.error("Failed to load provider settings:", err));
+  }, []);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(
     null,
@@ -285,23 +272,21 @@ export default function Main() {
               {deleteError}
             </div>
           )}
-          {missingProviders.length > 0 && (
+          {providerStatusLoaded && !anyProviderConfigured && (
             <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900/50 dark:bg-amber-900/10">
               <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-500" />
               <div className="flex-1">
                 <p className="font-medium text-amber-900 dark:text-amber-200">
-                  {missingProviders.length === 3
-                    ? "No API keys configured"
-                    : `${missingProviders.join(", ")} API ${missingProviders.length === 1 ? "key is" : "keys are"} missing`}
+                  No AI provider configured
                 </p>
                 <p className="mt-0.5 text-amber-800/80 dark:text-amber-200/70">
                   <Link
                     to="/settings?section=providers"
                     className="underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100"
                   >
-                    Add API keys in settings
+                    Configure a provider in Settings
                   </Link>{" "}
-                  to use these providers.
+                  to make models available in Trident.
                 </p>
               </div>
             </div>
@@ -396,7 +381,7 @@ export default function Main() {
                           {project.used_providers.map((provider) => (
                             <ModelSelectorLogo
                               key={provider}
-                              provider={provider}
+                              provider={PROVIDER_CATALOG[provider].logo}
                               className="size-4"
                             />
                           ))}

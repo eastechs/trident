@@ -1,9 +1,27 @@
+import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
+import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createAzure } from "@ai-sdk/azure";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import type { LanguageModel } from "ai";
+import { createVertex } from "@ai-sdk/google-vertex";
+import { createVertexAnthropic } from "@ai-sdk/google-vertex/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
-import { getApiKey } from "../settings.js";
+import type { LanguageModel } from "ai";
+import { getApiKey, getGatewayProviderConfig } from "../settings.js";
+import {
+  bedrockRuntimeEndpoint,
+  containsControlCharacters,
+  decodeGatewayModelRef,
+  gatewayConfigHasModelReference,
+  isAnthropicModel,
+  isBedrockAnthropicModelId,
+  resolvedDirectModelReference,
+  resolvedGatewayModelReference,
+  type ProviderId,
+  type ResolvedModelReference,
+  type VertexProviderConfig,
+} from "./provider-config.js";
 import { supportsReasoning } from "./model-registry.js";
 
 export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
@@ -17,12 +35,70 @@ export function isEffortLevel(value: unknown): value is EffortLevel {
   );
 }
 
-export type ProviderName = "anthropic" | "openai" | "gemini";
+export type ProviderName = ProviderId;
 
-export function resolveProviderName(modelId: string): ProviderName {
-  if (modelId.startsWith("claude-")) return "anthropic";
-  if (modelId.startsWith("gemini-")) return "gemini";
-  return "openai";
+export class ModelReferenceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ModelReferenceError";
+  }
+}
+
+/**
+ * Resolves persisted model identity and rejects route-qualified references
+ * unless their exact provider/model pair is still configured. This prevents a
+ * client from forging a Bedrock, Vertex, or Azure route in the request body.
+ */
+export function resolveModelReference(
+  modelReference: string,
+): ResolvedModelReference {
+  if (
+    !modelReference ||
+    modelReference.length > 16_384 ||
+    containsControlCharacters(modelReference)
+  ) {
+    throw new ModelReferenceError("The selected model reference is invalid.");
+  }
+
+  const decoded = decodeGatewayModelRef(modelReference);
+  if (decoded) {
+    const config = getGatewayProviderConfig(decoded.providerId);
+    if (!config) {
+      throw new ModelReferenceError(
+        `The ${decoded.providerId} provider is not configured.`,
+      );
+    }
+    const configured = gatewayConfigHasModelReference(config, modelReference);
+    if (!configured) {
+      throw new ModelReferenceError(
+        "The selected gateway model is not configured.",
+      );
+    }
+    return resolvedGatewayModelReference(decoded);
+  }
+
+  // A route-looking value that does not decode canonically must never fall
+  // through to OpenAI as a legacy direct model ID.
+  if (modelReference.startsWith("trident-")) {
+    throw new ModelReferenceError("The selected gateway model is invalid.");
+  }
+
+  // Direct IDs are also used as legacy document directory names, so keep the
+  // existing raw form while rejecting path separators and unsafe segments.
+  if (
+    modelReference.length > 255 ||
+    modelReference === "." ||
+    modelReference === ".." ||
+    !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(modelReference) ||
+    /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(modelReference)
+  ) {
+    throw new ModelReferenceError("The selected direct model ID is invalid.");
+  }
+  return resolvedDirectModelReference(modelReference);
+}
+
+export function resolveProviderName(modelReference: string): ProviderName {
+  return resolveModelReference(modelReference).providerId;
 }
 
 // Re-exported so existing callers keep importing from one place. The
@@ -30,36 +106,99 @@ export function resolveProviderName(modelId: string): ProviderName {
 // API-returned model names already exists.
 export { displayNameFor as modelLabel } from "./model-registry.js";
 
-export function resolveModel(modelId: string): LanguageModel {
-  const provider = resolveProviderName(modelId);
-
-  if (provider === "anthropic") {
-    const key = getApiKey("anthropic");
-    if (!key) throw new Error("Anthropic API key not configured");
-    return createAnthropic({ apiKey: key })(modelId);
-  }
-
-  if (provider === "gemini") {
-    const key = getApiKey("gemini");
-    if (!key) throw new Error("Gemini API key not configured");
-    return createGoogleGenerativeAI({ apiKey: key })(modelId);
-  }
-
-  const key = getApiKey("openai");
-  if (!key) throw new Error("OpenAI API key not configured");
-  return createOpenAI({ apiKey: key })(modelId);
+function vertexGoogleAuthOptions(config: VertexProviderConfig) {
+  if (config.authType !== "serviceAccount") return undefined;
+  return {
+    credentials: JSON.parse(config.serviceAccountJson!) as Record<
+      string,
+      unknown
+    >,
+  };
 }
 
-/**
- * Map our unified effort level to each provider's native value range.
- *
- * Provider native ranges (verified against installed AI SDK provider zod enums):
- *   - Anthropic:  low | medium | high | xhigh | max   (full set, passes through)
- *   - OpenAI:     low | medium | high | xhigh         (no 'max'; clamp down)
- *   - Gemini:     low | medium | high                 (no 'xhigh' or 'max'; clamp down)
- *
- * 'max' and 'xhigh' clamp to the highest available rung where unsupported.
- */
+export function resolveModel(modelReference: string): LanguageModel {
+  const resolved = resolveModelReference(modelReference);
+
+  if (resolved.providerId === "anthropic") {
+    const key = getApiKey("anthropic");
+    if (!key) throw new ModelReferenceError("Anthropic API key not configured");
+    return createAnthropic({ apiKey: key })(resolved.modelId);
+  }
+
+  if (resolved.providerId === "gemini") {
+    const key = getApiKey("gemini");
+    if (!key) throw new ModelReferenceError("Gemini API key not configured");
+    return createGoogleGenerativeAI({ apiKey: key })(resolved.modelId);
+  }
+
+  if (resolved.providerId === "openai") {
+    const key = getApiKey("openai");
+    if (!key) throw new ModelReferenceError("OpenAI API key not configured");
+    return createOpenAI({ apiKey: key })(resolved.modelId);
+  }
+
+  const config = getGatewayProviderConfig(resolved.providerId);
+  if (!config) {
+    throw new ModelReferenceError(
+      `The ${resolved.providerId} provider is not configured.`,
+    );
+  }
+
+  if (config.provider === "bedrock") {
+    const common = {
+      region: config.region,
+      baseURL: bedrockRuntimeEndpoint(config.region),
+    };
+    if (config.authType === "apiKey") {
+      return createAmazonBedrock({ ...common, apiKey: config.apiKey })(
+        resolved.modelId,
+      );
+    }
+    if (config.authType === "profile") {
+      return createAmazonBedrock({
+        ...common,
+        credentialProvider: fromNodeProviderChain(),
+      })(resolved.modelId);
+    }
+    return createAmazonBedrock({
+      ...common,
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+      ...(config.sessionToken ? { sessionToken: config.sessionToken } : {}),
+    })(resolved.modelId);
+  }
+
+  if (config.provider === "vertex") {
+    const common = {
+      ...(config.authType !== "apiKey" ? { project: config.project! } : {}),
+      location: config.location,
+      ...(vertexGoogleAuthOptions(config)
+        ? { googleAuthOptions: vertexGoogleAuthOptions(config) }
+        : {}),
+    };
+    if (isAnthropicModel(resolved.modelId, resolved.baseModelId)) {
+      if (config.authType === "apiKey") {
+        throw new ModelReferenceError(
+          "Vertex Claude models require service-account or application-default credentials.",
+        );
+      }
+      return createVertexAnthropic(common)(resolved.modelId);
+    }
+    return createVertex({
+      ...common,
+      ...(config.authType === "apiKey" ? { apiKey: config.apiKey } : {}),
+    })(resolved.modelId);
+  }
+
+  return createAzure({
+    apiKey: config.apiKey,
+    baseURL: config.endpoint,
+    ...(config.apiVersion ? { apiVersion: config.apiVersion } : {}),
+    useDeploymentBasedUrls: false,
+  })(resolved.modelId);
+}
+
+/** Map the unified effort level to each provider's accepted range. */
 function effortToOpenAI(
   level: EffortLevel,
 ): "low" | "medium" | "high" | "xhigh" {
@@ -71,35 +210,36 @@ function effortToGemini(level: EffortLevel): "low" | "medium" | "high" {
   return level;
 }
 
+function reasoningSupported(resolved: ResolvedModelReference): boolean {
+  if (resolved.modelFamily === "anthropic") {
+    return supportsReasoning(resolved.capabilityModelId, "anthropic");
+  }
+  if (resolved.modelFamily === "openai") {
+    return supportsReasoning(resolved.capabilityModelId, "openai");
+  }
+  if (resolved.modelFamily === "google") {
+    return supportsReasoning(resolved.capabilityModelId, "google");
+  }
+  return false;
+}
+
 /**
- * Per-provider options applied to every chat call. Effort comes from the
- * conversation (sticky once dialed; defaults to 'medium' on a new chat).
- *
- *   - Anthropic: extended thinking with adaptive budget + summarized display;
- *                contextManagement.clear_tool_uses_20250919 drops old tool-use
- *                blocks when input tokens exceed 100k, keeping the last 20 so
- *                long sessions don't blow past the model's context window.
- *   - OpenAI:    auto reasoning summaries; truncation 'auto' so the Responses
- *                API drops oldest turns instead of failing when the prompt
- *                nears the model's context limit; promptCacheRetention '24h'
- *                (max) for stickier auto-caching; promptCacheKey scoped per
- *                project so requests in the same project route to the same
- *                cache instance.
- *   - Gemini:    thinkingConfig with summaries, level dialed per conversation.
+ * Per-provider options applied to chat calls. Gateway options are deliberately
+ * conservative: only the options supported by their installed SDK adapter are
+ * sent, and direct-provider cache/context behavior remains unchanged.
  */
 export function getProviderOptions(
-  modelId: string,
+  modelReference: string,
   context?: { projectId?: string; effort?: EffortLevel },
 ): ProviderOptions {
-  const provider = resolveProviderName(modelId);
+  const resolved = resolveModelReference(modelReference);
+  const provider = resolved.providerId;
   const effort = context?.effort ?? DEFAULT_EFFORT;
+  const reasoningOk = reasoningSupported(resolved);
 
   if (provider === "anthropic") {
-    const reasoningOk = supportsReasoning(modelId, "anthropic");
     return {
       anthropic: {
-        // Skip the thinking block + effort knob on chat-only Claude models
-        // (e.g. claude-3-5-*) so the API doesn't reject the request.
         ...(reasoningOk
           ? {
               thinking: { type: "adaptive", display: "summarized" },
@@ -121,11 +261,8 @@ export function getProviderOptions(
   }
 
   if (provider === "openai") {
-    const reasoningOk = supportsReasoning(modelId, "openai");
     return {
       openai: {
-        // reasoningEffort is only valid on the o-series and gpt-5 family;
-        // sending it to gpt-4o or chat-only models 4xxs.
         ...(reasoningOk
           ? {
               reasoningEffort: effortToOpenAI(effort),
@@ -140,13 +277,67 @@ export function getProviderOptions(
   }
 
   if (provider === "gemini") {
-    if (!supportsReasoning(modelId, "google")) return {};
+    if (!reasoningOk) return {};
     return {
       google: {
         thinkingConfig: {
           thinkingLevel: effortToGemini(effort),
           includeThoughts: true,
         },
+      },
+    };
+  }
+
+  if (provider === "bedrock") {
+    if (
+      !reasoningOk ||
+      (resolved.modelFamily === "anthropic" &&
+        !isBedrockAnthropicModelId(resolved.modelId))
+    ) {
+      return {};
+    }
+    return {
+      bedrock: {
+        reasoningConfig: {
+          ...(resolved.modelFamily === "anthropic"
+            ? { type: "adaptive" as const, display: "summarized" as const }
+            : {}),
+          maxReasoningEffort: effort,
+        },
+      },
+    };
+  }
+
+  if (provider === "vertex") {
+    if (!reasoningOk) return {};
+    if (resolved.modelFamily === "anthropic") {
+      return {
+        anthropic: {
+          thinking: { type: "adaptive", display: "summarized" },
+          effort,
+          sendReasoning: true,
+        },
+      };
+    }
+    if (resolved.modelFamily === "google") {
+      return {
+        vertex: {
+          thinkingConfig: {
+            thinkingLevel: effortToGemini(effort),
+            includeThoughts: true,
+          },
+        },
+      };
+    }
+    return {};
+  }
+
+  if (provider === "azure" && reasoningOk) {
+    return {
+      openai: {
+        forceReasoning: true,
+        reasoningEffort: effortToOpenAI(effort),
+        reasoningSummary: "auto",
       },
     };
   }

@@ -1,6 +1,7 @@
 import { app } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
+import { decodeGatewayModelRef } from "./provider-config.js";
 import { BUNDLED_PRICING } from "./pricing/bundled-pricing.js";
 
 // Per-million-token rates used everywhere in the UI cost calc. The LiteLLM
@@ -125,8 +126,16 @@ async function refreshPricing(): Promise<void> {
 // stripped variants, then provider-prefixed forms (Bedrock/Vertex mirrors
 // carry the same canonical pricing as the direct provider entries).
 export function lookupPricing(modelId: string): ModelPricing | undefined {
-  const expectedProvider = guessProvider(modelId);
-  const candidates = generateCandidates(modelId);
+  const gateway = decodeGatewayModelRef(modelId);
+  const nativeModelId = gateway ? gateway.baseModelId || gateway.id : modelId;
+  const expectedProviders = gateway
+    ? gateway.providerId === "bedrock"
+      ? ["bedrock", "bedrock_converse"]
+      : gateway.providerId === "vertex"
+        ? ["vertex_ai"]
+        : ["azure", "azure_ai"]
+    : guessProvider(nativeModelId);
+  const candidates = generateCandidates(nativeModelId);
 
   const lookupSources = [activeData, BUNDLED_PRICING];
 
@@ -134,10 +143,13 @@ export function lookupPricing(modelId: string): ModelPricing | undefined {
     for (const candidate of candidates) {
       const entry = source.models[candidate];
       if (!entry) continue;
-      if (expectedProvider && entry.litellm_provider === expectedProvider) {
+      if (expectedProviders?.includes(entry.litellm_provider ?? "")) {
         return toPricing(entry);
       }
     }
+  }
+
+  for (const source of lookupSources) {
     for (const candidate of candidates) {
       const entry = source.models[candidate];
       if (entry) return toPricing(entry);
@@ -167,11 +179,11 @@ export function getActiveSnapshot(): {
   };
 }
 
-function guessProvider(modelId: string): string | undefined {
-  if (modelId.startsWith("claude-")) return "anthropic";
-  if (modelId.startsWith("gemini-")) return "gemini";
-  if (modelId.startsWith("text-embedding-")) return "openai";
-  if (/^(gpt-|o\d)/.test(modelId)) return "openai";
+function guessProvider(modelId: string): string[] | undefined {
+  if (modelId.startsWith("claude-")) return ["anthropic"];
+  if (modelId.startsWith("gemini-")) return ["gemini"];
+  if (modelId.startsWith("text-embedding-")) return ["openai"];
+  if (/^(gpt-|o\d)/.test(modelId)) return ["openai"];
   return undefined;
 }
 
@@ -180,13 +192,22 @@ function generateCandidates(modelId: string): string[] {
   set.add(modelId);
   const dateStripped8 = modelId.replace(/-\d{8}$/, "");
   const dateStripped10 = modelId.replace(/-\d{4}-\d{2}-\d{2}$/, "");
+  const revisionStripped = modelId.replace(/-v\d+(?::\d+)?$/, "");
   set.add(dateStripped8);
   set.add(dateStripped10);
+  set.add(revisionStripped);
   // Bedrock/Vertex variants — same canonical pricing as direct provider entries.
-  for (const base of [modelId, dateStripped8, dateStripped10]) {
+  for (const base of [
+    modelId,
+    dateStripped8,
+    dateStripped10,
+    revisionStripped,
+  ]) {
     set.add(`anthropic.${base}`);
     set.add(`global.anthropic.${base}`);
     set.add(`vertex_ai/${base}`);
+    set.add(`azure/${base}`);
+    set.add(`azure_ai/${base}`);
   }
   set.delete("");
   return Array.from(set);

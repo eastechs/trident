@@ -15,7 +15,7 @@ export default function Chat() {
         is a fully independent conversation with its own:
       </p>
       <ul>
-        <li>Model selection (Anthropic, OpenAI, or Gemini)</li>
+        <li>Model selection from any configured provider connection</li>
         <li>Conversation history</li>
         <li>Document attachments</li>
         <li>Token usage tracking</li>
@@ -33,7 +33,7 @@ export default function Chat() {
         models simultaneously.
       </p>
       <p>
-        You need at least one API key configured in{" "}
+        You need at least one provider connection configured in{" "}
         <em>Settings &gt; Providers</em> before you can chat.
       </p>
 

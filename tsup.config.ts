@@ -9,7 +9,7 @@ function collectEntries(dir: string, base = dir): Record<string, string> {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) {
       Object.assign(entries, collectEntries(full, base));
-    } else if (name.endsWith(".ts")) {
+    } else if (name.endsWith(".ts") && !name.endsWith(".test.ts")) {
       const rel = full.substring(base.length + 1).replace(/\.ts$/, "");
       entries[rel] = full;
     }

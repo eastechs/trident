@@ -15,6 +15,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { ConversationData } from "@/types/api";
+import {
+  modelReferenceDisplayName,
+  parseModelReference,
+} from "@/lib/model-reference";
 
 interface ConversationHistoryProps {
   conversations: ConversationData[];
@@ -29,53 +33,11 @@ interface ConversationHistoryProps {
 function getModelInfo(
   model: string | null,
 ): { providerSlug: string; displayName: string } | null {
-  if (!model) {
-    return null;
-  }
-
-  if (model.startsWith("claude-")) {
-    const rest = model.replace("claude-", "");
-    const parts = rest.split("-");
-    const family = parts[0];
-    const version = parts.slice(1).join(".");
-    const familyCased = family.charAt(0).toUpperCase() + family.slice(1);
-
-    return {
-      providerSlug: "anthropic",
-      displayName: version ? `${familyCased} ${version}` : familyCased,
-    };
-  }
-
-  if (model.startsWith("gpt-")) {
-    const rest = model.replace("gpt-", "");
-    const parts = rest.split("-");
-    const version = parts[0];
-    const variant = parts
-      .slice(1)
-      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-      .join(" ");
-
-    return {
-      providerSlug: "openai",
-      displayName: variant ? `GPT-${version} ${variant}` : `GPT-${version}`,
-    };
-  }
-
-  if (model.startsWith("gemini-")) {
-    const rest = model.replace("gemini-", "");
-    const parts = rest
-      .split("-")
-      .map((p) => p.charAt(0).toUpperCase() + p.slice(1));
-
-    return {
-      providerSlug: "google",
-      displayName: `Gemini ${parts.join(" ")}`,
-    };
-  }
-
+  if (!model) return null;
+  const reference = parseModelReference(model);
   return {
-    providerSlug: "anthropic",
-    displayName: model,
+    providerSlug: reference.providerSlug,
+    displayName: modelReferenceDisplayName(model),
   };
 }
 

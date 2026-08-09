@@ -1,12 +1,26 @@
 import { Router } from "express";
 import {
+  deleteGatewayProviderConfig,
   getSetting,
   setSetting,
   setApiKey,
   deleteApiKey,
   getConfiguredProviders,
+  getProviderStatusResponse,
   isApiKeyEncryptionAvailable,
+  setGatewayProviderConfig,
 } from "../settings.js";
+import {
+  isDirectProviderId,
+  isGatewayProviderId,
+  isProviderId,
+  type GatewayProviderConfig,
+} from "../ai/provider-config.js";
+import {
+  parseGatewayProviderPayload,
+  validateDirectProviderConnection,
+  validateGatewayProviderConnection,
+} from "../ai/provider-validation.js";
 
 const router = Router();
 
@@ -59,6 +73,110 @@ router.put("/trash", (req, res) => {
 router.put("/project-tour", (_req, res) => {
   setSetting("projectTourCompleted", true);
   res.json({ success: true });
+});
+
+// ─── Providers ─────────────────────────────────────────────
+
+router.get("/providers", (_req, res) => {
+  // This intentionally returns status and nonsecret detail only. Credential
+  // material never leaves the main process after it is stored.
+  res.json(getProviderStatusResponse());
+});
+
+function gatewayConfigHasSecrets(config: GatewayProviderConfig): boolean {
+  if (config.provider === "bedrock") return config.authType !== "profile";
+  if (config.provider === "vertex") return config.authType !== "adc";
+  return true;
+}
+
+router.put("/providers/:provider", async (req, res) => {
+  const provider = req.params.provider;
+  if (!isProviderId(provider)) {
+    res.status(404).json({ error: "Unknown provider." });
+    return;
+  }
+
+  const { invalidateModelCache } = await import("../ai/model-registry.js");
+
+  if (isDirectProviderId(provider)) {
+    const apiKey =
+      typeof req.body?.apiKey === "string" ? req.body.apiKey.trim() : "";
+    if (!apiKey) {
+      res.status(422).json({ errors: { apiKey: ["API key is required."] } });
+      return;
+    }
+    if (!isApiKeyEncryptionAvailable()) {
+      res.status(422).json({
+        errors: {
+          apiKey: [
+            "Cannot securely store this API key because the OS keychain is unavailable.",
+          ],
+        },
+      });
+      return;
+    }
+
+    const errors = await validateDirectProviderConnection(provider, apiKey);
+    if (Object.keys(errors).length > 0) {
+      res.status(422).json({ errors });
+      return;
+    }
+
+    setApiKey(provider, apiKey);
+    invalidateModelCache(provider);
+    setSetting("onboardingCompleted", true);
+    res.json(getProviderStatusResponse());
+    return;
+  }
+
+  const parsed = parseGatewayProviderPayload(provider, req.body);
+  if (!parsed.config || Object.keys(parsed.errors).length > 0) {
+    res.status(422).json({ errors: parsed.errors });
+    return;
+  }
+  if (
+    gatewayConfigHasSecrets(parsed.config) &&
+    !isApiKeyEncryptionAvailable()
+  ) {
+    res.status(422).json({
+      errors: {
+        authType: [
+          "Cannot securely store these credentials because the OS keychain is unavailable.",
+        ],
+      },
+    });
+    return;
+  }
+
+  const errors = await validateGatewayProviderConnection(parsed.config);
+  if (Object.keys(errors).length > 0) {
+    res.status(422).json({ errors });
+    return;
+  }
+
+  // This is the only write in the gateway PUT path. Parsing and connection
+  // validation above cannot partially replace an existing connection.
+  setGatewayProviderConfig(parsed.config);
+  invalidateModelCache(provider);
+  setSetting("onboardingCompleted", true);
+  res.json(getProviderStatusResponse());
+});
+
+router.delete("/providers/:provider", async (req, res) => {
+  const provider = req.params.provider;
+  if (!isProviderId(provider)) {
+    res.status(404).json({ error: "Unknown provider." });
+    return;
+  }
+
+  const { invalidateModelCache } = await import("../ai/model-registry.js");
+  if (isDirectProviderId(provider)) {
+    deleteApiKey(provider);
+  } else if (isGatewayProviderId(provider)) {
+    deleteGatewayProviderConfig(provider);
+  }
+  invalidateModelCache(provider);
+  res.json(getProviderStatusResponse());
 });
 
 // ─── API keys ──────────────────────────────────────────────
@@ -136,8 +254,8 @@ router.delete("/api-keys", async (req, res) => {
   const { provider } = req.body as {
     provider: "anthropic" | "openai" | "gemini";
   };
-  if (!provider) {
-    res.status(422).json({ error: "Provider is required" });
+  if (!isDirectProviderId(provider)) {
+    res.status(422).json({ error: "A valid direct provider is required" });
     return;
   }
   deleteApiKey(provider);

@@ -57,9 +57,31 @@ export interface ModelPricing {
 }
 
 export interface ModelInfo {
+  // Stable model reference used in selectors and persisted conversations. Direct
+  // providers use their native ID; gateway providers use a route-qualified ref.
   id: string;
-  provider: "Anthropic" | "OpenAI" | "Gemini";
-  providerSlug: "anthropic" | "openai" | "google";
+  providerId:
+    | "anthropic"
+    | "openai"
+    | "gemini"
+    | "bedrock"
+    | "vertex"
+    | "azure";
+  // Provider-native model or deployment ID sent through the selected connection.
+  modelId: string;
+  // Canonical underlying model when modelId is a gateway alias or deployment.
+  baseModelId?: string;
+  provider:
+    | "Anthropic"
+    | "OpenAI"
+    | "Gemini"
+    | "Amazon Bedrock"
+    | "Google Vertex AI"
+    | "Azure OpenAI";
+  // Logo slug for the underlying model family. Gateway providers can expose
+  // families such as Llama, Mistral, Cohere, or DeepSeek in addition to the
+  // direct-provider slugs.
+  providerSlug: string;
   name: string;
   // True when the model exposes reasoning_effort / thinking_level. The chat
   // hides the effort selector when this is false so we don't 4xx by sending

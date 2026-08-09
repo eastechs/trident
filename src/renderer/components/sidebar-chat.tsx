@@ -147,84 +147,6 @@ function formatChatError(error: Error | undefined): string {
   return rawMessage;
 }
 
-// Curated set; every entry here is a known reasoning-capable model so the
-// initial-render fallback flag is hardcoded true. Once the real /api/settings/models
-// list arrives, each entry carries its own server-stamped flag.
-const FALLBACK_MODELS: ModelInfo[] = [
-  {
-    id: "claude-opus-4-8",
-    provider: "Anthropic",
-    providerSlug: "anthropic",
-    name: "Opus 4.8",
-    supportsReasoning: true,
-    supportsImages: true,
-  },
-  {
-    id: "claude-opus-4-7",
-    provider: "Anthropic",
-    providerSlug: "anthropic",
-    name: "Opus 4.7",
-    supportsReasoning: true,
-    supportsImages: true,
-  },
-  {
-    id: "claude-sonnet-4-6",
-    provider: "Anthropic",
-    providerSlug: "anthropic",
-    name: "Sonnet 4.6",
-    supportsReasoning: true,
-    supportsImages: true,
-  },
-  {
-    id: "claude-haiku-4-5",
-    provider: "Anthropic",
-    providerSlug: "anthropic",
-    name: "Haiku 4.5",
-    supportsReasoning: true,
-    supportsImages: true,
-  },
-  {
-    id: "gpt-5.5",
-    provider: "OpenAI",
-    providerSlug: "openai",
-    name: "GPT-5.5",
-    supportsReasoning: true,
-    supportsImages: true,
-  },
-  {
-    id: "gpt-5-mini",
-    provider: "OpenAI",
-    providerSlug: "openai",
-    name: "GPT-5 Mini",
-    supportsReasoning: true,
-    supportsImages: true,
-  },
-  {
-    id: "gpt-5-nano",
-    provider: "OpenAI",
-    providerSlug: "openai",
-    name: "GPT-5 Nano",
-    supportsReasoning: true,
-    supportsImages: true,
-  },
-  {
-    id: "gemini-3.1-pro-preview",
-    provider: "Gemini",
-    providerSlug: "google",
-    name: "Gemini 3.1 Pro Preview",
-    supportsReasoning: true,
-    supportsImages: true,
-  },
-  {
-    id: "gemini-3-flash-preview",
-    provider: "Gemini",
-    providerSlug: "google",
-    name: "Gemini 3 Flash Preview",
-    supportsReasoning: true,
-    supportsImages: true,
-  },
-];
-
 // Generic safe default when the LiteLLM snapshot doesn't list the model.
 // The real per-model values come from `selectedModelData.pricing.contextWindow`
 // (sourced from LiteLLM at app launch — see src/main/ai/pricing.ts).
@@ -315,34 +237,43 @@ export function SidebarChat({
   onImageCreated,
   onStreamingComplete,
 }: SidebarChatProps) {
-  const [availableModels, setAvailableModels] =
-    useState<ModelInfo[]>(FALLBACK_MODELS);
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
   const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [modelsLoadError, setModelsLoadError] = useState(false);
+  const modelLoadAttemptRef = useRef(0);
+
+  const loadModels = useCallback(async () => {
+    const attempt = ++modelLoadAttemptRef.current;
+    setModelsLoaded(false);
+    setModelsLoadError(false);
+
+    try {
+      const data = await api_get<ModelInfo[]>("/api/settings/models");
+      if (attempt !== modelLoadAttemptRef.current) return;
+      setAvailableModels(data);
+    } catch (error) {
+      if (attempt !== modelLoadAttemptRef.current) return;
+      console.error("Failed to load configured models:", error);
+      setModelsLoadError(true);
+    } finally {
+      if (attempt === modelLoadAttemptRef.current) setModelsLoaded(true);
+    }
+  }, []);
 
   useEffect(() => {
-    api_get<ModelInfo[]>("/api/settings/models")
-      .then((data) => {
-        setAvailableModels(data);
-        setModelsLoaded(true);
-      })
-      .catch(() => setModelsLoaded(true));
-  }, []);
+    void loadModels();
+    return () => {
+      modelLoadAttemptRef.current += 1;
+    };
+  }, [loadModels]);
 
   const availableProviders = useMemo(
     () => [...new Set(availableModels.map((m) => m.provider))],
     [availableModels],
   );
   const [model, setModel] = useState<string>(() => {
-    // Trust both lockedModel and defaultModel verbatim. FALLBACK_MODELS is
-    // the only data we have at first render and it's Anthropic-only, so
-    // checking membership here would silently snap any non-Anthropic id
-    // (e.g. a project default of gpt-5.4) to FALLBACK_MODELS[0]
-    // (claude-opus-4-8) — and the catch-up effect below wouldn't correct
-    // it because opus is in the eventually-loaded list. The reconciliation
-    // effect handles truly-invalid ids by snapping to availableModels[0]
-    // once the real list lands.
     if (lockedModel) return lockedModel;
-    return defaultModel ?? FALLBACK_MODELS[0].id;
+    return defaultModel ?? "";
   });
 
   // Once the dynamic list loads, reconcile the selected model. For a locked
@@ -357,9 +288,15 @@ export function SidebarChat({
       return;
     }
     if (!availableModels.some((m) => m.id === model)) {
-      setModel(availableModels[0].id);
+      const fallback =
+        side === "right"
+          ? (availableModels.find(
+              (candidate) => candidate.provider !== availableModels[0].provider,
+            ) ?? availableModels[0])
+          : availableModels[0];
+      setModel(fallback.id);
     }
-  }, [modelsLoaded, availableModels, model, lockedModel]);
+  }, [modelsLoaded, availableModels, model, lockedModel, side]);
 
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -505,7 +442,15 @@ export function SidebarChat({
 
   const isStreaming = status === "streaming" || status === "submitted";
   const isModelLocked = lockedModel != null || messages.length > 0;
-  const hasNoProviders = availableModels.length === 0;
+  const hasNoProviders =
+    modelsLoaded && !modelsLoadError && availableModels.length === 0;
+  const selectedModelUnavailable =
+    modelsLoaded &&
+    !modelsLoadError &&
+    availableModels.length > 0 &&
+    model.length > 0 &&
+    selectedModelData == null;
+  const canChat = modelsLoaded && !modelsLoadError && selectedModelData != null;
   const chatErrorMessage = visibleChatError || formatChatError(chatError);
   const lastSendBodyRef = useRef<{
     document_ids: string[];
@@ -602,12 +547,13 @@ export function SidebarChat({
       initialPrompt &&
       !initialPromptSentRef.current &&
       messagesLoaded &&
+      canChat &&
       status === "ready"
     ) {
       initialPromptSentRef.current = true;
       sendMessageRef.current({ text: initialPrompt });
     }
-  }, [initialPrompt, messagesLoaded, status]);
+  }, [initialPrompt, messagesLoaded, canChat, status]);
 
   // Play chime and notify parent when streaming finishes
   const chimeEnabledRef = useRef(true);
@@ -685,7 +631,7 @@ export function SidebarChat({
       // Throw a sentinel error so PromptInput's submit catch keeps the
       // user's draft instead of clearing it. See the catch at the bottom
       // of PromptInput's handleSubmit.
-      if (!text || isStreaming) {
+      if (!text || isStreaming || !selectedModelData) {
         throw new Error("not-sent");
       }
 
@@ -702,6 +648,7 @@ export function SidebarChat({
     [
       clearChatError,
       isStreaming,
+      selectedModelData,
       sendMessage,
       selectedDocumentIds,
       selectedImageIds,
@@ -1101,12 +1048,34 @@ export function SidebarChat({
             </AlertDescription>
           </Alert>
         )}
+        {!modelsLoaded && (
+          <div className="border-border flex items-center justify-center rounded-lg border border-dashed px-3 py-4">
+            <p className="text-muted-foreground text-center text-xs">
+              Loading configured models...
+            </p>
+          </div>
+        )}
+        {modelsLoaded && modelsLoadError && (
+          <div className="border-border flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-4">
+            <p className="text-muted-foreground text-center text-xs">
+              Configured models could not be loaded.
+            </p>
+            <button
+              type="button"
+              onClick={() => void loadModels()}
+              className="border-border text-muted-foreground hover:bg-muted inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium"
+            >
+              <RotateCcwIcon className="size-3" />
+              Retry
+            </button>
+          </div>
+        )}
         {hasNoProviders && (
           <div className="border-border flex items-center justify-center rounded-lg border border-dashed px-3 py-4">
             <p className="text-muted-foreground text-center text-xs">
-              Add an API key in{" "}
+              Connect an AI provider in{" "}
               <Link
-                to="/settings"
+                to="/settings?section=providers"
                 className="text-primary font-medium underline underline-offset-2"
               >
                 Settings
@@ -1115,7 +1084,22 @@ export function SidebarChat({
             </p>
           </div>
         )}
-        {!hasNoProviders && (
+        {selectedModelUnavailable && (
+          <div className="border-border flex items-center justify-center rounded-lg border border-dashed px-3 py-4">
+            <p className="text-muted-foreground text-center text-xs">
+              This conversation&apos;s provider connection is unavailable.
+              Reconnect it in{" "}
+              <Link
+                to="/settings?section=providers"
+                className="text-primary font-medium underline underline-offset-2"
+              >
+                Settings
+              </Link>
+              .
+            </p>
+          </div>
+        )}
+        {canChat && (
           <div
             className={`relative ${isStreaming || isGeneratingImage ? "chat-input-shimmer" : ""}`}
           >

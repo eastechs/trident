@@ -1,9 +1,29 @@
-import { getApiKey } from "../settings.js";
+import { getApiKey, getGatewayProviderConfig } from "../settings.js";
+import {
+  PROVIDER_LABELS,
+  capabilityModelIdFor,
+  decodeGatewayModelRef,
+  gatewayModelRef,
+  isBedrockAnthropicModelId,
+  isDirectProviderId,
+  modelFamilyFor,
+  modelsForGatewayConfig,
+  type ModelFamily,
+  type ProviderId,
+} from "./provider-config.js";
 
 export interface ModelInfo {
+  // Persisted reference. Direct models retain their native IDs; gateway
+  // models use a provider-qualified, browser-decodable reference.
   id: string;
-  provider: "Anthropic" | "OpenAI" | "Gemini";
-  providerSlug: "anthropic" | "openai" | "google";
+  providerId: ProviderId;
+  modelId: string;
+  baseModelId?: string;
+  modelFamily: ModelFamily;
+  provider: (typeof PROVIDER_LABELS)[ProviderId];
+  // The logo reflects the underlying model family while `providerId` and
+  // `provider` retain the connection grouping (for example, Vertex Claude).
+  providerSlug: string;
   name: string;
   // True when the model exposes a reasoning/thinking knob the chat surfaces
   // as the effort selector. Hidden in the UI and skipped server-side when
@@ -16,6 +36,7 @@ export interface ModelInfo {
 }
 
 type ProviderKey = "anthropic" | "openai" | "gemini";
+type CapabilityProviderSlug = "anthropic" | "openai" | "google";
 
 // Family-based capability check. Patterns:
 //   - OpenAI: o-series (o1/o3/o4...) and the GPT-5 line all support
@@ -26,7 +47,7 @@ type ProviderKey = "anthropic" | "openai" | "gemini";
 //   - Gemini: thinking is on 2.5+ (and any 3+ family). Earlier 1.x / 2.0 don't.
 export function supportsReasoning(
   modelId: string,
-  providerSlug: "anthropic" | "openai" | "google",
+  providerSlug: CapabilityProviderSlug,
 ): boolean {
   if (providerSlug === "openai") {
     return /^o\d/.test(modelId) || /^gpt-5/.test(modelId);
@@ -45,7 +66,7 @@ export function supportsReasoning(
 
 export function supportsImageInput(
   modelId: string,
-  providerSlug: "anthropic" | "openai" | "google",
+  providerSlug: CapabilityProviderSlug,
 ): boolean {
   if (providerSlug === "anthropic") {
     return (
@@ -78,14 +99,77 @@ const cache = new Map<ProviderKey, { at: number; models: ModelInfo[] }>();
 // Intermediate row used by FALLBACK and the per-provider fetchers; the
 // reasoning capability is stamped in one place after fetch so we don't
 // have to repeat the predicate at every construction site.
-type ModelDescriptor = Omit<ModelInfo, "supportsReasoning" | "supportsImages">;
+type ModelDescriptor = Pick<
+  ModelInfo,
+  "id" | "provider" | "providerSlug" | "name"
+> &
+  Partial<
+    Pick<ModelInfo, "providerId" | "modelId" | "baseModelId" | "modelFamily">
+  >;
+
+function directProviderIdForSlug(providerSlug: string): ProviderKey {
+  if (providerSlug === "anthropic") return "anthropic";
+  if (providerSlug === "google") return "gemini";
+  return "openai";
+}
+
+function capabilitySlugForFamily(
+  family: ModelFamily,
+): CapabilityProviderSlug | null {
+  if (family === "anthropic") return "anthropic";
+  if (family === "openai") return "openai";
+  if (family === "google") return "google";
+  return null;
+}
+
+function logoSlugForFamily(
+  family: ModelFamily,
+  providerId: ProviderId,
+): string {
+  if (family === "anthropic") return "anthropic";
+  if (family === "openai") return "openai";
+  if (family === "google") return "google";
+  if (family === "amazon") return "amazon-bedrock";
+  if (family === "meta") return "llama";
+  if (family === "mistral") return "mistral";
+  if (family === "cohere") return "cohere";
+  if (family === "deepseek") return "deepseek";
+  if (providerId === "bedrock") return "amazon-bedrock";
+  if (providerId === "vertex") return "google-vertex";
+  if (providerId === "azure") return "azure";
+  return providerId === "gemini" ? "google" : providerId;
+}
 
 function stampCapabilities(models: ModelDescriptor[]): ModelInfo[] {
-  return models.map((m) => ({
-    ...m,
-    supportsReasoning: supportsReasoning(m.id, m.providerSlug),
-    supportsImages: supportsImageInput(m.id, m.providerSlug),
-  }));
+  return models.map((model) => {
+    const providerId =
+      model.providerId ?? directProviderIdForSlug(model.providerSlug);
+    const modelId = model.modelId ?? model.id;
+    const capabilityModelId = capabilityModelIdFor(modelId, model.baseModelId);
+    const modelFamily =
+      model.modelFamily ?? modelFamilyFor(modelId, model.baseModelId);
+    const capabilitySlug = capabilitySlugForFamily(modelFamily);
+    const supportsModelReasoning = capabilitySlug
+      ? supportsReasoning(capabilityModelId, capabilitySlug)
+      : false;
+    return {
+      ...model,
+      providerId,
+      modelId,
+      modelFamily,
+      providerSlug: logoSlugForFamily(modelFamily, providerId),
+      supportsReasoning:
+        supportsModelReasoning &&
+        !(
+          providerId === "bedrock" &&
+          modelFamily === "anthropic" &&
+          !isBedrockAnthropicModelId(modelId)
+        ),
+      supportsImages: capabilitySlug
+        ? supportsImageInput(capabilityModelId, capabilitySlug)
+        : false,
+    };
+  });
 }
 
 /**
@@ -176,13 +260,39 @@ export async function fetchAvailableModels(): Promise<ModelInfo[]> {
     }),
   );
 
-  return results.flat();
+  const gatewayModels = (["bedrock", "vertex", "azure"] as const).flatMap(
+    (providerId) => {
+      const config = getGatewayProviderConfig(providerId);
+      if (!config) return [];
+      return stampCapabilities(
+        modelsForGatewayConfig(config).map((model) => {
+          const modelFamily = modelFamilyFor(model.id, model.baseModelId);
+          const capabilityId = capabilityModelIdFor(
+            model.id,
+            model.baseModelId,
+          );
+          return {
+            id: gatewayModelRef(providerId, model),
+            providerId,
+            modelId: model.id,
+            ...(model.baseModelId ? { baseModelId: model.baseModelId } : {}),
+            modelFamily,
+            provider: PROVIDER_LABELS[providerId],
+            providerSlug: logoSlugForFamily(modelFamily, providerId),
+            name: deriveGatewayName(capabilityId, modelFamily),
+          };
+        }),
+      );
+    },
+  );
+
+  return [...results.flat(), ...gatewayModels];
 }
 
-export function invalidateModelCache(provider?: ProviderKey): void {
-  if (provider) {
+export function invalidateModelCache(provider?: ProviderId): void {
+  if (provider && isDirectProviderId(provider)) {
     cache.delete(provider);
-  } else {
+  } else if (!provider) {
     cache.clear();
   }
 }
@@ -197,10 +307,30 @@ export function displayNameFor(modelId: string): string {
     const m = cached.models.find((x) => x.id === modelId);
     if (m) return m.name;
   }
+  const gateway = decodeGatewayModelRef(modelId);
+  if (gateway) {
+    const family = modelFamilyFor(gateway.id, gateway.baseModelId);
+    return deriveGatewayName(
+      capabilityModelIdFor(gateway.id, gateway.baseModelId),
+      family,
+    );
+  }
   if (modelId.startsWith("claude-")) return deriveAnthropicName(modelId);
   if (modelId.startsWith("gemini-")) return deriveGeminiName(modelId);
   if (/^(gpt-|o\d)/.test(modelId)) return deriveOpenAIName(modelId);
   return modelId;
+}
+
+function deriveGatewayName(id: string, family: ModelFamily): string {
+  if (family === "anthropic") return deriveAnthropicName(id);
+  if (family === "google") return deriveGeminiName(id);
+  if (family === "openai") return deriveOpenAIName(id);
+  return id
+    .replace(/-v\d+(?::\d+)?$/, "")
+    .split(/[._/:@-]+/)
+    .filter(Boolean)
+    .map(capitalize)
+    .join(" ");
 }
 
 async function fetchForProvider(

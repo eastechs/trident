@@ -20,6 +20,7 @@ import {
   useState,
 } from "react";
 import { api_get } from "@/lib/api";
+import type { ProviderSettingsResponse } from "@/lib/providers";
 import "./css/app.css";
 
 type OnboardingContextValue = {
@@ -44,7 +45,7 @@ const Onboarding = lazy(() => import("./pages/onboarding"));
 const Documentation = lazy(() => import("./pages/documentation"));
 const About = lazy(() => import("./pages/about"));
 
-// Bootstraps the onboarding gate: if no API keys are configured and we're
+// Bootstraps the onboarding gate: if no provider connection is configured and we're
 // not already at /onboarding, redirect there so the user can't navigate past
 // the unconfigured state. Nothing renders while the check is in flight, to
 // avoid flashing a page the user shouldn't see. The Onboarding page calls
@@ -56,12 +57,10 @@ function OnboardingGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    api_get<{ anthropic: boolean; openai: boolean; gemini: boolean }>(
-      "/api/settings/api-keys",
-    )
+    api_get<ProviderSettingsResponse>("/api/settings/providers")
       .then((data) => {
         if (cancelled) return;
-        setNeedsOnboarding(!data.anthropic && !data.openai && !data.gemini);
+        setNeedsOnboarding(!data.anyConfigured);
       })
       .catch(() => {
         if (cancelled) return;

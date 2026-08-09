@@ -13,6 +13,11 @@ import {
   messages,
 } from "../db/schema.js";
 import { getConfiguredProviders, getSetting } from "../settings.js";
+import {
+  decodeGatewayModelRef,
+  directProviderForModelId,
+  type ProviderId,
+} from "../ai/provider-config.js";
 
 const router = Router();
 
@@ -28,10 +33,11 @@ function projectDirName(text: string): string {
   );
 }
 
-function resolveProvider(modelId: string): string {
-  if (modelId.startsWith("claude-")) return "anthropic";
-  if (modelId.startsWith("gemini-")) return "gemini";
-  return "openai";
+function resolveProvider(modelId: string): ProviderId | null {
+  const gateway = decodeGatewayModelRef(modelId);
+  if (gateway) return gateway.providerId;
+  if (modelId.startsWith("trident-")) return null;
+  return directProviderForModelId(modelId);
 }
 
 type ProjectRow = typeof projects.$inferSelect;
@@ -81,6 +87,7 @@ router.get("/", async (_req, res) => {
         .map((m) => m.model)
         .filter(Boolean)
         .map((model) => resolveProvider(model!))
+        .filter((provider): provider is ProviderId => provider !== null)
         .filter((v, i, a) => a.indexOf(v) === i);
 
       return {

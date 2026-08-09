@@ -280,7 +280,10 @@ export function ChatPanel({
       setAutoCreatedId(null);
     }
 
-    if (activeConversation?.title === "New Chat") {
+    if (
+      activeConversation &&
+      (activeConversation.title === "New Chat" || !activeConversation.model)
+    ) {
       api_get<ConversationData[]>(`/api/projects/${projectId}/conversations`)
         .then((data) => {
           onConversationsRefreshed(data);
@@ -289,7 +292,7 @@ export function ChatPanel({
     }
   }, [
     projectId,
-    activeConversation?.title,
+    activeConversation,
     activeConversationId,
     autoCreatedId,
     onConversationsRefreshed,

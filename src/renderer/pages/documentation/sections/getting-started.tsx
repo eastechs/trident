@@ -4,18 +4,19 @@ export default function GettingStarted() {
       <h1>Getting Started</h1>
       <p className="lead">
         Trident is a collaborative workspace for working on projects with
-        multiple AI models. Bring together models from Anthropic, OpenAI, and
-        Google &mdash; each thinks and performs a little differently &mdash; and
-        build up a shared set of documents and images alongside them.
+        multiple AI models. Connect directly to Anthropic, OpenAI, or Google, or
+        use models deployed through Amazon Bedrock, Google Vertex AI, and Azure
+        OpenAI. Each thinks and performs a little differently, while your
+        documents and images stay together in one workspace.
       </p>
 
       <h2>Quick Start</h2>
       <ol>
         <li>
-          <strong>Add an API key</strong> &mdash; Open{" "}
-          <em>Settings &gt; Providers</em> and enter at least one API key
-          (Anthropic, OpenAI, or Google Gemini). Keys are encrypted and stored
-          locally on your device.
+          <strong>Connect a provider</strong> &mdash; Open{" "}
+          <em>Settings &gt; Providers</em> and configure at least one direct API
+          or cloud platform. Secrets are encrypted and stored locally on your
+          device.
         </li>
         <li>
           <strong>Create a project</strong> &mdash; From the home screen, click{" "}
@@ -62,8 +63,10 @@ export default function GettingStarted() {
       <p>
         All Trident files &mdash; projects, documents, and images &mdash; are
         stored locally on your computer in a <code>Trident</code> folder in your
-        home directory (<code>~/Trident/</code>). Nothing is uploaded to the
-        cloud. API keys are encrypted and stored on-device as well.
+        home directory (<code>~/Trident/</code>). Trident does not sync that
+        library to its own cloud service. Prompts and attached content are sent
+        only when needed to the AI connection you choose, and provider secrets
+        are encrypted on-device.
       </p>
 
       <h2>Supported AI Providers</h2>
@@ -86,6 +89,18 @@ export default function GettingStarted() {
           <tr>
             <td>Google Gemini</td>
             <td>Gemini 3.1 Pro, Gemini 3 Flash</td>
+          </tr>
+          <tr>
+            <td>Amazon Bedrock</td>
+            <td>Configured foundation models and inference profiles</td>
+          </tr>
+          <tr>
+            <td>Google Vertex AI</td>
+            <td>Configured Gemini and Claude partner models</td>
+          </tr>
+          <tr>
+            <td>Azure OpenAI</td>
+            <td>Configured Azure model deployments</td>
           </tr>
         </tbody>
       </table>

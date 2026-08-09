@@ -3,8 +3,8 @@ export default function Settings() {
     <>
       <h1>Settings</h1>
       <p className="lead">
-        Configure your Trident preferences, API keys, and AI agent behavior from
-        the Settings screen.
+        Configure your Trident preferences, AI provider connections, and agent
+        behavior from the Settings screen.
       </p>
 
       <h2>Preferences</h2>
@@ -40,10 +40,10 @@ export default function Settings() {
         </li>
       </ul>
 
-      <h2>Providers (API Keys)</h2>
+      <h2>Providers</h2>
       <p>
-        Trident requires at least one AI provider API key to function. You can
-        configure keys for:
+        Trident requires at least one AI provider connection to chat. Direct
+        APIs use a provider key:
       </p>
       <ul>
         <li>
@@ -58,14 +58,39 @@ export default function Settings() {
         </li>
       </ul>
       <p>
-        All API keys are <strong>encrypted locally</strong> on your device. They
-        are never sent anywhere except directly to the respective AI provider
-        when making API calls.
+        Cloud platforms let you use models and deployments already available in
+        your organization:
+      </p>
+      <ul>
+        <li>
+          <strong>Amazon Bedrock</strong> &mdash; using AWS credentials, a
+          credential chain, or a Bedrock API key
+        </li>
+        <li>
+          <strong>Google Vertex AI</strong> &mdash; using Application Default
+          Credentials, a service account, or an Express Mode API key
+        </li>
+        <li>
+          <strong>Azure OpenAI</strong> &mdash; using an Azure endpoint, API
+          key, and deployment names
+        </li>
+      </ul>
+      <p>
+        Cloud connections also need the model, inference-profile, or deployment
+        IDs you want Trident to show. An optional base model ID helps Trident
+        label capabilities and estimate usage when a deployment has a custom
+        name.
+      </p>
+      <p>
+        API keys and credential material are <strong>encrypted locally</strong>{" "}
+        on your device and are used only by Trident&apos;s local backend to
+        authenticate requests. Non-secret connection details such as regions,
+        endpoints, and model IDs are stored locally as settings.
       </p>
       <p>
         A <em>Configured</em> badge appears next to each provider that has a
-        valid key. Use the eye icon to toggle key visibility, or the Clear
-        button to remove a key.
+        saved connection. Use <em>Edit</em> to replace its configuration or{" "}
+        <em>Remove</em> to disconnect it.
       </p>
 
       <h2>Agents</h2>

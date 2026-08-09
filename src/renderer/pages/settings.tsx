@@ -1,12 +1,10 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/use-document-title";
-import { api_get, api_put, api_delete, isApiError } from "@/lib/api";
+import { api_get, api_put, api_delete } from "@/lib/api";
 import {
   BellIcon,
   BotIcon,
   CheckIcon,
-  EyeIcon,
-  EyeOffIcon,
   FolderIcon,
   KeyRoundIcon,
   Settings2Icon,
@@ -17,40 +15,73 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ModelSelectorLogo } from "@/components/ai-elements/model-selector";
 import type { EditorHandle } from "@/components/editor";
 import { MilkdownEditorWrapper } from "@/components/editor";
+import { ProviderConnectionForm } from "@/components/provider-connection-form";
 import { UpdateSidebarButton } from "@/components/update-sidebar-button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  PROVIDER_CATALOG,
+  PROVIDER_GROUPS,
+  emptyProviderSettings,
+  type ProviderId,
+  type ProviderSettingsResponse,
+} from "@/lib/providers";
 import appIcon from "../../images/app-icon.png";
 
 export default function Settings() {
   useDocumentTitle("Settings");
-  const [anthropicKey, setAnthropicKey] = useState("");
-  const [openaiKey, setOpenaiKey] = useState("");
-  const [geminiKey, setGeminiKey] = useState("");
-  const [showAnthropic, setShowAnthropic] = useState(false);
-  const [showOpenai, setShowOpenai] = useState(false);
-  const [showGemini, setShowGemini] = useState(false);
-  const [hasAnthropic, setHasAnthropic] = useState(false);
-  const [hasOpenai, setHasOpenai] = useState(false);
-  const [hasGemini, setHasGemini] = useState(false);
-  const [keyErrors, setKeyErrors] = useState<{
-    anthropic: string | null;
-    openai: string | null;
-    gemini: string | null;
-  }>({ anthropic: null, openai: null, gemini: null });
-  const [keyError, setKeyError] = useState<string | null>(null);
+  const [providerSettings, setProviderSettings] = useState(
+    emptyProviderSettings,
+  );
+  const [providerLoading, setProviderLoading] = useState(true);
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<ProviderId | null>(
+    null,
+  );
+  const [providerToRemove, setProviderToRemove] = useState<ProviderId | null>(
+    null,
+  );
+  const [removingProvider, setRemovingProvider] = useState(false);
+  const [removeProviderError, setRemoveProviderError] = useState<string | null>(
+    null,
+  );
+  const [providerAnnouncement, setProviderAnnouncement] = useState("");
+  const [providerSaving, setProviderSaving] = useState(false);
   const [instructionsError, setInstructionsError] = useState<string | null>(
     null,
   );
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [chimeEnabled, setChimeEnabled] = useState(true);
   const [trashEnabled, setTrashEnabled] = useState(true);
@@ -101,111 +132,71 @@ export default function Settings() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    api_get<{ anthropic: boolean; openai: boolean; gemini: boolean }>(
-      "/api/settings/api-keys",
-    )
-      .then((data) => {
-        setHasAnthropic(data.anthropic);
-        setHasOpenai(data.openai);
-        setHasGemini(data.gemini);
-      })
-      .catch(() => {});
+  const refreshProviderSettings = useCallback(async () => {
+    const data = await api_get<ProviderSettingsResponse>(
+      "/api/settings/providers",
+    );
+    setProviderSettings(data);
+    setProviderError(null);
+    return data;
   }, []);
 
-  const handleSaveKeys = async () => {
-    if (!anthropicKey.trim() && !openaiKey.trim() && !geminiKey.trim()) {
-      return;
-    }
-
-    setSaving(true);
-    setSaved(false);
-    setKeyErrors({ anthropic: null, openai: null, gemini: null });
-    setKeyError(null);
-
+  const loadProviderSettings = useCallback(async () => {
+    setProviderLoading(true);
+    setProviderError(null);
     try {
-      const data = await api_put<{
-        success: boolean;
-        saved: Array<"anthropic" | "openai" | "gemini">;
-        invalid: Array<"anthropic" | "openai" | "gemini">;
-      }>("/api/settings/api-keys", {
-        anthropic_key: anthropicKey.trim() || null,
-        openai_key: openaiKey.trim() || null,
-        gemini_key: geminiKey.trim() || null,
-      });
-
-      if (data.saved.includes("anthropic")) {
-        setHasAnthropic(true);
-        setAnthropicKey("");
-      }
-
-      if (data.saved.includes("openai")) {
-        setHasOpenai(true);
-        setOpenaiKey("");
-      }
-
-      if (data.saved.includes("gemini")) {
-        setHasGemini(true);
-        setGeminiKey("");
-      }
-
-      if (data.invalid.length > 0) {
-        setKeyErrors({
-          anthropic: data.invalid.includes("anthropic")
-            ? "Invalid API key. Please check the key and try again."
-            : null,
-          openai: data.invalid.includes("openai")
-            ? "Invalid API key. Please check the key and try again."
-            : null,
-          gemini: data.invalid.includes("gemini")
-            ? "Invalid API key. Please check the key and try again."
-            : null,
-        });
-      }
-
-      if (data.saved.length > 0) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
-      }
+      await refreshProviderSettings();
     } catch (error) {
-      if (isApiError(error) && error.status === 422) {
-        const responseErrors =
-          (error.response as { errors?: Record<string, string[]> })?.errors ??
-          {};
-        setKeyErrors({
-          anthropic: responseErrors.anthropic_key?.[0] ?? null,
-          openai: responseErrors.openai_key?.[0] ?? null,
-          gemini: responseErrors.gemini_key?.[0] ?? null,
-        });
-      } else {
-        console.error(error);
-        setKeyError("Failed to save API keys. Please try again.");
-      }
+      console.error("Failed to load provider settings:", error);
+      setProviderError(
+        "Provider connections could not be loaded. Please try again.",
+      );
     } finally {
-      setSaving(false);
+      setProviderLoading(false);
     }
+  }, [refreshProviderSettings]);
+
+  useEffect(() => {
+    void loadProviderSettings();
+  }, [loadProviderSettings]);
+
+  const handleProviderSaved = async (provider: ProviderId) => {
+    await refreshProviderSettings();
+    setProviderAnnouncement(
+      `${PROVIDER_CATALOG[provider].label} is configured.`,
+    );
+    setSelectedProvider(null);
   };
 
-  const handleClearKey = async (
-    provider: "anthropic" | "openai" | "gemini",
-  ) => {
-    setKeyError(null);
-    try {
-      await api_delete("/api/settings/api-keys", { provider });
+  const handleRemoveProvider = async () => {
+    if (!providerToRemove) return;
 
-      if (provider === "anthropic") {
-        setHasAnthropic(false);
-        setAnthropicKey("");
-      } else if (provider === "openai") {
-        setHasOpenai(false);
-        setOpenaiKey("");
-      } else {
-        setHasGemini(false);
-        setGeminiKey("");
-      }
+    const provider = providerToRemove;
+    setRemovingProvider(true);
+    setRemoveProviderError(null);
+    let providerWasRemoved = false;
+    try {
+      await api_delete(`/api/settings/providers/${provider}`);
+      providerWasRemoved = true;
+      await refreshProviderSettings();
+      setProviderAnnouncement(
+        `${PROVIDER_CATALOG[provider].label} was removed.`,
+      );
+      setProviderToRemove(null);
     } catch (error) {
-      console.error("Failed to clear API key:", error);
-      setKeyError(`Failed to clear ${provider} API key. Please try again.`);
+      console.error(`Failed to remove ${provider} provider:`, error);
+      if (providerWasRemoved) {
+        setProviderToRemove(null);
+        setProviderError(
+          `${PROVIDER_CATALOG[provider].label} was removed, but its status could not be refreshed. Reopen Settings to refresh it.`,
+        );
+      } else {
+        setRemoveProviderError(
+          `Failed to remove ${PROVIDER_CATALOG[provider].label}. Please try again.`,
+        );
+      }
+    } finally {
+      setRemovingProvider(false);
     }
   };
 
@@ -548,256 +539,251 @@ export default function Settings() {
               </div>
             )}
 
-            {/* Providers: API Keys */}
+            {/* Providers */}
             {activeSection === "providers" && (
-              <div className="space-y-12">
-                <div className="grid grid-cols-1 gap-x-8 gap-y-10 pb-12 md:grid-cols-3">
+              <div className="space-y-8 pb-12">
+                <div className="space-y-6">
                   <div>
                     <h2 className="text-foreground text-base/7 font-semibold">
-                      API Keys
+                      Provider connections
                     </h2>
                     <p className="text-muted-foreground mt-1 text-sm/6">
-                      Manage your API keys for AI providers. Keys are encrypted
-                      and stored locally on your device.
+                      Connect direct model APIs or route models through your
+                      cloud account. Secrets entered in Trident are encrypted
+                      locally.
                     </p>
                   </div>
 
-                  <div className="max-w-2xl space-y-6 md:col-span-2">
-                    {keyError && (
+                  <div className="space-y-6">
+                    <p className="sr-only" role="status" aria-live="polite">
+                      {providerAnnouncement}
+                    </p>
+
+                    {providerError ? (
                       <Alert variant="destructive">
-                        <AlertDescription>{keyError}</AlertDescription>
+                        <AlertDescription className="flex items-center justify-between gap-3">
+                          <span>{providerError}</span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void loadProviderSettings()}
+                          >
+                            Retry
+                          </Button>
+                        </AlertDescription>
                       </Alert>
-                    )}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-foreground flex items-center gap-2 text-sm font-medium">
-                          <ModelSelectorLogo
-                            provider="anthropic"
-                            className="size-4"
-                          />
-                          Anthropic
-                          {hasAnthropic && (
-                            <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                              <CheckIcon className="size-3" />
-                              Configured
-                            </span>
-                          )}
-                        </label>
-                        {hasAnthropic && (
-                          <button
-                            type="button"
-                            onClick={() => handleClearKey("anthropic")}
-                            className="text-muted-foreground hover:text-destructive flex items-center gap-1 text-xs transition-colors"
-                          >
-                            <Trash2Icon className="size-3" />
-                            Clear
-                          </button>
-                        )}
-                      </div>
-                      <div className="relative">
-                        <KeyRoundIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-                        <Input
-                          type={showAnthropic ? "text" : "password"}
-                          value={anthropicKey}
-                          onChange={(e) => {
-                            setAnthropicKey(e.target.value);
+                    ) : null}
 
-                            if (keyErrors.anthropic) {
-                              setKeyErrors((prev) => ({
-                                ...prev,
-                                anthropic: null,
-                              }));
-                            }
-                          }}
-                          placeholder={
-                            hasAnthropic
-                              ? "Enter new key to replace"
-                              : "sk-ant-..."
-                          }
-                          className={`pr-9 pl-9 ${keyErrors.anthropic ? "border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20" : ""}`}
-                          autoComplete="off"
-                          spellCheck={false}
-                          aria-invalid={keyErrors.anthropic ? true : undefined}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowAnthropic(!showAnthropic)}
-                          className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
-                          tabIndex={-1}
-                        >
-                          {showAnthropic ? (
-                            <EyeOffIcon className="size-4" />
-                          ) : (
-                            <EyeIcon className="size-4" />
-                          )}
-                        </button>
-                      </div>
-                      {keyErrors.anthropic && (
-                        <p className="text-destructive text-xs">
-                          {keyErrors.anthropic}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-foreground flex items-center gap-2 text-sm font-medium">
-                          <ModelSelectorLogo
-                            provider="openai"
-                            className="size-4"
-                          />
-                          OpenAI
-                          {hasOpenai && (
-                            <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                              <CheckIcon className="size-3" />
-                              Configured
-                            </span>
-                          )}
-                        </label>
-                        {hasOpenai && (
-                          <button
-                            type="button"
-                            onClick={() => handleClearKey("openai")}
-                            className="text-muted-foreground hover:text-destructive flex items-center gap-1 text-xs transition-colors"
-                          >
-                            <Trash2Icon className="size-3" />
-                            Clear
-                          </button>
-                        )}
-                      </div>
-                      <div className="relative">
-                        <KeyRoundIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-                        <Input
-                          type={showOpenai ? "text" : "password"}
-                          value={openaiKey}
-                          onChange={(e) => {
-                            setOpenaiKey(e.target.value);
-
-                            if (keyErrors.openai) {
-                              setKeyErrors((prev) => ({
-                                ...prev,
-                                openai: null,
-                              }));
-                            }
-                          }}
-                          placeholder={
-                            hasOpenai ? "Enter new key to replace" : "sk-..."
-                          }
-                          className={`pr-9 pl-9 ${keyErrors.openai ? "border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20" : ""}`}
-                          autoComplete="off"
-                          spellCheck={false}
-                          aria-invalid={keyErrors.openai ? true : undefined}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowOpenai(!showOpenai)}
-                          className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
-                          tabIndex={-1}
-                        >
-                          {showOpenai ? (
-                            <EyeOffIcon className="size-4" />
-                          ) : (
-                            <EyeIcon className="size-4" />
-                          )}
-                        </button>
-                      </div>
-                      {keyErrors.openai && (
-                        <p className="text-destructive text-xs">
-                          {keyErrors.openai}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-foreground flex items-center gap-2 text-sm font-medium">
-                          <ModelSelectorLogo
-                            provider="gemini"
-                            className="size-4"
-                          />
-                          Gemini
-                          {hasGemini && (
-                            <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                              <CheckIcon className="size-3" />
-                              Configured
-                            </span>
-                          )}
-                        </label>
-                        {hasGemini && (
-                          <button
-                            type="button"
-                            onClick={() => handleClearKey("gemini")}
-                            className="text-muted-foreground hover:text-destructive flex items-center gap-1 text-xs transition-colors"
-                          >
-                            <Trash2Icon className="size-3" />
-                            Clear
-                          </button>
-                        )}
-                      </div>
-                      <div className="relative">
-                        <KeyRoundIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-                        <Input
-                          type={showGemini ? "text" : "password"}
-                          value={geminiKey}
-                          onChange={(e) => {
-                            setGeminiKey(e.target.value);
-
-                            if (keyErrors.gemini) {
-                              setKeyErrors((prev) => ({
-                                ...prev,
-                                gemini: null,
-                              }));
-                            }
-                          }}
-                          placeholder={
-                            hasGemini ? "Enter new key to replace" : "AIza..."
-                          }
-                          className={`pr-9 pl-9 ${keyErrors.gemini ? "border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20" : ""}`}
-                          autoComplete="off"
-                          spellCheck={false}
-                          aria-invalid={keyErrors.gemini ? true : undefined}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowGemini(!showGemini)}
-                          className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
-                          tabIndex={-1}
-                        >
-                          {showGemini ? (
-                            <EyeOffIcon className="size-4" />
-                          ) : (
-                            <EyeIcon className="size-4" />
-                          )}
-                        </button>
-                      </div>
-                      {keyErrors.gemini && (
-                        <p className="text-destructive text-xs">
-                          {keyErrors.gemini}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <Button
-                        onClick={handleSaveKeys}
-                        disabled={
-                          (!anthropicKey.trim() &&
-                            !openaiKey.trim() &&
-                            !geminiKey.trim()) ||
-                          saving
-                        }
+                    {providerLoading ? (
+                      <p
+                        className="text-muted-foreground py-8 text-sm"
+                        role="status"
                       >
-                        {saving ? "Saving..." : "Save Keys"}
-                      </Button>
-                      {saved && (
-                        <span className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
-                          <CheckIcon className="size-4" />
-                          Saved
-                        </span>
-                      )}
-                    </div>
+                        Loading provider connections...
+                      </p>
+                    ) : providerError ? null : (
+                      PROVIDER_GROUPS.map((group) => (
+                        <section
+                          key={group.id}
+                          className="space-y-3"
+                          aria-labelledby={`settings-${group.id}-providers`}
+                        >
+                          <div>
+                            <h3
+                              id={`settings-${group.id}-providers`}
+                              className="text-foreground text-sm font-semibold"
+                            >
+                              {group.label}
+                            </h3>
+                            <p className="text-muted-foreground mt-1 text-xs">
+                              {group.description}
+                            </p>
+                          </div>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            {group.providers.map((provider) => {
+                              const definition = PROVIDER_CATALOG[provider];
+                              const status =
+                                providerSettings.providers[provider];
+
+                              return (
+                                <Card
+                                  key={provider}
+                                  size="sm"
+                                  className="gap-3 shadow-none"
+                                >
+                                  <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-sm">
+                                      <ModelSelectorLogo
+                                        provider={definition.logo}
+                                        className="size-4"
+                                        aria-hidden="true"
+                                      />
+                                      {definition.label}
+                                    </CardTitle>
+                                    <CardDescription className="text-xs leading-5">
+                                      {definition.description}
+                                    </CardDescription>
+                                    <CardAction>
+                                      <span
+                                        className={
+                                          status.configured
+                                            ? "flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                            : "bg-muted text-muted-foreground rounded-full px-2 py-1 text-[10px] font-medium"
+                                        }
+                                      >
+                                        {status.configured ? (
+                                          <CheckIcon
+                                            className="size-3"
+                                            aria-hidden="true"
+                                          />
+                                        ) : null}
+                                        {status.configured
+                                          ? "Configured"
+                                          : "Not configured"}
+                                      </span>
+                                    </CardAction>
+                                  </CardHeader>
+                                  <CardContent className="text-muted-foreground space-y-1 text-xs">
+                                    {status.detail ? (
+                                      <p>{status.detail}</p>
+                                    ) : null}
+                                    {status.configured &&
+                                    (definition.group === "cloud" ||
+                                      status.modelCount > 0) ? (
+                                      <p>
+                                        {status.modelCount}{" "}
+                                        {status.modelCount === 1
+                                          ? "model"
+                                          : "models"}
+                                      </p>
+                                    ) : null}
+                                  </CardContent>
+                                  <CardFooter className="mt-auto gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setProviderAnnouncement("");
+                                        setSelectedProvider(provider);
+                                      }}
+                                    >
+                                      {status.configured ? "Edit" : "Configure"}
+                                    </Button>
+                                    {status.configured ? (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          setRemoveProviderError(null);
+                                          setProviderToRemove(provider);
+                                        }}
+                                      >
+                                        <Trash2Icon
+                                          className="size-3.5"
+                                          aria-hidden="true"
+                                        />
+                                        Remove
+                                      </Button>
+                                    ) : null}
+                                  </CardFooter>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        </section>
+                      ))
+                    )}
                   </div>
                 </div>
+
+                <Dialog
+                  open={selectedProvider !== null}
+                  onOpenChange={(open) => {
+                    if (!open && !providerSaving) setSelectedProvider(null);
+                  }}
+                >
+                  <DialogContent
+                    className="flex max-h-[calc(100vh-3rem)] min-h-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
+                    showCloseButton={!providerSaving}
+                    onEscapeKeyDown={(event) => {
+                      if (providerSaving) event.preventDefault();
+                    }}
+                    onInteractOutside={(event) => {
+                      if (providerSaving) event.preventDefault();
+                    }}
+                  >
+                    {selectedProvider ? (
+                      <>
+                        <DialogHeader className="sr-only">
+                          <DialogTitle>
+                            Configure {PROVIDER_CATALOG[selectedProvider].label}
+                          </DialogTitle>
+                          <DialogDescription>
+                            Test and save this provider connection.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <ProviderConnectionForm
+                          key={selectedProvider}
+                          provider={selectedProvider}
+                          modal
+                          configured={
+                            providerSettings.providers[selectedProvider]
+                              .configured
+                          }
+                          onSaved={handleProviderSaved}
+                          onCancel={() => setSelectedProvider(null)}
+                          onSavingChange={setProviderSaving}
+                        />
+                      </>
+                    ) : null}
+                  </DialogContent>
+                </Dialog>
+
+                <AlertDialog
+                  open={providerToRemove !== null}
+                  onOpenChange={(open) => {
+                    if (!open && !removingProvider) {
+                      setProviderToRemove(null);
+                      setRemoveProviderError(null);
+                    }
+                  }}
+                >
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Remove provider?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {providerToRemove
+                          ? `${PROVIDER_CATALOG[providerToRemove].label} credentials and model configuration will be removed from Trident.`
+                          : "This provider connection will be removed from Trident."}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    {removeProviderError ? (
+                      <Alert variant="destructive">
+                        <AlertDescription>
+                          {removeProviderError}
+                        </AlertDescription>
+                      </Alert>
+                    ) : null}
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={removingProvider}>
+                        Cancel
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        variant="destructive"
+                        disabled={removingProvider}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          void handleRemoveProvider();
+                        }}
+                      >
+                        {removingProvider ? "Removing..." : "Remove"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
 

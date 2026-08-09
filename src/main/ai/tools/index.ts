@@ -429,10 +429,11 @@ function buildWorkspaceTools(filesystemRoot: string) {
 export function createTools(
   projectId: string,
   projectPath: string,
-  modelId: string,
+  agentIdentity: { bucket: string; author: string },
   filesystemRoot: string | null,
 ) {
   const db = getDb();
+  const { bucket: agentBucket, author: agentAuthor } = agentIdentity;
   const workspaceTools = filesystemRoot
     ? buildWorkspaceTools(filesystemRoot)
     : {};
@@ -444,7 +445,10 @@ export function createTools(
     lastEditedBy: string,
   ): string {
     const now = new Date().toISOString();
-    return `---\nuuid: ${docId}\nname: ${name}\ncreated_by: ${createdBy}\nlast_edited_by: ${lastEditedBy}\nupdated_at: ${now}\n---\n`;
+    // JSON string syntax is valid YAML double-quoted scalar syntax. Quoting
+    // every user/model-derived value prevents colons, hashes, or future
+    // newline-bearing values from changing the frontmatter structure.
+    return `---\nuuid: ${JSON.stringify(docId)}\nname: ${JSON.stringify(name)}\ncreated_by: ${JSON.stringify(createdBy)}\nlast_edited_by: ${JSON.stringify(lastEditedBy)}\nupdated_at: ${JSON.stringify(now)}\n---\n`;
   }
 
   return {
@@ -502,9 +506,9 @@ export function createTools(
         // Both paths are scoped to the agent's own directory bucket so a
         // model never surfaces another model's or the user's documents in
         // search; user docs reach the agent only via explicit attachment.
-        // Without a modelId there is no own-bucket to search, so return
+        // Without an agent bucket there is no own-bucket to search, so return
         // empty rather than falling back to user docs.
-        if (!modelId) {
+        if (!agentBucket) {
           return {
             status: "success",
             documents: [],
@@ -523,7 +527,7 @@ export function createTools(
             try {
               const semantic = await searchProject(projectId, query, {
                 topK: 10,
-                directory: modelId,
+                directory: agentBucket,
               });
               if (semantic.length === 0) {
                 return {
@@ -557,7 +561,7 @@ export function createTools(
           .where(
             and(
               eq(documents.projectId, projectId),
-              eq(documents.directory, modelId),
+              eq(documents.directory, agentBucket),
               ilike(documents.name, `%${query}%`),
             ),
           );
@@ -880,7 +884,7 @@ export function createTools(
           };
         }
 
-        const editedBy = modelId || "ai";
+        const editedBy = agentAuthor || "ai";
         const fullPath = safeDocumentFullPath(projectPath, doc.path);
 
         await db
@@ -1014,8 +1018,8 @@ export function createTools(
       execute: async ({ name, content }, { abortSignal }) => {
         throwIfAborted(abortSignal);
         const safeName = sanitizeDocumentName(name);
-        const createdBy = modelId || "ai";
-        const directory = modelId || "user";
+        const createdBy = agentAuthor || "ai";
+        const directory = agentBucket || "user";
         const dirPath = `${projectPath}/documents/${directory}`;
         const docPath = `${dirPath}/${safeName}.md`;
         const fullDir = safeDocumentFullPath(projectPath, dirPath);

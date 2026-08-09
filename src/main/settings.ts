@@ -1,4 +1,20 @@
 import { safeStorage } from "electron";
+import type {
+  DirectProviderId,
+  GatewayProviderConfig,
+  GatewayProviderId,
+  ProviderId,
+} from "./ai/provider-config.js";
+import {
+  containsControlCharacters,
+  isGatewayModelConfigArray,
+  normalizeAzureEndpoint,
+} from "./ai/provider-config.js";
+
+interface StoredGatewayProvider {
+  config: Record<string, unknown>;
+  encryptedSecrets?: string;
+}
 
 interface SettingsSchema {
   autosave: boolean;
@@ -12,6 +28,7 @@ interface SettingsSchema {
     openai?: string;
     gemini?: string;
   };
+  gatewayProviders: Partial<Record<GatewayProviderId, StoredGatewayProvider>>;
 }
 
 const DEFAULTS: SettingsSchema = {
@@ -22,6 +39,7 @@ const DEFAULTS: SettingsSchema = {
   onboardingCompleted: false,
   projectTourCompleted: false,
   apiKeys: {},
+  gatewayProviders: {},
 };
 
 type StoreLike = {
@@ -83,11 +101,15 @@ export function isApiKeyEncryptionAvailable(): boolean {
   return safeStorage.isEncryptionAvailable();
 }
 
-export function getApiKey(
-  provider: "anthropic" | "openai" | "gemini",
-): string | undefined {
-  const encrypted = store().get("apiKeys")[provider];
-  if (!encrypted) return undefined;
+function storedApiKeys(): SettingsSchema["apiKeys"] {
+  const value = store().get("apiKeys") as unknown;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as SettingsSchema["apiKeys"];
+}
+
+export function getApiKey(provider: DirectProviderId): string | undefined {
+  const encrypted = storedApiKeys()[provider];
+  if (typeof encrypted !== "string" || !encrypted) return undefined;
 
   try {
     const buffer = Buffer.from(encrypted, "base64");
@@ -97,10 +119,7 @@ export function getApiKey(
   }
 }
 
-export function setApiKey(
-  provider: "anthropic" | "openai" | "gemini",
-  key: string,
-): void {
+export function setApiKey(provider: DirectProviderId, key: string): void {
   // Without an OS-level keyring, safeStorage on Linux falls back to writing a
   // "v10"-prefixed plaintext buffer. Refuse rather than persist a key that
   // would land on disk effectively unencrypted.
@@ -110,15 +129,12 @@ export function setApiKey(
     );
   }
   const encrypted = safeStorage.encryptString(key).toString("base64");
-  const keys = store().get("apiKeys");
-  keys[provider] = encrypted;
-  store().set("apiKeys", keys);
+  const keys = storedApiKeys();
+  store().set("apiKeys", { ...keys, [provider]: encrypted });
 }
 
-export function deleteApiKey(
-  provider: "anthropic" | "openai" | "gemini",
-): void {
-  const keys = store().get("apiKeys");
+export function deleteApiKey(provider: DirectProviderId): void {
+  const keys = { ...storedApiKeys() };
   delete keys[provider];
   store().set("apiKeys", keys);
 }
@@ -128,10 +144,352 @@ export function getConfiguredProviders(): {
   openai: boolean;
   gemini: boolean;
 } {
-  const keys = store().get("apiKeys");
   return {
-    anthropic: !!keys.anthropic,
-    openai: !!keys.openai,
-    gemini: !!keys.gemini,
+    anthropic: !!getApiKey("anthropic"),
+    openai: !!getApiKey("openai"),
+    gemini: !!getApiKey("gemini"),
+  };
+}
+
+// ─── Encrypted gateway credentials ─────────────────────────
+
+function encryptSecretBundle(bundle: Record<string, string>): string {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error(
+      "OS keychain encryption is not available; refusing to store provider credentials.",
+    );
+  }
+  return safeStorage.encryptString(JSON.stringify(bundle)).toString("base64");
+}
+
+function decryptSecretBundle(
+  encrypted: string | undefined,
+): Record<string, string> | undefined {
+  if (!encrypted) return {};
+  try {
+    const json = safeStorage.decryptString(Buffer.from(encrypted, "base64"));
+    const parsed = JSON.parse(json) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+    const entries = Object.entries(parsed);
+    if (entries.some(([, value]) => typeof value !== "string")) {
+      return undefined;
+    }
+    return Object.fromEntries(entries) as Record<string, string>;
+  } catch {
+    return undefined;
+  }
+}
+
+function isStoredServiceAccountJson(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return (
+      !!parsed &&
+      !Array.isArray(parsed) &&
+      typeof parsed.client_email === "string" &&
+      !!parsed.client_email.trim() &&
+      typeof parsed.private_key === "string" &&
+      !!parsed.private_key.trim()
+    );
+  } catch {
+    return false;
+  }
+}
+
+function gatewayStorageParts(config: GatewayProviderConfig): {
+  plain: Record<string, unknown>;
+  secrets: Record<string, string>;
+} {
+  if (config.provider === "bedrock") {
+    const secrets: Record<string, string> = {};
+    if (config.authType === "accessKey") {
+      if (config.accessKeyId) secrets.accessKeyId = config.accessKeyId;
+      if (config.secretAccessKey)
+        secrets.secretAccessKey = config.secretAccessKey;
+      if (config.sessionToken) secrets.sessionToken = config.sessionToken;
+    } else if (config.authType === "apiKey" && config.apiKey) {
+      secrets.apiKey = config.apiKey;
+    }
+    return {
+      plain: {
+        provider: config.provider,
+        authType: config.authType,
+        region: config.region,
+        models: config.models,
+      },
+      secrets,
+    };
+  }
+
+  if (config.provider === "vertex") {
+    const secrets: Record<string, string> = {};
+    if (config.authType === "apiKey" && config.apiKey) {
+      secrets.apiKey = config.apiKey;
+    } else if (
+      config.authType === "serviceAccount" &&
+      config.serviceAccountJson
+    ) {
+      secrets.serviceAccountJson = config.serviceAccountJson;
+    }
+    return {
+      plain: {
+        provider: config.provider,
+        authType: config.authType,
+        ...(config.project ? { project: config.project } : {}),
+        location: config.location,
+        models: config.models,
+      },
+      secrets,
+    };
+  }
+
+  return {
+    plain: {
+      provider: config.provider,
+      endpoint: config.endpoint,
+      ...(config.apiVersion ? { apiVersion: config.apiVersion } : {}),
+      deployments: config.deployments,
+    },
+    secrets: { apiKey: config.apiKey },
+  };
+}
+
+function storedGatewayProviders(): Partial<
+  Record<GatewayProviderId, StoredGatewayProvider>
+> {
+  const value = store().get("gatewayProviders") as unknown;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Partial<Record<GatewayProviderId, StoredGatewayProvider>>;
+}
+
+/**
+ * Writes a complete gateway connection with one electron-store set. Validation
+ * happens before this function is called, so a failed replacement never
+ * destroys the last working configuration.
+ */
+export function setGatewayProviderConfig(config: GatewayProviderConfig): void {
+  const { plain, secrets } = gatewayStorageParts(config);
+  const encryptedSecrets =
+    Object.keys(secrets).length > 0 ? encryptSecretBundle(secrets) : undefined;
+  const current = storedGatewayProviders();
+  store().set("gatewayProviders", {
+    ...current,
+    [config.provider]: {
+      config: plain,
+      ...(encryptedSecrets ? { encryptedSecrets } : {}),
+    },
+  });
+}
+
+export function getGatewayProviderConfig(
+  provider: GatewayProviderId,
+): GatewayProviderConfig | undefined {
+  const stored = storedGatewayProviders()[provider];
+  if (!stored || !stored.config || typeof stored.config !== "object") {
+    return undefined;
+  }
+  const secrets = decryptSecretBundle(stored.encryptedSecrets);
+  if (!secrets) return undefined;
+
+  const plain = stored.config;
+  if (provider === "bedrock") {
+    if (
+      plain.provider !== "bedrock" ||
+      (plain.authType !== "accessKey" &&
+        plain.authType !== "profile" &&
+        plain.authType !== "apiKey") ||
+      typeof plain.region !== "string" ||
+      !plain.region ||
+      plain.region.length > 64 ||
+      !/^[a-z0-9-]+$/.test(plain.region) ||
+      !isGatewayModelConfigArray(plain.models)
+    ) {
+      return undefined;
+    }
+    if (
+      (plain.authType === "accessKey" &&
+        (!secrets.accessKeyId || !secrets.secretAccessKey)) ||
+      (plain.authType === "apiKey" && !secrets.apiKey)
+    ) {
+      return undefined;
+    }
+    return {
+      provider,
+      authType: plain.authType,
+      region: plain.region,
+      models: plain.models,
+      ...(secrets.accessKeyId ? { accessKeyId: secrets.accessKeyId } : {}),
+      ...(secrets.secretAccessKey
+        ? { secretAccessKey: secrets.secretAccessKey }
+        : {}),
+      ...(secrets.sessionToken ? { sessionToken: secrets.sessionToken } : {}),
+      ...(secrets.apiKey ? { apiKey: secrets.apiKey } : {}),
+    };
+  }
+
+  if (provider === "vertex") {
+    if (
+      plain.provider !== "vertex" ||
+      (plain.authType !== "apiKey" &&
+        plain.authType !== "serviceAccount" &&
+        plain.authType !== "adc") ||
+      typeof plain.location !== "string" ||
+      !plain.location ||
+      plain.location.length > 64 ||
+      !/^[a-z0-9-]+$/.test(plain.location) ||
+      (plain.authType !== "apiKey" &&
+        (typeof plain.project !== "string" || !plain.project.trim())) ||
+      (plain.project !== undefined &&
+        (typeof plain.project !== "string" ||
+          plain.project.length > 256 ||
+          containsControlCharacters(plain.project))) ||
+      !isGatewayModelConfigArray(plain.models)
+    ) {
+      return undefined;
+    }
+    if (
+      (plain.authType === "apiKey" && !secrets.apiKey) ||
+      (plain.authType === "serviceAccount" &&
+        !isStoredServiceAccountJson(secrets.serviceAccountJson))
+    ) {
+      return undefined;
+    }
+    return {
+      provider,
+      authType: plain.authType,
+      ...(typeof plain.project === "string" ? { project: plain.project } : {}),
+      location: plain.location,
+      models: plain.models,
+      ...(secrets.apiKey ? { apiKey: secrets.apiKey } : {}),
+      ...(secrets.serviceAccountJson
+        ? { serviceAccountJson: secrets.serviceAccountJson }
+        : {}),
+    };
+  }
+
+  if (
+    plain.provider !== "azure" ||
+    typeof plain.endpoint !== "string" ||
+    plain.endpoint.length > 2_048 ||
+    (plain.apiVersion !== undefined &&
+      (typeof plain.apiVersion !== "string" ||
+        plain.apiVersion.length > 128 ||
+        containsControlCharacters(plain.apiVersion))) ||
+    !isGatewayModelConfigArray(plain.deployments) ||
+    !secrets.apiKey
+  ) {
+    return undefined;
+  }
+  try {
+    const endpoint = normalizeAzureEndpoint(plain.endpoint);
+    const url = new URL(endpoint);
+    if (
+      endpoint !== plain.endpoint ||
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password
+    ) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+  return {
+    provider,
+    apiKey: secrets.apiKey,
+    endpoint: plain.endpoint,
+    ...(typeof plain.apiVersion === "string"
+      ? { apiVersion: plain.apiVersion }
+      : {}),
+    deployments: plain.deployments,
+  };
+}
+
+export function deleteGatewayProviderConfig(provider: GatewayProviderId): void {
+  const current = storedGatewayProviders();
+  const next = { ...current };
+  delete next[provider];
+  store().set("gatewayProviders", next);
+}
+
+export interface ProviderStatus {
+  configured: boolean;
+  detail?: string;
+  modelCount: number;
+}
+
+export interface ProviderStatusResponse {
+  providers: Record<ProviderId, ProviderStatus>;
+  anyConfigured: boolean;
+}
+
+function gatewayDetail(config: GatewayProviderConfig): string {
+  if (config.provider === "bedrock") {
+    const auth =
+      config.authType === "accessKey"
+        ? "Access key"
+        : config.authType === "apiKey"
+          ? "API key"
+          : "AWS profile";
+    return `${config.region} · ${auth}`;
+  }
+  if (config.provider === "vertex") {
+    const auth =
+      config.authType === "serviceAccount"
+        ? "Service account"
+        : config.authType === "apiKey"
+          ? "API key"
+          : "Application default credentials";
+    return `${config.project ? `${config.project} · ` : ""}${config.location} · ${auth}`;
+  }
+  try {
+    return new URL(config.endpoint).hostname;
+  } catch {
+    return config.endpoint;
+  }
+}
+
+export function getProviderStatusResponse(): ProviderStatusResponse {
+  const direct = getConfiguredProviders();
+  const providers: Record<ProviderId, ProviderStatus> = {
+    anthropic: {
+      configured: direct.anthropic,
+      ...(direct.anthropic ? { detail: "API key" } : {}),
+      modelCount: 0,
+    },
+    openai: {
+      configured: direct.openai,
+      ...(direct.openai ? { detail: "API key" } : {}),
+      modelCount: 0,
+    },
+    gemini: {
+      configured: direct.gemini,
+      ...(direct.gemini ? { detail: "API key" } : {}),
+      modelCount: 0,
+    },
+    bedrock: { configured: false, modelCount: 0 },
+    vertex: { configured: false, modelCount: 0 },
+    azure: { configured: false, modelCount: 0 },
+  };
+
+  for (const provider of ["bedrock", "vertex", "azure"] as const) {
+    const config = getGatewayProviderConfig(provider);
+    if (!config) continue;
+    providers[provider] = {
+      configured: true,
+      detail: gatewayDetail(config),
+      modelCount:
+        config.provider === "azure"
+          ? config.deployments.length
+          : config.models.length,
+    };
+  }
+
+  return {
+    providers,
+    anyConfigured: Object.values(providers).some((item) => item.configured),
   };
 }
