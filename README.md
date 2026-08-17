@@ -1,98 +1,180 @@
 # Trident
 
-Multi-Model AI Collaborative Workspace — an Electron desktop app (Electron 35, React 19,
-Vite, Express, PGLite).
+**A desktop AI workspace where several models work side by side on the same
+documents.**
 
-## Development
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-```bash
-npm install
-npm run dev        # vite + tsup (main) + electron, with hot reload
-```
+Trident runs two chat panels at once — Claude in one, GPT or Gemini in the other
+— over a shared project of markdown documents and images. Ask one model to
+draft, the other to critique, and let either one edit the document directly. It
+is built for long-running work: dissertations, research projects, books,
+specifications, course material.
 
-Other scripts:
+Everything lives on your machine. Trident has no accounts and no servers of its
+own; you bring your own API keys, and they are encrypted with your operating
+system's keychain.
 
-| Script                                    | Purpose                                                  |
-| ----------------------------------------- | -------------------------------------------------------- |
-| `npm run build`                           | Build main (tsup) + renderer (vite) into `dist/`         |
-| `npm run dist:mac`                        | Build, then package a macOS dmg/zip via electron-builder |
-| `npm run lint:check` / `npm run lint`     | ESLint (check / autofix)                                 |
-| `npm run format:check` / `npm run format` | Prettier (check / write)                                 |
-| `npm run types:check`                     | `tsc --noEmit`                                           |
-| `npm run test:provider-contracts`         | Model reference, capability, and pricing contracts       |
-| `npm run test:image-providers`            | Image generation request contracts                       |
-| `npm run release`                         | Cut a release (see below)                                |
+![Trident: a document open in the centre editor, with two AI chat panels either side running different models](docs/screenshot.webp)
+
+→ [tridenthq.app](https://tridenthq.app)
+
+## Download
+
+Signed, notarized builds for **Apple Silicon Macs** are published at
+[eastechs/trident-releases](https://github.com/eastechs/trident-releases/releases).
+Once installed, the app updates itself from there.
+
+Windows and Linux targets are configured but not currently built or tested. If
+you want them, open an issue — it is a question of testing capacity rather than
+architecture.
+
+## What it does
+
+- **Two models, one workspace.** Independent conversations side by side, each
+  with its own model and reasoning-effort setting.
+- **Shared documents.** A markdown editor with tabs and autosave. Models can
+  read, search, and edit the same documents you are editing, and everything is
+  mirrored to plain `.md` files under `~/Trident/` that you can open in any
+  other editor.
+- **Semantic search.** Documents and images are chunked and embedded, so you can
+  search a project by meaning rather than keyword.
+- **Image generation** and a gallery with per-image metadata.
+- **Live cost tracking.** Per-turn spend including cache reads and writes,
+  priced from a continuously refreshed rate table.
 
 ## AI providers
 
-Trident chats through two kinds of connection, both configured in **Settings → Providers**:
+Trident chats through two kinds of connection, both configured in
+**Settings → Providers**:
 
-- **Direct APIs** — Anthropic, OpenAI, and Google Gemini, each with a provider API key.
-- **Cloud platforms** — Amazon Bedrock, Google Vertex AI, and Azure OpenAI, using the models
-  and deployments already available in an organization's own account.
+- **Direct APIs** — Anthropic, OpenAI, and Google Gemini, each with a provider
+  API key.
+- **Cloud platforms** — Amazon Bedrock, Google Vertex AI, and Azure OpenAI,
+  using the models and deployments already available in your organization's own
+  account.
 
-Credentials are encrypted with the OS keychain (`safeStorage`) and never leave the machine;
-non-secret details like regions, endpoints, and model IDs are stored as plain settings.
+Credentials are encrypted with the OS keychain (`safeStorage`) and never leave
+the machine; non-secret details like regions, endpoints, and model IDs are
+stored as plain settings.
 
-A few implementation notes for anyone working in `src/main/ai/`:
+## Privacy and network behavior
 
-- A cloud model is persisted as an opaque reference (`trident-<provider>-<base64url>`) carrying
-  the provider-facing model ID plus an optional base model ID. Identity is the **model ID alone** —
-  the base model ID is a capability hint that can be edited without orphaning conversations.
-- `provider-config.ts` is deliberately free of Electron and Node-only imports so the routing,
-  capability, and validation rules it owns stay unit-testable; `provider-contracts.test.ts` covers it.
-- Capability decisions (reasoning, image input, prompt caching) follow the **model family**, not
-  the connection — Claude reached through Vertex behaves like Claude, not like "a Vertex model".
-- Reads that only need model IDs or connection status must not decrypt credentials; use the
-  plain-config accessors in `settings.ts` rather than `getGatewayProviderConfig`.
+Trident is local-first, and that claim is checkable — which is much of the
+reason this source is public.
 
-## Releases & auto-update
+**There is no telemetry, no analytics, and no account system.** Projects,
+documents, images, and conversations are stored in an embedded Postgres database
+in your user data directory, plus plain files under `~/Trident/`. API keys are
+encrypted through the OS keychain and never leave the main process.
 
-The packaged app self-updates via [`electron-updater`](https://www.electron.build/auto-update).
-On launch (and every 4 hours) it checks GitHub Releases, downloads a newer version in the
-background, and surfaces an **Install available** indicator (download icon + red dot) in the main
-left sidebar — clicking it installs the update and restarts.
+Besides the AI providers you configure, the app makes exactly three kinds of
+outbound request:
 
-> **First auto-update-capable build is 0.2.0.** The currently-shipped 0.1.0 predates the updater and
-> cannot update itself, so 0.2.0 must be installed **manually, once** on each machine. From 0.2.0
-> onward, every newer _published_ release is delivered automatically.
+| Destination | Purpose | Carries |
+| --- | --- | --- |
+| GitHub Releases | Update check on launch and every 4 hours | Nothing but the version |
+| `raw.githubusercontent.com` | Refreshing the model pricing table | Nothing |
+| `models.dev` | Provider logos in the model picker | Nothing |
 
-### Why a separate releases repo
+Requests to AI providers go directly from your machine to that provider using
+your key. Trident operates no proxy and no gateway, so there is no point at
+which your prompts pass through infrastructure controlled by Eastechs.
 
-The source repo (`eastechs/trident`) is **private**, and an installed app can't anonymously read a
-private repo's release assets. So release artifacts are published to a separate **public** repo,
-**`eastechs/trident-releases`**, configured as the `github` publish provider in
-`electron-builder.yml`. Source stays private; only the built installers are public. No credential is
-shipped inside the app — clients read updates anonymously.
+## Build from source
 
-> Scope: auto-update currently targets **macOS arm64** only (matching the signed dmg/zip we build).
+Requires Node 22+.
 
-### One-time setup
+```bash
+npm install
+npm run dev
+```
 
-- The public repo `eastechs/trident-releases` must exist (created during initial setup).
-- macOS signing + notarization must be configured (see env vars below). macOS will not auto-update
-  an unsigned/un-notarized app.
+That starts Vite, tsup, and Electron together with hot reload.
 
-### Cutting a release
+| Script | Purpose |
+| --- | --- |
+| `npm run build` | Build main (tsup) + renderer (vite) into `dist/` |
+| `npm run dist:mac` | Build, then package a macOS dmg/zip via electron-builder |
+| `npm run lint:check` / `npm run lint` | ESLint (check / autofix) |
+| `npm run format:check` / `npm run format` | Prettier (check / write) |
+| `npm run types:check` | `tsc --noEmit` |
+| `npm run test:provider-contracts` | Model reference, capability, and pricing contracts |
+| `npm run test:image-providers` | Image generation request contracts |
+| `npm run release` | Cut a release (maintainer only, see below) |
 
-Requires these environment variables:
+Packaging a build for yourself works without an Apple Developer account; you
+just won't get a signed, notarized, or self-updating app.
 
-| Var                                                        | Purpose                                                        |
-| ---------------------------------------------------------- | -------------------------------------------------------------- |
-| `GH_TOKEN`                                                 | Uploads the GitHub release. `export GH_TOKEN=$(gh auth token)` |
-| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Notarization                                                   |
+Architecture in one paragraph: the Electron main process boots an Express server
+on `127.0.0.1:19274`, guarded by a per-launch shared secret, and serves the
+React renderer. Data lives in PGLite (Postgres compiled to WebAssembly) with
+pgvector for embeddings, accessed through Drizzle. AI calls go through the
+Vercel AI SDK, with provider resolution in `src/main/ai/providers.ts`.
+[CONTRIBUTING.md](CONTRIBUTING.md) has a fuller map.
+
+## Releases and auto-update
+
+The packaged app self-updates via
+[`electron-updater`](https://www.electron.build/auto-update). On launch, and
+every 4 hours, it checks GitHub Releases, downloads a newer version in the
+background, and surfaces an **Install available** indicator in the left sidebar;
+clicking it installs and restarts.
+
+Built installers are published to a separate public repository,
+[eastechs/trident-releases](https://github.com/eastechs/trident-releases),
+configured as the `github` publish provider in `electron-builder.yml`. Keeping
+binaries out of the source repository keeps clones small, and every installed
+app already points at that update feed. No credential ships inside the app —
+clients read updates anonymously.
+
+> Auto-update currently targets **macOS arm64** only, matching the signed
+> dmg/zip that gets built.
+
+### Cutting a release (maintainer)
+
+Requires signing and upload credentials in the environment:
+
+| Var | Purpose |
+| --- | --- |
+| `GH_TOKEN` | Uploads the GitHub release. `export GH_TOKEN=$(gh auth token)` |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Notarization |
 
 Then, from a clean `main`:
 
 ```bash
-npm version <patch|minor|major>   # bumps version, commits, tags
-npm run release                   # build → notarize → upload DRAFT → push tag
+npm version <patch|minor|major>
+npm run release
 ```
 
-`npm run release` builds, notarizes, and uploads the dmg, zip, `latest-mac.yml`, and blockmap to a
-**draft** GitHub Release in `eastechs/trident-releases`, then pushes the version tag to the source
-repo.
+This builds, notarizes, and uploads the dmg, zip, `latest-mac.yml`, and blockmap
+to a **draft** release, then pushes the version tag. Drafts are invisible to the
+updater until published by hand.
 
-**Drafts are invisible to the updater.** To go live, open the draft at
-<https://github.com/eastechs/trident-releases/releases>, review it, and click **Publish release**.
-Installed apps pick it up on their next check.
+## License
+
+Trident is free software under the
+[GNU Affero General Public License v3.0](LICENSE). You may use, study, modify,
+and redistribute it. If you distribute a modified version — or run one as a
+network service — that version must also be AGPL.
+
+**If the AGPL does not work for your organization**, commercial licenses and
+support agreements are available: <licensing@eastechs.com>. Universities and
+research groups are welcome to get in touch as well; there is usually a sensible
+arrangement.
+
+The Trident name and icon are not covered by the AGPL. Forks are welcome and
+should use their own branding — see [TRADEMARK.md](TRADEMARK.md). Third-party
+attribution is in [CREDITS.md](CREDITS.md).
+
+## Contributing
+
+Pull requests are welcome; please open an issue first for anything substantial.
+Contributors sign a [CLA](CLA.md) so the project can be dual-licensed — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for what that means and why.
+
+Security issues should be reported privately: [SECURITY.md](SECURITY.md).
+
+---
+
+Built by Eastechs, LLC.
