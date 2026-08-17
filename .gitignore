@@ -3,3 +3,13 @@ dist/
 release/
 .vite/
 *.tsbuildinfo
+
+# Secrets — never commit
+.env
+.env.*
+
+# OS / editor cruft
+.DS_Store
+.idea/
+.vscode/
+*.local

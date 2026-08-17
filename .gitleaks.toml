@@ -1,0 +1,16 @@
+# Secret-scanning config. Run before publishing or cutting a release:
+#
+#   gitleaks git --log-opts="--all" .
+#
+# The allowlist below is deliberately narrow: it requires BOTH the fixture file
+# path AND the exact placeholder text, so a real key committed to that same file
+# is still caught.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Vertex service-account fixture in provider contract tests (key body is the literal word 'example')"
+condition = "AND"
+paths = ['''src/main/ai/provider-contracts\.test\.ts''']
+regexes = ['''-----BEGIN PRIVATE KEY-----\\nexample\\n-----END PRIVATE KEY-----''']
