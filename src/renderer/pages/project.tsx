@@ -1284,7 +1284,7 @@ function ProjectView({
               id="left-sidebar"
               panelRef={leftPanelRef}
               defaultSize="25%"
-              minSize="15%"
+              minSize="280px"
               maxSize="30%"
               collapsible
               collapsedSize="0%"
@@ -1783,7 +1783,7 @@ function ProjectView({
               id="right-sidebar"
               panelRef={rightPanelRef}
               defaultSize="25%"
-              minSize="15%"
+              minSize="280px"
               maxSize="30%"
               collapsible
               collapsedSize="0%"
