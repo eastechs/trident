@@ -44,6 +44,10 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    // The project view holds two chat panels either side of the editor. Below
+    // this the panels' percentage cap binds before their 280px floor and the
+    // composer starts losing controls.
+    minWidth: 960,
     titleBarStyle: "hidden",
     trafficLightPosition: { x: 12, y: 8 },
     icon: appIconPath(),
