@@ -37,6 +37,7 @@ import { safePathInside } from "../safe-paths.js";
 import {
   capabilitySlugForFamily,
   supportsImageInput,
+  type ResolvedModelReference,
 } from "../ai/provider-config.js";
 
 const router = Router({ mergeParams: true });
@@ -659,7 +660,7 @@ router.post("/", async (req: ProjectRequest, res) => {
             const firstUserMsg = allMessages.find((m) => m.role === "user");
             const title = await generateConversationTitle(
               firstUserMsg,
-              resolvedModelReference.providerId === "openai",
+              resolvedModelReference,
             );
             await db
               .update(conversations)
@@ -803,8 +804,8 @@ router.delete("/", async (req: ProjectRequest, res) => {
 // ─── Title generation helper ───────────────────────────────
 
 async function generateConversationTitle(
-  firstUserMessage?: UIMessage,
-  useOpenAI = false,
+  firstUserMessage: UIMessage | undefined,
+  resolved: ResolvedModelReference,
 ): Promise<string> {
   if (!firstUserMessage) return "New Chat";
 
@@ -818,23 +819,24 @@ async function generateConversationTitle(
   if (!userText) return "New Chat";
 
   try {
-    // Never send a prompt to a second provider just to title a conversation.
-    // Non-OpenAI conversations use the local truncation fallback below.
-    const openaiKey = useOpenAI ? getApiKey("openai") : undefined;
-    if (openaiKey) {
-      const { createOpenAI } = await import("@ai-sdk/openai");
-      const openai = createOpenAI({ apiKey: openaiKey });
-      const { text } = await generateText({
-        model: openai("gpt-5-nano"),
-        system:
-          "Generate a short, descriptive title for a conversation based on the user's first message. Max 50 characters. No quotes. Just the title.",
-        prompt: userText,
-      });
-      const title = text.trim();
-      if (title) return title;
-    }
+    // Title with the conversation's own model. Titling used to be limited to
+    // direct OpenAI connections so that no prompt reached a provider the user
+    // had not chosen for this conversation, which left every other connection
+    // — including Azure, which is the same model family — with nothing but the
+    // truncation fallback. Using the conversation's own model honors that rule
+    // and works everywhere. It is one short request per new conversation, and
+    // no reasoning options are sent.
+    const { text } = await generateText({
+      model: resolveModel(resolved),
+      system:
+        "Generate a short, descriptive title for a conversation based on the user's first message. Max 50 characters. No quotes. Just the title.",
+      prompt: userText,
+    });
+    const title = text.trim();
+    if (title) return title;
   } catch {
-    // Fall back to truncation
+    // Any failure — unreachable provider, revoked credentials — falls through
+    // to the local truncation below.
   }
 
   return userText.length > 50 ? userText.substring(0, 47) + "..." : userText;

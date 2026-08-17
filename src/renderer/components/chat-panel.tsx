@@ -272,6 +272,13 @@ export function ChatPanel({
     handleNewChat,
   ]);
 
+  // Depend on the derived condition rather than the conversation object: the
+  // list is refetched into new objects, which would otherwise rebuild this
+  // callback — and re-run the effects that take it — on every refresh.
+  const needsConversationRefresh =
+    !!activeConversation &&
+    (activeConversation.title === "New Chat" || !activeConversation.model);
+
   const handleStreamingComplete = useCallback(() => {
     // Stop passing initialPrompt to SidebarChat now that the first
     // exchange is complete — prevents a re-send if the component
@@ -280,10 +287,7 @@ export function ChatPanel({
       setAutoCreatedId(null);
     }
 
-    if (
-      activeConversation &&
-      (activeConversation.title === "New Chat" || !activeConversation.model)
-    ) {
+    if (needsConversationRefresh) {
       api_get<ConversationData[]>(`/api/projects/${projectId}/conversations`)
         .then((data) => {
           onConversationsRefreshed(data);
@@ -292,7 +296,7 @@ export function ChatPanel({
     }
   }, [
     projectId,
-    activeConversation,
+    needsConversationRefresh,
     activeConversationId,
     autoCreatedId,
     onConversationsRefreshed,

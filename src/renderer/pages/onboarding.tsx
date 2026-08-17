@@ -42,39 +42,9 @@ export default function Onboarding() {
     return data;
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    api_get<ProviderSettingsResponse>("/api/settings/providers")
-      .then((data) => {
-        if (cancelled) return;
-        setProviderSettings(data);
-        setShowChooser(!data.anyConfigured);
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        console.error("Failed to load provider settings:", error);
-        setLoadError(
-          "Provider settings could not be loaded. Check that Trident is running and try again.",
-        );
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const handleSaved = async (provider: ProviderId) => {
-    await refreshProviders();
-    setAnnouncement(`${PROVIDER_CATALOG[provider].label} is configured.`);
-    setSelectedProvider(null);
-    setShowChooser(false);
-  };
-
-  const handleRetryLoad = async () => {
+  // One load path for both the initial mount and the retry button, so the
+  // two cannot drift in what they set or how they report failure.
+  const loadProviders = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
@@ -88,7 +58,20 @@ export default function Onboarding() {
     } finally {
       setLoading(false);
     }
+  }, [refreshProviders]);
+
+  useEffect(() => {
+    void loadProviders();
+  }, [loadProviders]);
+
+  const handleSaved = async (provider: ProviderId) => {
+    await refreshProviders();
+    setAnnouncement(`${PROVIDER_CATALOG[provider].label} is configured.`);
+    setSelectedProvider(null);
+    setShowChooser(false);
   };
+
+  const handleRetryLoad = loadProviders;
 
   const handleContinue = () => {
     if (!providerSettings.anyConfigured) return;
