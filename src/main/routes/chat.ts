@@ -286,15 +286,18 @@ router.post("/", async (req: ProjectRequest, res) => {
 
   const filePartByImageId = new Map<string, FileUIPart>();
   if (allReferencedImageIds.size > 0) {
+    // Reject only when the family is one whose image support we can evaluate;
+    // an unclassifiable gateway deployment may be vision-capable, and the
+    // provider is a better authority than a guess made from its name.
     if (
-      !capabilityProviderSlug ||
+      capabilityProviderSlug &&
       !supportsImageInput(
         resolvedModelReference.capabilityModelId,
         capabilityProviderSlug,
       )
     ) {
       res.status(422).json({
-        error: `The selected model (${effectiveModelId}) does not support image input.`,
+        error: `The selected model (${modelLabel(effectiveModelId)}) does not support image input.`,
       });
       return;
     }

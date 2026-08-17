@@ -165,9 +165,16 @@ function stampCapabilities(models: ModelDescriptor[]): ModelInfo[] {
           modelFamily === "anthropic" &&
           !isBedrockAnthropicModelId(modelId)
         ),
+      // Only claim a model can't accept images when the family is one whose
+      // image support we can actually evaluate. A gateway deployment with an
+      // opaque name — which is what an unclassifiable family means — may well
+      // be vision-capable, and refusing on a guess makes that capability
+      // unreachable. Reasoning stays conservative in the other direction:
+      // omitting an optional parameter costs nothing, while sending one to a
+      // chat-only model is an error.
       supportsImages: capabilitySlug
         ? supportsImageInput(capabilityModelId, capabilitySlug)
-        : false,
+        : true,
     };
   });
 }
