@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint:check
+
+      - run: npm run format:check
+
+      - run: npm run types:check
+
+      # Both suites stub fetch and use placeholder keys — no credentials or
+      # network access required.
+      - run: npm run test:provider-contracts
+
+      - run: npm run test:image-providers
