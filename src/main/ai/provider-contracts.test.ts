@@ -401,3 +401,22 @@ test("Bedrock revision-qualified model IDs resolve canonical pricing", () => {
   assert.equal(pricing?.outputPerMTokens, 15);
   assert.equal(pricing?.contextWindow, 1_000_000);
 });
+
+test("region-scoped Bedrock profiles price as the model they route to", () => {
+  // The snapshot carries keys for some region scopes but not every one; an
+  // APAC profile must not lose its pricing just because its scoped key is
+  // missing.
+  const scoped = lookupPricing(
+    gatewayModelRef("bedrock", {
+      id: "apac.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    }),
+  );
+  const unscoped = lookupPricing(
+    gatewayModelRef("bedrock", {
+      id: "anthropic.claude-sonnet-4-5-20250929-v1:0",
+    }),
+  );
+
+  assert.ok(scoped, "region-scoped profile should resolve pricing");
+  assert.deepEqual(scoped, unscoped);
+});

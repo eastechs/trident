@@ -187,22 +187,31 @@ function guessProvider(modelId: string): string[] | undefined {
   return undefined;
 }
 
+// Bedrock cross-region inference profiles prefix the model ID with their
+// region scope. The pricing snapshot carries keys for some scopes but not
+// every one, so also try the unscoped form: a Tokyo or APAC profile prices
+// the same as the model it routes to.
+const REGION_SCOPE_PREFIX =
+  /^(?:[a-z]{2}(?:-gov)?|apac|global)\.(?=anthropic\.)/;
+
 function generateCandidates(modelId: string): string[] {
-  const set = new Set<string>();
-  set.add(modelId);
-  const dateStripped8 = modelId.replace(/-\d{8}$/, "");
-  const dateStripped10 = modelId.replace(/-\d{4}-\d{2}-\d{2}$/, "");
-  const revisionStripped = modelId.replace(/-v\d+(?::\d+)?$/, "");
-  set.add(dateStripped8);
-  set.add(dateStripped10);
-  set.add(revisionStripped);
-  // Bedrock/Vertex variants — same canonical pricing as direct provider entries.
-  for (const base of [
-    modelId,
-    dateStripped8,
-    dateStripped10,
-    revisionStripped,
-  ]) {
+  const bases: string[] = [];
+  for (const root of [modelId, modelId.replace(REGION_SCOPE_PREFIX, "")]) {
+    for (const base of [
+      root,
+      root.replace(/-\d{8}$/, ""),
+      root.replace(/-\d{4}-\d{2}-\d{2}$/, ""),
+      root.replace(/-v\d+(?::\d+)?$/, ""),
+    ]) {
+      if (!bases.includes(base)) bases.push(base);
+    }
+  }
+
+  // Unprefixed forms first, so an exact entry always wins over a mirror.
+  const set = new Set<string>(bases);
+  for (const base of bases) {
+    // Bedrock/Vertex/Azure mirrors carry the same canonical pricing as the
+    // direct provider entries.
     set.add(`anthropic.${base}`);
     set.add(`global.anthropic.${base}`);
     set.add(`vertex_ai/${base}`);
