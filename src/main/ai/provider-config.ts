@@ -434,6 +434,60 @@ function gatewayAgentBucket(
   return `${providerId}-${readable || "model"}-${digest}`;
 }
 
+export type ClassifiedModelReference =
+  | { kind: "gateway"; decoded: DecodedGatewayModelRef }
+  | { kind: "direct"; modelId: string }
+  | { kind: "invalid"; reason: string };
+
+/**
+ * Classifies a persisted model reference without consulting any settings.
+ *
+ * This is the request-path gate: it decides whether a value names a gateway
+ * route, a direct model, or nothing usable. Callers still have to confirm a
+ * gateway route is configured — that check needs settings and cannot live
+ * here — but every rule about the shape of a reference does, so it stays
+ * testable and in one piece.
+ */
+export function classifyModelReference(
+  value: string,
+): ClassifiedModelReference {
+  if (!value || value.length > 16_384 || containsControlCharacters(value)) {
+    return {
+      kind: "invalid",
+      reason: "The selected model reference is invalid.",
+    };
+  }
+
+  const decoded = decodeGatewayModelRef(value);
+  if (decoded) return { kind: "gateway", decoded };
+
+  // A route-looking value that does not decode canonically must never fall
+  // through to a direct model, which would route it to a provider the user
+  // never selected.
+  if (value.startsWith("trident-")) {
+    return {
+      kind: "invalid",
+      reason: "The selected gateway model is invalid.",
+    };
+  }
+
+  // Direct IDs double as document directory names, so reject path separators
+  // and names the filesystem reserves alongside the usual character rules.
+  if (
+    value.length > 255 ||
+    value === "." ||
+    value === ".." ||
+    !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value) ||
+    /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(value)
+  ) {
+    return {
+      kind: "invalid",
+      reason: "The selected direct model ID is invalid.",
+    };
+  }
+  return { kind: "direct", modelId: value };
+}
+
 export function resolvedDirectModelReference(
   modelId: string,
 ): ResolvedModelReference {

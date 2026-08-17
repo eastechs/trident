@@ -13,8 +13,7 @@ import type { LanguageModel } from "ai";
 import { getApiKey, getGatewayProviderConfig } from "../settings.js";
 import {
   bedrockRuntimeEndpoint,
-  containsControlCharacters,
-  decodeGatewayModelRef,
+  classifyModelReference,
   gatewayConfiguredModel,
   isBedrockAnthropicModelId,
   resolvedDirectModelReference,
@@ -58,55 +57,34 @@ export class ModelReferenceError extends Error {
 export function resolveModelReference(
   modelReference: string,
 ): ResolvedModelReference {
-  if (
-    !modelReference ||
-    modelReference.length > 16_384 ||
-    containsControlCharacters(modelReference)
-  ) {
-    throw new ModelReferenceError("The selected model reference is invalid.");
+  const classified = classifyModelReference(modelReference);
+  if (classified.kind === "invalid") {
+    throw new ModelReferenceError(classified.reason);
+  }
+  if (classified.kind === "direct") {
+    return resolvedDirectModelReference(classified.modelId);
   }
 
-  const decoded = decodeGatewayModelRef(modelReference);
-  if (decoded) {
-    const config = getGatewayProviderConfig(decoded.providerId);
-    if (!config) {
-      throw new ModelReferenceError(
-        `The ${decoded.providerId} provider is not configured.`,
-      );
-    }
-    const configured = gatewayConfiguredModel(config, modelReference);
-    if (!configured) {
-      throw new ModelReferenceError(
-        "The selected gateway model is not configured.",
-      );
-    }
-    // Resolve from the current configuration rather than the persisted
-    // reference so an edited capability hint takes effect on conversations
-    // that were pinned before the edit.
-    return resolvedGatewayModelReference({
-      providerId: decoded.providerId,
-      ...configured,
-    });
+  const { decoded } = classified;
+  const config = getGatewayProviderConfig(decoded.providerId);
+  if (!config) {
+    throw new ModelReferenceError(
+      `The ${decoded.providerId} provider is not configured.`,
+    );
   }
-
-  // A route-looking value that does not decode canonically must never fall
-  // through to OpenAI as a legacy direct model ID.
-  if (modelReference.startsWith("trident-")) {
-    throw new ModelReferenceError("The selected gateway model is invalid.");
+  const configured = gatewayConfiguredModel(config, modelReference);
+  if (!configured) {
+    throw new ModelReferenceError(
+      "The selected gateway model is not configured.",
+    );
   }
-
-  // Direct IDs are also used as legacy document directory names, so keep the
-  // existing raw form while rejecting path separators and unsafe segments.
-  if (
-    modelReference.length > 255 ||
-    modelReference === "." ||
-    modelReference === ".." ||
-    !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(modelReference) ||
-    /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(modelReference)
-  ) {
-    throw new ModelReferenceError("The selected direct model ID is invalid.");
-  }
-  return resolvedDirectModelReference(modelReference);
+  // Resolve from the current configuration rather than the persisted
+  // reference so an edited capability hint takes effect on conversations
+  // that were pinned before the edit.
+  return resolvedGatewayModelReference({
+    providerId: decoded.providerId,
+    ...configured,
+  });
 }
 
 export function resolveProviderName(modelReference: string): ProviderName {

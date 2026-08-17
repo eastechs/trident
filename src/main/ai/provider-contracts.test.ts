@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   bedrockRuntimeEndpoint,
   capabilityModelIdFor,
+  classifyModelReference,
   decodeGatewayModelRef,
   gatewayConfigHasModelReference,
   gatewayConfiguredModel,
@@ -105,6 +106,49 @@ test("editing a capability hint keeps pinned references routable", () => {
     baseModelId: "claude-opus-4-6",
   });
   assert.equal(before.agentBucket, after.agentBucket);
+});
+
+test("model reference classification gates the request path", () => {
+  const gateway = gatewayModelRef("bedrock", {
+    id: "anthropic.claude-sonnet-4-6-v1:0",
+  });
+  assert.equal(classifyModelReference(gateway).kind, "gateway");
+  assert.deepEqual(classifyModelReference("claude-sonnet-4-6"), {
+    kind: "direct",
+    modelId: "claude-sonnet-4-6",
+  });
+
+  // A route-looking value that does not decode must never be treated as a
+  // direct model — that would route it to a provider the user never selected.
+  for (const forged of [
+    "trident-bedrock-not-base64",
+    "trident-bedrock-",
+    "trident-openrouter-abc",
+    `trident-bedrock-${Buffer.from(JSON.stringify({ modelId: "x", extra: 1 })).toString("base64url")}`,
+  ]) {
+    assert.equal(classifyModelReference(forged).kind, "invalid", forged);
+  }
+
+  // Direct IDs double as document directory names.
+  for (const unsafe of [
+    "",
+    ".",
+    "..",
+    "../escape",
+    "with/slash",
+    "with\\backslash",
+    "-leading-dash",
+    "CON",
+    "com1.txt",
+    "a".repeat(256),
+    "has space",
+  ]) {
+    assert.equal(
+      classifyModelReference(unsafe).kind,
+      "invalid",
+      JSON.stringify(unsafe),
+    );
+  }
 });
 
 test("vendor-prefixed gateway IDs resolve to the underlying model", () => {
