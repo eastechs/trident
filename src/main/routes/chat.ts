@@ -34,7 +34,10 @@ import { createTools } from "../ai/tools/index.js";
 import { showNotification } from "../native/notifications.js";
 import { getApiKey } from "../settings.js";
 import { safePathInside } from "../safe-paths.js";
-import { supportsImageInput } from "../ai/model-registry.js";
+import {
+  capabilitySlugForFamily,
+  supportsImageInput,
+} from "../ai/provider-config.js";
 
 const router = Router({ mergeParams: true });
 
@@ -149,14 +152,9 @@ router.post("/", async (req: ProjectRequest, res) => {
     }
     throw error;
   }
-  const capabilityProviderSlug =
-    resolvedModelReference.modelFamily === "anthropic"
-      ? "anthropic"
-      : resolvedModelReference.modelFamily === "openai"
-        ? "openai"
-        : resolvedModelReference.modelFamily === "google"
-          ? "google"
-          : null;
+  const capabilityProviderSlug = capabilitySlugForFamily(
+    resolvedModelReference.modelFamily,
+  );
 
   // The client (useChat) sends the full UIMessage[] including the new user message.
   // Use that directly; the DB history would miss the new message.

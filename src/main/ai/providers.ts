@@ -19,7 +19,9 @@ import {
   isBedrockAnthropicModelId,
   resolvedDirectModelReference,
   resolvedGatewayModelReference,
+  capabilitySlugForFamily,
   supportsAdaptiveThinking,
+  supportsReasoning,
   vertexSurfaceFor,
   type GatewayProviderConfig,
   type GatewayProviderId,
@@ -27,7 +29,6 @@ import {
   type ResolvedModelReference,
   type VertexProviderConfig,
 } from "./provider-config.js";
-import { supportsReasoning } from "./model-registry.js";
 
 export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];
@@ -333,16 +334,10 @@ export function supportsAnthropicCacheControl(
 }
 
 function reasoningSupported(resolved: ResolvedModelReference): boolean {
-  if (resolved.modelFamily === "anthropic") {
-    return supportsReasoning(resolved.capabilityModelId, "anthropic");
-  }
-  if (resolved.modelFamily === "openai") {
-    return supportsReasoning(resolved.capabilityModelId, "openai");
-  }
-  if (resolved.modelFamily === "google") {
-    return supportsReasoning(resolved.capabilityModelId, "google");
-  }
-  return false;
+  const capabilitySlug = capabilitySlugForFamily(resolved.modelFamily);
+  return capabilitySlug
+    ? supportsReasoning(resolved.capabilityModelId, capabilitySlug)
+    : false;
 }
 
 /**

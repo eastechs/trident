@@ -487,6 +487,90 @@ export function bedrockRuntimeEndpoint(region: string): string {
   return `https://bedrock-runtime.${region}.${suffix}`;
 }
 
+export type CapabilityProviderSlug = "anthropic" | "openai" | "google";
+
+// Family-based capability check. Patterns:
+//   - OpenAI: o-series (o1/o3/o4...) and the GPT-5 line all support
+//     reasoning_effort. GPT-4 and earlier do not.
+//   - Anthropic: extended thinking is on Claude 3.7 (legacy `claude-3-7-...`
+//     ids) and the Claude 4+ family-first ids (`claude-(opus|sonnet|haiku)-N-x`).
+//     Older claude-3-5-* / claude-2 / claude-instant don't support thinking.
+//   - Gemini: thinking is on 2.5+ (and any 3+ family). Earlier 1.x / 2.0 don't.
+export function supportsReasoning(
+  modelId: string,
+  providerSlug: CapabilityProviderSlug,
+): boolean {
+  if (providerSlug === "openai") {
+    return /^o\d/.test(modelId) || /^gpt-5/.test(modelId);
+  }
+  if (providerSlug === "anthropic") {
+    return (
+      /^claude-(opus|sonnet|haiku)-/.test(modelId) ||
+      /^claude-3-7/.test(modelId)
+    );
+  }
+  if (providerSlug === "google") {
+    return /^gemini-(2[-.]5|[3-9])/.test(modelId);
+  }
+  return false;
+}
+
+export function supportsImageInput(
+  modelId: string,
+  providerSlug: CapabilityProviderSlug,
+): boolean {
+  if (providerSlug === "anthropic") {
+    return (
+      /^claude-3(?:[-.]|$)/.test(modelId) ||
+      /^claude-(opus|sonnet|haiku)-/.test(modelId)
+    );
+  }
+  if (providerSlug === "openai") {
+    // The legacy small reasoning aliases are text-only even though the full
+    // o1/o3 models accept images. o4-mini is multimodal, so do not exclude
+    // every `-mini` suffix generically.
+    if (/^o(?:1|3)-mini(?:-|$)/.test(modelId)) return false;
+    return (
+      /^gpt-4(?:o|\.\d|-turbo|-vision)/.test(modelId) ||
+      /^gpt-[5-9]/.test(modelId) ||
+      /^o[1345](?:-|$)/.test(modelId)
+    );
+  }
+  if (providerSlug === "google") {
+    return /^gemini-(?:1[.-]5|[2-9])/.test(modelId);
+  }
+  return false;
+}
+
+// The capability namespace a family is evaluated under. Families outside it
+// have no capability data, which callers must treat as "unknown" rather than
+// "unsupported".
+export function capabilitySlugForFamily(
+  family: ModelFamily,
+): CapabilityProviderSlug | null {
+  if (family === "anthropic") return "anthropic";
+  if (family === "openai") return "openai";
+  if (family === "google") return "google";
+  return null;
+}
+
+// Logo for the underlying model family, falling back to the connection when
+// the family is not one we recognize.
+export function logoSlugForFamily(
+  family: ModelFamily,
+  providerId: ProviderId,
+): string {
+  if (family === "anthropic") return "anthropic";
+  if (family === "openai") return "openai";
+  if (family === "google") return "google";
+  if (family === "amazon") return "amazon-bedrock";
+  if (family === "meta") return "llama";
+  if (family === "mistral") return "mistral";
+  if (family === "cohere") return "cohere";
+  if (family === "deepseek") return "deepseek";
+  return PROVIDER_LOGO_SLUGS[providerId];
+}
+
 // Adaptive thinking (`type: "adaptive"`) and the companion effort knob arrived
 // with the Claude 4.5 generation. Earlier thinking-capable models — Claude 3.7
 // and the 4.0/4.1 family — only accept budget-based extended thinking and

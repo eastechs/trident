@@ -2,6 +2,10 @@ import { getApiKey, getGatewayProviderConfig } from "../settings.js";
 import {
   PROVIDER_LABELS,
   capabilityModelIdFor,
+  capabilitySlugForFamily,
+  logoSlugForFamily,
+  supportsImageInput,
+  supportsReasoning,
   decodeGatewayModelRef,
   gatewayModelRef,
   isBedrockAnthropicModelId,
@@ -37,60 +41,6 @@ export interface ModelInfo {
 }
 
 type ProviderKey = "anthropic" | "openai" | "gemini";
-type CapabilityProviderSlug = "anthropic" | "openai" | "google";
-
-// Family-based capability check. Patterns:
-//   - OpenAI: o-series (o1/o3/o4...) and the GPT-5 line all support
-//     reasoning_effort. GPT-4 and earlier do not.
-//   - Anthropic: extended thinking is on Claude 3.7 (legacy `claude-3-7-...`
-//     ids) and the Claude 4+ family-first ids (`claude-(opus|sonnet|haiku)-N-x`).
-//     Older claude-3-5-* / claude-2 / claude-instant don't support thinking.
-//   - Gemini: thinking is on 2.5+ (and any 3+ family). Earlier 1.x / 2.0 don't.
-export function supportsReasoning(
-  modelId: string,
-  providerSlug: CapabilityProviderSlug,
-): boolean {
-  if (providerSlug === "openai") {
-    return /^o\d/.test(modelId) || /^gpt-5/.test(modelId);
-  }
-  if (providerSlug === "anthropic") {
-    return (
-      /^claude-(opus|sonnet|haiku)-/.test(modelId) ||
-      /^claude-3-7/.test(modelId)
-    );
-  }
-  if (providerSlug === "google") {
-    return /^gemini-(2[-.]5|[3-9])/.test(modelId);
-  }
-  return false;
-}
-
-export function supportsImageInput(
-  modelId: string,
-  providerSlug: CapabilityProviderSlug,
-): boolean {
-  if (providerSlug === "anthropic") {
-    return (
-      /^claude-3(?:[-.]|$)/.test(modelId) ||
-      /^claude-(opus|sonnet|haiku)-/.test(modelId)
-    );
-  }
-  if (providerSlug === "openai") {
-    // The legacy small reasoning aliases are text-only even though the full
-    // o1/o3 models accept images. o4-mini is multimodal, so do not exclude
-    // every `-mini` suffix generically.
-    if (/^o(?:1|3)-mini(?:-|$)/.test(modelId)) return false;
-    return (
-      /^gpt-4(?:o|\.\d|-turbo|-vision)/.test(modelId) ||
-      /^gpt-[5-9]/.test(modelId) ||
-      /^o[1345](?:-|$)/.test(modelId)
-    );
-  }
-  if (providerSlug === "google") {
-    return /^gemini-(?:1[.-]5|[2-9])/.test(modelId);
-  }
-  return false;
-}
 
 const FETCH_TIMEOUT_MS = 8_000;
 const CACHE_TTL_MS = 5 * 60_000;
@@ -112,33 +62,6 @@ function directProviderIdForSlug(providerSlug: string): ProviderKey {
   if (providerSlug === "anthropic") return "anthropic";
   if (providerSlug === "google") return "gemini";
   return "openai";
-}
-
-function capabilitySlugForFamily(
-  family: ModelFamily,
-): CapabilityProviderSlug | null {
-  if (family === "anthropic") return "anthropic";
-  if (family === "openai") return "openai";
-  if (family === "google") return "google";
-  return null;
-}
-
-function logoSlugForFamily(
-  family: ModelFamily,
-  providerId: ProviderId,
-): string {
-  if (family === "anthropic") return "anthropic";
-  if (family === "openai") return "openai";
-  if (family === "google") return "google";
-  if (family === "amazon") return "amazon-bedrock";
-  if (family === "meta") return "llama";
-  if (family === "mistral") return "mistral";
-  if (family === "cohere") return "cohere";
-  if (family === "deepseek") return "deepseek";
-  if (providerId === "bedrock") return "amazon-bedrock";
-  if (providerId === "vertex") return "google-vertex";
-  if (providerId === "azure") return "azure";
-  return providerId === "gemini" ? "google" : providerId;
 }
 
 function stampCapabilities(models: ModelDescriptor[]): ModelInfo[] {
