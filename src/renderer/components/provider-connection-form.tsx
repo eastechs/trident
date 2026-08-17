@@ -71,6 +71,14 @@ function initialState(provider: ProviderId): ProviderFormState {
   };
 }
 
+// The field a provider's models are reported under, matching the key the
+// server returns errors on. Azure calls them deployments; keeping one source
+// for the name stops client- and server-side errors landing in two different
+// namespaces where only one of them gets displayed or cleared.
+function modelCollectionKey(provider: ProviderId): "models" | "deployments" {
+  return provider === "azure" ? "deployments" : "models";
+}
+
 function isDirectProvider(provider: ProviderId): boolean {
   return (
     provider === "anthropic" || provider === "openai" || provider === "gemini"
@@ -146,9 +154,10 @@ function validateForm(
   }
 
   if (provider === "bedrock" || provider === "vertex" || provider === "azure") {
+    const collectionKey = modelCollectionKey(provider);
     values.models.forEach((model, index) => {
       if (!model.id.trim()) {
-        errors[`models.${index}.id`] =
+        errors[`${collectionKey}.${index}.id`] =
           provider === "azure"
             ? "Enter a deployment name."
             : "Enter a model ID.";
@@ -356,9 +365,8 @@ function ModelRows({
   onChange,
 }: ModelRowsProps) {
   const isAzure = provider === "azure";
-  const collectionKey = isAzure ? "deployments" : "models";
-  const collectionError =
-    errors[collectionKey] ?? (isAzure ? errors.models : undefined);
+  const collectionKey = modelCollectionKey(provider);
+  const collectionError = errors[collectionKey];
   const collectionErrorId = `${idPrefix}-${collectionKey}-error`;
 
   const updateRow = (
@@ -396,12 +404,8 @@ function ModelRows({
       {rows.map((row, index) => {
         const modelId = `${idPrefix}-model-${row.key}`;
         const baseModelId = `${modelId}-base`;
-        const modelError =
-          errors[`${collectionKey}.${index}.id`] ??
-          errors[`models.${index}.id`];
-        const baseModelError =
-          errors[`${collectionKey}.${index}.baseModelId`] ??
-          errors[`models.${index}.baseModelId`];
+        const modelError = errors[`${collectionKey}.${index}.id`];
+        const baseModelError = errors[`${collectionKey}.${index}.baseModelId`];
 
         return (
           <div
@@ -537,10 +541,13 @@ export function ProviderConnectionForm({
       }
       if (field === "serviceAccountJson") delete next.project;
       if (clearsModelErrors) {
+        // Azure reports this collection as "deployments" while the form field
+        // is "models", so clear the collection-level key by its reported name
+        // as well as every per-row key beneath it.
+        const collectionKey = modelCollectionKey(provider);
+        delete next[collectionKey];
         for (const key of Object.keys(next)) {
-          if (key.startsWith("models.") || key.startsWith("deployments.")) {
-            delete next[key];
-          }
+          if (key.startsWith(`${collectionKey}.`)) delete next[key];
         }
       }
       return next;
