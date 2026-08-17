@@ -1318,7 +1318,15 @@ function ProjectView({
 
             <ResizableHandle withHandle />
 
-            <ResizablePanel id="main-content" defaultSize="50%" minSize="20%">
+            {/*
+              No defaultSize here on purpose. Double-clicking a divider resets
+              the first adjacent panel that declares one, so giving the editor a
+              default would make the right divider reset the editor rather than
+              the right chat panel — leaving that panel to take up whatever was
+              left over instead of its own width. Without one it receives the
+              remainder, which is the same 50% it had.
+            */}
+            <ResizablePanel id="main-content" minSize="20%">
               <div
                 data-tour="main-content"
                 className="flex h-full flex-col overflow-hidden"
