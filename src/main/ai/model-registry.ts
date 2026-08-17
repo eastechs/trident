@@ -8,6 +8,7 @@ import {
   isDirectProviderId,
   modelFamilyFor,
   modelsForGatewayConfig,
+  type GatewayModelConfig,
   type ModelFamily,
   type ProviderId,
 } from "./provider-config.js";
@@ -99,12 +100,12 @@ const cache = new Map<ProviderKey, { at: number; models: ModelInfo[] }>();
 // Intermediate row used by FALLBACK and the per-provider fetchers; the
 // reasoning capability is stamped in one place after fetch so we don't
 // have to repeat the predicate at every construction site.
-type ModelDescriptor = Pick<
-  ModelInfo,
-  "id" | "provider" | "providerSlug" | "name"
-> &
+type ModelDescriptor = Pick<ModelInfo, "id" | "provider" | "name"> &
   Partial<
-    Pick<ModelInfo, "providerId" | "modelId" | "baseModelId" | "modelFamily">
+    Pick<
+      ModelInfo,
+      "providerId" | "providerSlug" | "modelId" | "baseModelId" | "modelFamily"
+    >
   >;
 
 function directProviderIdForSlug(providerSlug: string): ProviderKey {
@@ -143,7 +144,7 @@ function logoSlugForFamily(
 function stampCapabilities(models: ModelDescriptor[]): ModelInfo[] {
   return models.map((model) => {
     const providerId =
-      model.providerId ?? directProviderIdForSlug(model.providerSlug);
+      model.providerId ?? directProviderIdForSlug(model.providerSlug ?? "");
     const modelId = model.modelId ?? model.id;
     const capabilityModelId = capabilityModelIdFor(modelId, model.baseModelId);
     const modelFamily =
@@ -271,22 +272,30 @@ export async function fetchAvailableModels(): Promise<ModelInfo[]> {
     (providerId) => {
       const config = getGatewayProviderConfig(providerId);
       if (!config) return [];
+      const models = modelsForGatewayConfig(config);
+
+      // Names come from the base model when one is recorded, so several
+      // deployments or profiles of the same model would otherwise be
+      // indistinguishable in the picker. Qualify those with the ID that tells
+      // them apart.
+      const nameCounts = new Map<string, number>();
+      for (const model of models) {
+        const name = gatewayModelName(model);
+        nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+      }
+
       return stampCapabilities(
-        modelsForGatewayConfig(config).map((model) => {
-          const modelFamily = modelFamilyFor(model.id, model.baseModelId);
-          const capabilityId = capabilityModelIdFor(
-            model.id,
-            model.baseModelId,
-          );
+        models.map((model) => {
+          const name = gatewayModelName(model);
           return {
             id: gatewayModelRef(providerId, model),
             providerId,
             modelId: model.id,
             ...(model.baseModelId ? { baseModelId: model.baseModelId } : {}),
-            modelFamily,
+            modelFamily: modelFamilyFor(model.id, model.baseModelId),
             provider: PROVIDER_LABELS[providerId],
-            providerSlug: logoSlugForFamily(modelFamily, providerId),
-            name: deriveGatewayName(capabilityId, modelFamily),
+            name:
+              (nameCounts.get(name) ?? 0) > 1 ? `${name} (${model.id})` : name,
           };
         }),
       );
@@ -326,6 +335,13 @@ export function displayNameFor(modelId: string): string {
   if (modelId.startsWith("gemini-")) return deriveGeminiName(modelId);
   if (/^(gpt-|o\d)/.test(modelId)) return deriveOpenAIName(modelId);
   return modelId;
+}
+
+function gatewayModelName(model: GatewayModelConfig): string {
+  return deriveGatewayName(
+    capabilityModelIdFor(model.id, model.baseModelId),
+    modelFamilyFor(model.id, model.baseModelId),
+  );
 }
 
 function deriveGatewayName(id: string, family: ModelFamily): string {
