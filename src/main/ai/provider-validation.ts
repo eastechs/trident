@@ -15,8 +15,8 @@ import {
   GATEWAY_MODEL_ID_MAX_LENGTH,
   containsControlCharacters,
   gatewayModelRef,
-  isAnthropicModel,
   normalizeAzureEndpoint,
+  vertexSurfaceFor,
 } from "./provider-config.js";
 import { validateApiKey } from "./validate-key.js";
 
@@ -222,13 +222,21 @@ export function parseGatewayProviderPayload(
     const errors = duplicateModelErrors(provider, config.models, "models");
     if (config.authType === "apiKey") {
       if (!config.apiKey) errors.apiKey = ["Vertex API key is required."];
-      if (
-        config.models.some((model) =>
-          isAnthropicModel(model.id, model.baseModelId),
-        )
-      ) {
+      // Express-mode API keys only reach Google's own publishers; Claude and
+      // the partner endpoint both require OAuth credentials.
+      const unsupported = config.models.filter(
+        (model) => vertexSurfaceFor(model.id, model.baseModelId) !== "gemini",
+      );
+      if (unsupported.length > 0) {
         errors.models = [
-          "Vertex Claude models require service-account or application-default credentials.",
+          `${
+            unsupported.every(
+              (model) =>
+                vertexSurfaceFor(model.id, model.baseModelId) === "anthropic",
+            )
+              ? "Vertex Claude models"
+              : "Vertex Claude and partner models"
+          } require service-account or application-default credentials.`,
         ];
       }
     } else if (config.authType === "serviceAccount") {
@@ -322,12 +330,14 @@ export function vertexOAuthValidationRequest({
   project: string;
   location: string;
   model: GatewayModelConfig;
-}): { url: string; body: Record<string, unknown> } {
+}): { method: "GET" | "POST"; url: string; body?: Record<string, unknown> } {
   const host = `${location === "global" ? "" : `${location}-`}aiplatform.googleapis.com`;
   const root = `https://${host}/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}`;
+  const surface = vertexSurfaceFor(model.id, model.baseModelId);
 
-  if (isAnthropicModel(model.id, model.baseModelId)) {
+  if (surface === "anthropic") {
     return {
+      method: "POST",
       url: `${root}/publishers/anthropic/models/count-tokens:rawPredict`,
       body: {
         model: model.id,
@@ -336,7 +346,16 @@ export function vertexOAuthValidationRequest({
     };
   }
 
+  // Partner models are served from an OpenAI-compatible endpoint that offers
+  // no free probe, and they do not exist under `publishers/google`. Verify the
+  // credentials reach the project and location instead; the model ID itself is
+  // checked on first use.
+  if (surface === "partner") {
+    return { method: "GET", url: root };
+  }
+
   return {
+    method: "POST",
     url: `${root}/publishers/google/models/${encodeURIComponent(model.id)}:countTokens`,
     body: {
       contents: [
@@ -543,12 +562,12 @@ async function validateVertex(
     let response: Response;
     try {
       response = await fetch(request.url, {
-        method: "POST",
+        method: request.method,
         headers: {
           authorization: `Bearer ${token}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify(request.body),
+        ...(request.body ? { body: JSON.stringify(request.body) } : {}),
         signal: controller.signal,
       });
     } finally {

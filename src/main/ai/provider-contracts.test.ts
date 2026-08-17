@@ -255,6 +255,7 @@ test("Vertex OAuth validation probes the configured project, location, and famil
       model: { id: "gemini-2.5-flash" },
     }),
     {
+      method: "POST",
       url: "https://us-central1-aiplatform.googleapis.com/v1/projects/trident-project/locations/us-central1/publishers/google/models/gemini-2.5-flash:countTokens",
       body: {
         contents: [
@@ -264,6 +265,20 @@ test("Vertex OAuth validation probes the configured project, location, and famil
           },
         ],
       },
+    },
+  );
+
+  // Partner models are not served under publishers/google, so probing there
+  // would 404 a perfectly valid connection. Check the project and location.
+  assert.deepEqual(
+    vertexOAuthValidationRequest({
+      project: "trident-project",
+      location: "us-central1",
+      model: { id: "meta/llama-3.3-70b-instruct-maas" },
+    }),
+    {
+      method: "GET",
+      url: "https://us-central1-aiplatform.googleapis.com/v1/projects/trident-project/locations/us-central1",
     },
   );
 
@@ -277,6 +292,7 @@ test("Vertex OAuth validation probes the configured project, location, and famil
       },
     }),
     {
+      method: "POST",
       url: "https://aiplatform.googleapis.com/v1/projects/trident-project/locations/global/publishers/anthropic/models/count-tokens:rawPredict",
       body: {
         model: "claude-sonnet-4-6",
@@ -284,6 +300,25 @@ test("Vertex OAuth validation probes the configured project, location, and famil
       },
     },
   );
+});
+
+test("Vertex Express-mode keys reject models they cannot reach", () => {
+  const partner = parseGatewayProviderPayload("vertex", {
+    authType: "apiKey",
+    apiKey: "example",
+    location: "us-central1",
+    models: [{ id: "meta/llama-3.3-70b-instruct-maas" }],
+  });
+  assert.ok(partner.errors.models);
+
+  // Google's own publishers remain reachable with an Express-mode key.
+  const gemini = parseGatewayProviderPayload("vertex", {
+    authType: "apiKey",
+    apiKey: "example",
+    location: "us-central1",
+    models: [{ id: "gemini-2.5-flash" }],
+  });
+  assert.equal(gemini.errors.models, undefined);
 });
 
 test("model validation blocks duplicates and frontmatter control characters", () => {

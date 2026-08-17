@@ -340,14 +340,40 @@ export function modelFamilyFor(
   return baseFamily !== "unknown" ? baseFamily : modelFamily;
 }
 
-export function isAnthropicModel(
-  modelId: string,
-  baseModelId?: string,
-): boolean {
+function isAnthropicModel(modelId: string, baseModelId?: string): boolean {
   return (
     modelFamilyFor(modelId) === "anthropic" ||
     (!!baseModelId && modelFamilyFor(baseModelId) === "anthropic")
   );
+}
+
+/**
+ * Which Vertex serving surface a model is reached through. Google's own
+ * publishers use the Gemini surface and Claude uses Anthropic's, both under
+ * `publishers/<name>`. Partner (Model-as-a-Service) families are served from a
+ * separate OpenAI-compatible endpoint and are not reachable under
+ * `publishers/google` at all.
+ *
+ * Unrecognized IDs stay on the Gemini surface: that is where Vertex's own
+ * model IDs live, so it is the safer default for an ID we cannot classify.
+ */
+export type VertexSurface = "gemini" | "anthropic" | "partner";
+
+const VERTEX_PARTNER_FAMILIES: readonly ModelFamily[] = [
+  "meta",
+  "mistral",
+  "deepseek",
+  "cohere",
+];
+
+export function vertexSurfaceFor(
+  modelId: string,
+  baseModelId?: string,
+): VertexSurface {
+  if (isAnthropicModel(modelId, baseModelId)) return "anthropic";
+  return VERTEX_PARTNER_FAMILIES.includes(modelFamilyFor(modelId, baseModelId))
+    ? "partner"
+    : "gemini";
 }
 
 export function capabilityModelIdFor(

@@ -5,6 +5,7 @@ import { createAzure } from "@ai-sdk/azure";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createVertex } from "@ai-sdk/google-vertex";
 import { createVertexAnthropic } from "@ai-sdk/google-vertex/anthropic";
+import { createVertexMaas } from "@ai-sdk/google-vertex/maas";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type { LanguageModel } from "ai";
@@ -14,11 +15,11 @@ import {
   containsControlCharacters,
   decodeGatewayModelRef,
   gatewayConfiguredModel,
-  isAnthropicModel,
   isBedrockAnthropicModelId,
   resolvedDirectModelReference,
   resolvedGatewayModelReference,
   supportsAdaptiveThinking,
+  vertexSurfaceFor,
   type ProviderId,
   type ResolvedModelReference,
   type VertexProviderConfig,
@@ -183,13 +184,20 @@ export function resolveModel(modelReference: string): LanguageModel {
         ? { googleAuthOptions: vertexGoogleAuthOptions(config) }
         : {}),
     };
-    if (isAnthropicModel(resolved.modelId, resolved.baseModelId)) {
+    const surface = vertexSurfaceFor(resolved.modelId, resolved.baseModelId);
+    if (surface !== "gemini") {
+      // Neither Anthropic nor the partner endpoint is reachable with an
+      // Express-mode API key.
       if (config.authType === "apiKey") {
         throw new ModelReferenceError(
-          "Vertex Claude models require service-account or application-default credentials.",
+          surface === "anthropic"
+            ? "Vertex Claude models require service-account or application-default credentials."
+            : "Vertex partner models require service-account or application-default credentials.",
         );
       }
-      return createVertexAnthropic(common)(resolved.modelId);
+      return surface === "anthropic"
+        ? createVertexAnthropic(common)(resolved.modelId)
+        : createVertexMaas(common)(resolved.modelId);
     }
     return createVertex({
       ...common,
