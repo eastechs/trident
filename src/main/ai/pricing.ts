@@ -130,20 +130,34 @@ export function lookupPricing(modelId: string): ModelPricing | undefined {
   const nativeModelId = gateway ? gateway.baseModelId || gateway.id : modelId;
   const expectedProviders = gateway
     ? gateway.providerId === "bedrock"
-      ? ["bedrock", "bedrock_converse"]
+      ? ["bedrock"]
       : gateway.providerId === "vertex"
         ? ["vertex_ai"]
-        : ["azure", "azure_ai"]
+        : ["azure"]
     : guessProvider(nativeModelId);
   const candidates = generateCandidates(nativeModelId);
 
   const lookupSources = [activeData, BUNDLED_PRICING];
 
+  // Provider tags are matched by prefix because the source subdivides them by
+  // model family — Vertex entries are tagged vertex_ai-anthropic_models,
+  // vertex_ai-language-models and so on, with only a handful carrying the bare
+  // tag. Comparing for equality made this pass match almost nothing, dropping
+  // every lookup through to the unscoped fallback, which picks whichever
+  // catalog it finds first. That matters wherever the same model is listed
+  // under two providers at different rates.
+  const matchesProvider = (entry: RawEntry): boolean => {
+    const tag = entry.litellm_provider ?? "";
+    return (expectedProviders ?? []).some(
+      (provider) => tag === provider || tag.startsWith(provider),
+    );
+  };
+
   for (const source of lookupSources) {
     for (const candidate of candidates) {
       const entry = source.models[candidate];
       if (!entry) continue;
-      if (expectedProviders?.includes(entry.litellm_provider ?? "")) {
+      if (expectedProviders && matchesProvider(entry)) {
         return toPricing(entry);
       }
     }
@@ -217,6 +231,9 @@ function generateCandidates(modelId: string): string[] {
     set.add(`vertex_ai/${base}`);
     set.add(`azure/${base}`);
     set.add(`azure_ai/${base}`);
+    // The unprefixed Gemini keys are the Vertex catalog; AI Studio rates live
+    // under the gemini/ prefix, and the two diverge for some models.
+    set.add(`gemini/${base}`);
   }
   set.delete("");
   return Array.from(set);

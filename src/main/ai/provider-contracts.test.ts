@@ -423,6 +423,21 @@ test("Bedrock revision-qualified model IDs resolve canonical pricing", () => {
   assert.equal(pricing?.contextWindow, 1_000_000);
 });
 
+test("a model listed under two catalogs is priced by the one in use", () => {
+  // The unprefixed Gemini keys carry Vertex rates; AI Studio rates live under
+  // the gemini/ prefix. A direct connection must not be billed at Vertex's.
+  const direct = lookupPricing("gemini-2.0-flash-001");
+  const viaVertex = lookupPricing(
+    gatewayModelRef("vertex", { id: "gemini-2.0-flash-001" }),
+  );
+
+  assert.ok(direct);
+  assert.ok(viaVertex);
+  // Per-million conversion is a float multiply, so compare with tolerance.
+  assert.ok(Math.abs(direct.inputPerMTokens - 0.1) < 1e-9);
+  assert.ok(Math.abs(viaVertex.inputPerMTokens - 0.15) < 1e-9);
+});
+
 test("region-scoped Bedrock profiles price as the model they route to", () => {
   // The snapshot carries keys for some region scopes but not every one; an
   // APAC profile must not lose its pricing just because its scoped key is
