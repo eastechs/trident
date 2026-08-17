@@ -6,6 +6,7 @@ import {
   ImageIcon,
   Settings2Icon,
   KeyboardIcon,
+  ScaleIcon,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -14,6 +15,7 @@ import Documents from "./documents";
 import Gallery from "./gallery";
 import GettingStarted from "./getting-started";
 import KeyboardShortcuts from "./keyboard-shortcuts";
+import OpenSource from "./open-source";
 import Projects from "./projects";
 import Settings from "./settings";
 
@@ -56,5 +58,11 @@ export const SECTIONS: DocSection[] = [
     title: "Keyboard Shortcuts",
     icon: KeyboardIcon,
     component: KeyboardShortcuts,
+  },
+  {
+    slug: "open-source",
+    title: "Open Source",
+    icon: ScaleIcon,
+    component: OpenSource,
   },
 ];

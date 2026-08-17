@@ -5,6 +5,9 @@ import { useDocumentTitle } from "@/hooks/use-document-title";
 import appIcon from "../../images/app-icon.png";
 
 const dragStyle = { WebkitAppRegion: "drag" } as unknown as CSSProperties;
+// The whole window is a drag region, which would swallow clicks on the links
+// in the legal notice below.
+const noDragStyle = { WebkitAppRegion: "no-drag" } as unknown as CSSProperties;
 
 export default function About() {
   useDocumentTitle("About Trident");
@@ -49,10 +52,33 @@ export default function About() {
           Version {version}
         </div>
 
-        <div className="mt-auto flex flex-col items-center gap-4">
+        <div
+          className="mt-auto flex flex-col items-center gap-1.5 text-center"
+          style={noDragStyle}
+        >
           <p className="text-muted-foreground/75 text-[10.5px]">
-            © {year} Eastechs
+            © {year} Eastechs, LLC
           </p>
+          <p className="text-muted-foreground/75 text-[10.5px]">
+            Free software under{" "}
+            <a
+              href="https://www.gnu.org/licenses/agpl-3.0.html"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-foreground/80 underline underline-offset-2"
+            >
+              AGPL&#8209;3.0
+            </a>
+            . Comes with no warranty.
+          </p>
+          <a
+            href="https://github.com/eastechs/trident"
+            target="_blank"
+            rel="noreferrer"
+            className="text-muted-foreground/75 hover:text-foreground/80 text-[10.5px] underline underline-offset-2"
+          >
+            Source code
+          </a>
         </div>
       </div>
     </div>
