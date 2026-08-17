@@ -6,6 +6,7 @@ import type {
   ProviderId,
 } from "./ai/provider-config.js";
 import {
+  GATEWAY_PROVIDER_IDS,
   containsControlCharacters,
   isGatewayModelConfigArray,
   normalizeAzureEndpoint,
@@ -139,15 +140,24 @@ export function deleteApiKey(provider: DirectProviderId): void {
   store().set("apiKeys", keys);
 }
 
+/**
+ * Whether a credential is stored for each direct provider. This deliberately
+ * tests for the stored ciphertext rather than decrypting it: the OS keychain
+ * can be temporarily unavailable (a locked Linux keyring, a denied macOS
+ * prompt), and treating that as "no credentials" would report a configured
+ * install as blank and trap the user behind onboarding. Decryption failures
+ * surface at the point of use instead, where the error is actionable.
+ */
 export function getConfiguredProviders(): {
   anthropic: boolean;
   openai: boolean;
   gemini: boolean;
 } {
+  const keys = storedApiKeys();
   return {
-    anthropic: !!getApiKey("anthropic"),
-    openai: !!getApiKey("openai"),
-    gemini: !!getApiKey("gemini"),
+    anthropic: !!keys.anthropic,
+    openai: !!keys.openai,
+    gemini: !!keys.gemini,
   };
 }
 
@@ -426,29 +436,61 @@ export interface ProviderStatusResponse {
   anyConfigured: boolean;
 }
 
-function gatewayDetail(config: GatewayProviderConfig): string {
-  if (config.provider === "bedrock") {
+/**
+ * Connection status for a gateway provider, derived from the stored plain
+ * configuration without touching the encrypted secret bundle. Like
+ * getConfiguredProviders, status must not depend on the OS keychain being
+ * readable right now — otherwise a locked keyring reports every configured
+ * gateway as missing.
+ */
+function storedGatewayProviderStatus(
+  provider: GatewayProviderId,
+): ProviderStatus | undefined {
+  const plain = storedGatewayProviders()[provider]?.config;
+  if (!plain || typeof plain !== "object" || plain.provider !== provider) {
+    return undefined;
+  }
+  const models = provider === "azure" ? plain.deployments : plain.models;
+  if (!isGatewayModelConfigArray(models)) return undefined;
+  return {
+    configured: true,
+    detail: gatewayDetail(provider, plain),
+    modelCount: models.length,
+  };
+}
+
+// Summarizes a connection from the non-secret half of its stored configuration.
+function gatewayDetail(
+  provider: GatewayProviderId,
+  plain: Record<string, unknown>,
+): string {
+  const text = (value: unknown): string =>
+    typeof value === "string" ? value : "";
+
+  if (provider === "bedrock") {
     const auth =
-      config.authType === "accessKey"
+      plain.authType === "accessKey"
         ? "Access key"
-        : config.authType === "apiKey"
+        : plain.authType === "apiKey"
           ? "API key"
           : "AWS profile";
-    return `${config.region} · ${auth}`;
+    return `${text(plain.region)} · ${auth}`;
   }
-  if (config.provider === "vertex") {
+  if (provider === "vertex") {
     const auth =
-      config.authType === "serviceAccount"
+      plain.authType === "serviceAccount"
         ? "Service account"
-        : config.authType === "apiKey"
+        : plain.authType === "apiKey"
           ? "API key"
           : "Application default credentials";
-    return `${config.project ? `${config.project} · ` : ""}${config.location} · ${auth}`;
+    const project = text(plain.project);
+    return `${project ? `${project} · ` : ""}${text(plain.location)} · ${auth}`;
   }
+  const endpoint = text(plain.endpoint);
   try {
-    return new URL(config.endpoint).hostname;
+    return new URL(endpoint).hostname;
   } catch {
-    return config.endpoint;
+    return endpoint;
   }
 }
 
@@ -475,17 +517,9 @@ export function getProviderStatusResponse(): ProviderStatusResponse {
     azure: { configured: false, modelCount: 0 },
   };
 
-  for (const provider of ["bedrock", "vertex", "azure"] as const) {
-    const config = getGatewayProviderConfig(provider);
-    if (!config) continue;
-    providers[provider] = {
-      configured: true,
-      detail: gatewayDetail(config),
-      modelCount:
-        config.provider === "azure"
-          ? config.deployments.length
-          : config.models.length,
-    };
+  for (const provider of GATEWAY_PROVIDER_IDS) {
+    const status = storedGatewayProviderStatus(provider);
+    if (status) providers[provider] = status;
   }
 
   return {
