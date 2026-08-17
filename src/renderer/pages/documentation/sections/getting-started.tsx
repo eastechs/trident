@@ -70,43 +70,26 @@ export default function GettingStarted() {
       </p>
 
       <h2>Supported AI Providers</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Provider</th>
-            <th>Models</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Anthropic</td>
-            <td>Claude Opus, Sonnet, Haiku</td>
-          </tr>
-          <tr>
-            <td>OpenAI</td>
-            <td>GPT-5.5, GPT-5 Mini, GPT-5 Nano</td>
-          </tr>
-          <tr>
-            <td>Google Gemini</td>
-            <td>Gemini 3.1 Pro, Gemini 3 Flash</td>
-          </tr>
-          <tr>
-            <td>Amazon Bedrock</td>
-            <td>Configured foundation models and inference profiles</td>
-          </tr>
-          <tr>
-            <td>Google Vertex AI</td>
-            <td>
-              Configured Gemini, Claude, and partner models (Llama, Mistral,
-              DeepSeek, Cohere)
-            </td>
-          </tr>
-          <tr>
-            <td>Azure OpenAI</td>
-            <td>Configured Azure model deployments</td>
-          </tr>
-        </tbody>
-      </table>
+      <p>Trident connects in two ways:</p>
+      <ul>
+        <li>
+          <strong>Direct APIs</strong> &mdash; Anthropic, OpenAI, and Google
+          Gemini, using your own API key for each. Trident lists whatever
+          chat-capable models your key has access to, so new releases appear as
+          soon as the provider offers them.
+        </li>
+        <li>
+          <strong>Cloud platforms</strong> &mdash; Amazon Bedrock, Google Vertex
+          AI, and Azure OpenAI, using the models, inference profiles, and
+          deployments already provisioned in your organization&apos;s account.
+          You choose which of them Trident should offer when you set up the
+          connection.
+        </li>
+      </ul>
+      <p>
+        Trident works out what each model supports &mdash; extended thinking,
+        image input, context size &mdash; and adapts the chat controls to match.
+      </p>
     </>
   );
 }

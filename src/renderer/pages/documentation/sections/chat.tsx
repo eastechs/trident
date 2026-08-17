@@ -91,10 +91,9 @@ export default function Chat() {
         </li>
         <li>
           <strong>Generate images</strong> &mdash; ask any model for an image
-          and it opens a picker inline so you choose which image model to use
-          (OpenAI&apos;s GPT Image family or Google&apos;s Nano Banana / Gemini
-          models), along with dimensions and quality. The finished image is
-          saved to the project gallery.
+          and it opens a picker inline so you choose which of your connected
+          image models to use, along with dimensions and quality. The finished
+          image is saved to the project gallery.
         </li>
         <li>
           <strong>Read your workspace directory</strong> &mdash; if you set one

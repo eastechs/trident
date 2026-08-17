@@ -26,12 +26,12 @@ export default function Documents() {
       </p>
       <ul>
         <li>
-          Ask Claude to draft a chapter, then attach it to a conversation with
-          GPT and ask for notes or a revision pass.
+          Ask one model to draft a chapter, then attach it to a conversation
+          with another and ask for notes or a revision pass.
         </li>
         <li>
-          Have Gemini outline a plan, then hand the outline to Claude to flesh
-          out the details.
+          Have one model outline a plan, then hand the outline to another to
+          flesh out the details.
         </li>
         <li>
           Get two models to take turns editing the same document so their

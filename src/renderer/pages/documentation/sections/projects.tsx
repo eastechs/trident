@@ -85,27 +85,29 @@ export default function Projects() {
         ├── documents/
         │   ├── user/
         │   │   └── outline.md
-        │   ├── claude-sonnet-4-5/
+        │   ├── drafting-model/
         │   │   ├── chapter-one.md
         │   │   └── character-notes.md
-        │   └── gpt-5/
+        │   └── reviewing-model/
         │       └── world-building.md
         └── images/
             ├── cover-concept.png
             └── map-sketch.png`}</code>
       </pre>
       <p>
-        The per-model folders describe <em>where things live on disk</em>, not
+        Each model writes into its own folder, named after the model for a
+        direct connection and after the connection and model together for a
+        cloud one.
+      </p>
+      <p>
+        Those folders describe <em>where things live on disk</em>, not
         who&apos;s allowed to touch what. When you attach a document to a
         conversation, the model you&apos;re chatting with can read and edit it
         regardless of which folder it came from &mdash; including documents
-        another model originally wrote. For example, if you attach{" "}
-        <code>chapter-one.md</code> (created by <code>claude-sonnet-4-5</code>)
-        to a conversation with <code>gpt-5</code>, <code>gpt-5</code> can edit
-        it freely. The file stays in the <code>claude-sonnet-4-5</code> folder,
-        and only the <code>last_edited_by</code> metadata changes to record the
-        handoff. That&apos;s the mechanism behind multi-model collaboration on a
-        single document.
+        another model originally wrote. The file stays in the folder of
+        whichever model created it, and only the <code>last_edited_by</code>
+        metadata changes to record the handoff. That&apos;s the mechanism behind
+        multi-model collaboration on a single document.
       </p>
 
       <h2>Deleting a Project</h2>

@@ -47,16 +47,20 @@ export default function Settings() {
       </p>
       <ul>
         <li>
-          <strong>Anthropic</strong> &mdash; for Claude models (Opus, Sonnet,
-          Haiku)
+          <strong>Anthropic</strong>
         </li>
         <li>
-          <strong>OpenAI</strong> &mdash; for GPT models
+          <strong>OpenAI</strong>
         </li>
         <li>
-          <strong>Google Gemini</strong> &mdash; for Gemini models
+          <strong>Google Gemini</strong>
         </li>
       </ul>
+      <p>
+        Trident offers whatever chat-capable models the key has access to, so
+        you don&apos;t need to update anything when a provider ships a new
+        model.
+      </p>
       <p>
         Cloud platforms let you use models and deployments already available in
         your organization:
@@ -87,10 +91,10 @@ export default function Settings() {
       <ul>
         <li>
           <strong>Vertex Express Mode keys</strong> reach Google&apos;s own
-          models only. Claude and partner models on Vertex are served from
-          different endpoints that require a service account or Application
-          Default Credentials, so Trident will tell you if a configured model
-          can&apos;t be reached with the credentials you chose.
+          models only. Vertex serves models from other publishers on separate
+          endpoints that require a service account or Application Default
+          Credentials, so Trident will tell you if a configured model can&apos;t
+          be reached with the credentials you chose.
         </li>
         <li>
           <strong>Azure endpoints</strong> can be pasted exactly as the portal

@@ -64,8 +64,8 @@ export default function Gallery() {
         <li>
           The model responds by opening an image configuration form inline in
           the chat. You pick the image model, dimensions, and quality or
-          resolution. Current options include OpenAI&apos;s GPT Image family and
-          Google&apos;s Nano Banana (Gemini) models.
+          resolution. Which image models appear depends on the providers
+          you&apos;ve connected.
         </li>
         <li>
           Once you confirm your selections, the model generates the image with
