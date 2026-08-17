@@ -14,7 +14,7 @@ import {
   setMainWindow,
 } from "./native/windows.js";
 import { appIconPath } from "./native/app-icon.js";
-import { initAutoUpdater } from "./native/updater.js";
+import { initAutoUpdater, registerUpdaterIpc } from "./native/updater.js";
 import { getServerAuth } from "./auth.js";
 
 app.setName("Trident");
@@ -120,6 +120,10 @@ app.whenReady().then(async () => {
 
   // Start the Express server
   await createServer(SERVER_PORT);
+
+  // Register the updater IPC before any window loads, so the sidebar's first
+  // query resolves rather than rejecting.
+  registerUpdaterIpc();
 
   // Create the main window
   await createWindow();

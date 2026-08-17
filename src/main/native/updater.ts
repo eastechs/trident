@@ -162,6 +162,27 @@ export async function checkForUpdatesFromMenu(): Promise<void> {
 // electron-builder.yml (provider: github, eastechs/trident-releases). Updates
 // download silently; when one is ready we notify the renderer so the sidebar
 // can surface an "Install available" control.
+/**
+ * Registers the updater's IPC surface.
+ *
+ * Separate from initAutoUpdater, and called before the first window loads: the
+ * renderer asks for update state the moment the sidebar mounts, and a handler
+ * registered after that point leaves the first query rejecting — so the
+ * indicator stayed hidden on whichever view loaded first and only appeared
+ * after navigating somewhere that remounted it.
+ *
+ * Registered even where auto-update is unsupported, so the query resolves
+ * false instead of rejecting.
+ */
+export function registerUpdaterIpc(): void {
+  ipcMain.handle("get-update-ready", () => updateReady);
+
+  ipcMain.handle("install-update", () => {
+    if (!updateReady) return;
+    autoUpdater.quitAndInstall();
+  });
+}
+
 export function initAutoUpdater(): void {
   // electron-updater throws when run from an unpacked dev tree — it needs the
   // bundled app-update.yml that only exists in a packaged build. No-op under
@@ -180,15 +201,6 @@ export function initAutoUpdater(): void {
 
   autoUpdater.on("error", (err) => {
     console.error("[updater] error:", err);
-  });
-
-  // Lets a freshly opened window query whether an update is already staged,
-  // since the "update-ready" push is a one-shot event it may have missed.
-  ipcMain.handle("get-update-ready", () => updateReady);
-
-  // Triggered from the renderer when the user clicks the sidebar indicator.
-  ipcMain.handle("install-update", () => {
-    autoUpdater.quitAndInstall();
   });
 
   runCheck();
