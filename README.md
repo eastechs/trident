@@ -12,14 +12,39 @@ npm run dev        # vite + tsup (main) + electron, with hot reload
 
 Other scripts:
 
-| Script | Purpose |
-| --- | --- |
-| `npm run build` | Build main (tsup) + renderer (vite) into `dist/` |
-| `npm run dist:mac` | Build, then package a macOS dmg/zip via electron-builder |
-| `npm run lint:check` / `npm run lint` | ESLint (check / autofix) |
-| `npm run format:check` / `npm run format` | Prettier (check / write) |
-| `npm run types:check` | `tsc --noEmit` |
-| `npm run release` | Cut a release (see below) |
+| Script                                    | Purpose                                                  |
+| ----------------------------------------- | -------------------------------------------------------- |
+| `npm run build`                           | Build main (tsup) + renderer (vite) into `dist/`         |
+| `npm run dist:mac`                        | Build, then package a macOS dmg/zip via electron-builder |
+| `npm run lint:check` / `npm run lint`     | ESLint (check / autofix)                                 |
+| `npm run format:check` / `npm run format` | Prettier (check / write)                                 |
+| `npm run types:check`                     | `tsc --noEmit`                                           |
+| `npm run test:provider-contracts`         | Model reference, capability, and pricing contracts       |
+| `npm run test:image-providers`            | Image generation request contracts                       |
+| `npm run release`                         | Cut a release (see below)                                |
+
+## AI providers
+
+Trident chats through two kinds of connection, both configured in **Settings → Providers**:
+
+- **Direct APIs** — Anthropic, OpenAI, and Google Gemini, each with a provider API key.
+- **Cloud platforms** — Amazon Bedrock, Google Vertex AI, and Azure OpenAI, using the models
+  and deployments already available in an organization's own account.
+
+Credentials are encrypted with the OS keychain (`safeStorage`) and never leave the machine;
+non-secret details like regions, endpoints, and model IDs are stored as plain settings.
+
+A few implementation notes for anyone working in `src/main/ai/`:
+
+- A cloud model is persisted as an opaque reference (`trident-<provider>-<base64url>`) carrying
+  the provider-facing model ID plus an optional base model ID. Identity is the **model ID alone** —
+  the base model ID is a capability hint that can be edited without orphaning conversations.
+- `provider-config.ts` is deliberately free of Electron and Node-only imports so the routing,
+  capability, and validation rules it owns stay unit-testable; `provider-contracts.test.ts` covers it.
+- Capability decisions (reasoning, image input, prompt caching) follow the **model family**, not
+  the connection — Claude reached through Vertex behaves like Claude, not like "a Vertex model".
+- Reads that only need model IDs or connection status must not decrypt credentials; use the
+  plain-config accessors in `settings.ts` rather than `getGatewayProviderConfig`.
 
 ## Releases & auto-update
 
@@ -30,7 +55,7 @@ left sidebar — clicking it installs the update and restarts.
 
 > **First auto-update-capable build is 0.2.0.** The currently-shipped 0.1.0 predates the updater and
 > cannot update itself, so 0.2.0 must be installed **manually, once** on each machine. From 0.2.0
-> onward, every newer *published* release is delivered automatically.
+> onward, every newer _published_ release is delivered automatically.
 
 ### Why a separate releases repo
 
@@ -52,10 +77,10 @@ shipped inside the app — clients read updates anonymously.
 
 Requires these environment variables:
 
-| Var | Purpose |
-| --- | --- |
-| `GH_TOKEN` | Uploads the GitHub release. `export GH_TOKEN=$(gh auth token)` |
-| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Notarization |
+| Var                                                        | Purpose                                                        |
+| ---------------------------------------------------------- | -------------------------------------------------------------- |
+| `GH_TOKEN`                                                 | Uploads the GitHub release. `export GH_TOKEN=$(gh auth token)` |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Notarization                                                   |
 
 Then, from a clean `main`:
 

@@ -79,7 +79,31 @@ export default function Settings() {
         Cloud connections also need the model, inference-profile, or deployment
         IDs you want Trident to show. An optional base model ID helps Trident
         label capabilities and estimate usage when a deployment has a custom
-        name.
+        name. You can add or change a base model ID later without affecting
+        conversations already using that model &mdash; a model is identified by
+        its provider-facing ID.
+      </p>
+      <p>Two connection details are easy to get wrong:</p>
+      <ul>
+        <li>
+          <strong>Vertex Express Mode keys</strong> reach Google&apos;s own
+          models only. Claude and partner models on Vertex are served from
+          different endpoints that require a service account or Application
+          Default Credentials, so Trident will tell you if a configured model
+          can&apos;t be reached with the credentials you chose.
+        </li>
+        <li>
+          <strong>Azure endpoints</strong> can be pasted exactly as the portal
+          shows them &mdash; <code>*.openai.azure.com</code>,{" "}
+          <code>*.cognitiveservices.azure.com</code>, or{" "}
+          <code>*.services.ai.azure.com</code>. Trident adds the path segment
+          Azure expects.
+        </li>
+      </ul>
+      <p>
+        Saving a connection tests it first, so a bad region, endpoint, or
+        credential is reported before it is stored rather than at the moment you
+        try to chat.
       </p>
       <p>
         API keys and credential material are <strong>encrypted locally</strong>{" "}

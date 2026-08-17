@@ -36,14 +36,37 @@ export default function Chat() {
         You need at least one provider connection configured in{" "}
         <em>Settings &gt; Providers</em> before you can chat.
       </p>
-
-      <h2>Attaching Documents</h2>
       <p>
-        Below the message input, you can select one or more documents to attach
-        to the conversation. When attached, the model has full context of those
-        documents and can reference or edit them in its responses. Attachments
-        work across providers &mdash; you can attach a document originally
-        drafted by one model to a conversation with another.
+        Models from cloud connections are listed under their platform &mdash;
+        Amazon Bedrock, Google Vertex AI, or Azure OpenAI &mdash; and the search
+        box matches on model name, so you can find a model without knowing how
+        its deployment or inference profile is named.
+      </p>
+
+      <h2>Reasoning Effort</h2>
+      <p>
+        Models that support extended thinking show an effort selector next to
+        the model name, from <em>Low</em> through <em>Max</em>. Higher effort
+        lets the model think longer before answering, which helps on harder
+        problems and costs more. The setting is saved per conversation, and the
+        selector is hidden for models that don&apos;t offer the control.
+      </p>
+
+      <h2>Attaching Documents and Images</h2>
+      <p>
+        Below the message input, <em>Attach Project Files</em> lets you select
+        documents and images from the project to send with your message. An
+        attached document gives the model its full content, which it can
+        reference or edit in its response. Attachments work across providers
+        &mdash; you can attach a document originally drafted by one model to a
+        conversation with another.
+      </p>
+      <p>
+        Images can be attached to any model that accepts visual input. If the
+        selected model doesn&apos;t, the image picker says so. For a cloud
+        deployment with a custom name, setting its base model ID in{" "}
+        <em>Settings &gt; Providers</em> lets Trident identify what the model
+        supports.
       </p>
 
       <h2>What the Model Can Do</h2>
@@ -89,7 +112,9 @@ export default function Chat() {
       </p>
       <ul>
         <li>
-          Title (auto-generated from the first message, or manually renamed)
+          Title &mdash; generated from your first message by the
+          conversation&apos;s own model, so no prompt goes to a provider you
+          didn&apos;t pick for it. You can rename it at any time.
         </li>
         <li>Message count</li>
         <li>Which model was used</li>

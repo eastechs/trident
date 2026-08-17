@@ -84,7 +84,7 @@ export default function GettingStarted() {
           </tr>
           <tr>
             <td>OpenAI</td>
-            <td>GPT-5.4, GPT-5.4 Mini, GPT-5.4 Nano</td>
+            <td>GPT-5.5, GPT-5 Mini, GPT-5 Nano</td>
           </tr>
           <tr>
             <td>Google Gemini</td>
@@ -96,7 +96,10 @@ export default function GettingStarted() {
           </tr>
           <tr>
             <td>Google Vertex AI</td>
-            <td>Configured Gemini and Claude partner models</td>
+            <td>
+              Configured Gemini, Claude, and partner models (Llama, Mistral,
+              DeepSeek, Cohere)
+            </td>
           </tr>
           <tr>
             <td>Azure OpenAI</td>
