@@ -376,15 +376,31 @@ export function vertexSurfaceFor(
     : "gemini";
 }
 
+// Vendor markers a gateway puts in front of the model's own ID. Stripping
+// them is what lets the capability predicates recognize the underlying model.
+const VENDOR_MARKERS = [
+  "anthropic.",
+  "openai.",
+  "meta.",
+  "mistral.",
+  "cohere.",
+  "deepseek.",
+  "amazon.",
+];
+
 export function capabilityModelIdFor(
   modelId: string,
   baseModelId?: string,
 ): string {
   let id = (baseModelId || modelId).trim();
   id = id.replace(/^(?:us|eu|apac|global)\./, "");
-  const anthropicMarker = "anthropic.";
-  const markerIndex = id.indexOf(anthropicMarker);
-  if (markerIndex >= 0) id = id.slice(markerIndex + anthropicMarker.length);
+  for (const marker of VENDOR_MARKERS) {
+    const markerIndex = id.indexOf(marker);
+    if (markerIndex >= 0) {
+      id = id.slice(markerIndex + marker.length);
+      break;
+    }
+  }
   return id.replace(/@(?=\d{8}$)/, "-");
 }
 
@@ -501,7 +517,10 @@ export function supportsReasoning(
   providerSlug: CapabilityProviderSlug,
 ): boolean {
   if (providerSlug === "openai") {
-    return /^o\d/.test(modelId) || /^gpt-5/.test(modelId);
+    // gpt-oss is offered through Bedrock and takes reasoning_effort there.
+    return (
+      /^o\d/.test(modelId) || /^gpt-5/.test(modelId) || /^gpt-oss/.test(modelId)
+    );
   }
   if (providerSlug === "anthropic") {
     return (

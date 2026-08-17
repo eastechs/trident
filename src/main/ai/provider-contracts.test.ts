@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   bedrockRuntimeEndpoint,
+  capabilityModelIdFor,
   decodeGatewayModelRef,
   gatewayConfigHasModelReference,
   gatewayConfiguredModel,
@@ -10,6 +11,8 @@ import {
   normalizeAzureEndpoint,
   resolvedGatewayModelReference,
   supportsAdaptiveThinking,
+  supportsReasoning,
+  supportsImageInput,
   type BedrockProviderConfig,
 } from "./provider-config.js";
 import {
@@ -102,6 +105,24 @@ test("editing a capability hint keeps pinned references routable", () => {
     baseModelId: "claude-opus-4-6",
   });
   assert.equal(before.agentBucket, after.agentBucket);
+});
+
+test("vendor-prefixed gateway IDs resolve to the underlying model", () => {
+  // Capability predicates only recognize a model once the gateway's vendor
+  // marker and region scope are off the front.
+  assert.equal(
+    capabilityModelIdFor("openai.gpt-oss-120b-1:0"),
+    "gpt-oss-120b-1:0",
+  );
+  assert.equal(
+    capabilityModelIdFor("us.anthropic.claude-opus-4-7-v1:0"),
+    "claude-opus-4-7-v1:0",
+  );
+  assert.equal(capabilityModelIdFor("meta.llama-3-3-70b"), "llama-3-3-70b");
+
+  // gpt-oss on Bedrock supports reasoning_effort; text-only, so no images.
+  assert.equal(supportsReasoning("gpt-oss-120b-1:0", "openai"), true);
+  assert.equal(supportsImageInput("gpt-oss-120b-1:0", "openai"), false);
 });
 
 test("adaptive thinking is limited to Claude 4.5 and newer", () => {
