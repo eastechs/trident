@@ -1,13 +1,16 @@
 import { safeStorage } from "electron";
 import type {
   DirectProviderId,
+  GatewayModelConfig,
   GatewayProviderConfig,
   GatewayProviderId,
   ProviderId,
 } from "./ai/provider-config.js";
 import {
   GATEWAY_PROVIDER_IDS,
+  PROVIDER_IDS,
   containsControlCharacters,
+  isDirectProviderId,
   isGatewayModelConfigArray,
   normalizeAzureEndpoint,
   parseServiceAccountJson,
@@ -427,6 +430,23 @@ export interface ProviderStatusResponse {
  * readable right now — otherwise a locked keyring reports every configured
  * gateway as missing.
  */
+/**
+ * The models configured for a gateway connection, read from the plain half of
+ * its stored configuration. Enumerating models needs no credentials, so this
+ * deliberately avoids decrypting the secret bundle — that would put an OS
+ * keychain round trip on a path the chat pane hits on every mount.
+ */
+export function getGatewayProviderModels(
+  provider: GatewayProviderId,
+): GatewayModelConfig[] | undefined {
+  const plain = storedGatewayProviders()[provider]?.config;
+  if (!plain || typeof plain !== "object" || plain.provider !== provider) {
+    return undefined;
+  }
+  const models = provider === "azure" ? plain.deployments : plain.models;
+  return isGatewayModelConfigArray(models) ? models : undefined;
+}
+
 function storedGatewayProviderStatus(
   provider: GatewayProviderId,
 ): ProviderStatus | undefined {
@@ -434,8 +454,8 @@ function storedGatewayProviderStatus(
   if (!plain || typeof plain !== "object" || plain.provider !== provider) {
     return undefined;
   }
-  const models = provider === "azure" ? plain.deployments : plain.models;
-  if (!isGatewayModelConfigArray(models)) return undefined;
+  const models = getGatewayProviderModels(provider);
+  if (!models) return undefined;
   return {
     configured: true,
     detail: gatewayDetail(provider, plain),
@@ -480,26 +500,19 @@ function gatewayDetail(
 
 export function getProviderStatusResponse(): ProviderStatusResponse {
   const direct = getConfiguredProviders();
-  const providers: Record<ProviderId, ProviderStatus> = {
-    anthropic: {
-      configured: direct.anthropic,
-      ...(direct.anthropic ? { detail: "API key" } : {}),
-      modelCount: 0,
-    },
-    openai: {
-      configured: direct.openai,
-      ...(direct.openai ? { detail: "API key" } : {}),
-      modelCount: 0,
-    },
-    gemini: {
-      configured: direct.gemini,
-      ...(direct.gemini ? { detail: "API key" } : {}),
-      modelCount: 0,
-    },
-    bedrock: { configured: false, modelCount: 0 },
-    vertex: { configured: false, modelCount: 0 },
-    azure: { configured: false, modelCount: 0 },
-  };
+  const providers = Object.fromEntries(
+    PROVIDER_IDS.map((provider) => {
+      const configured = isDirectProviderId(provider) && direct[provider];
+      return [
+        provider,
+        {
+          configured,
+          ...(configured ? { detail: "API key" } : {}),
+          modelCount: 0,
+        },
+      ];
+    }),
+  ) as Record<ProviderId, ProviderStatus>;
 
   for (const provider of GATEWAY_PROVIDER_IDS) {
     const status = storedGatewayProviderStatus(provider);

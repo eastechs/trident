@@ -1,4 +1,8 @@
-import { getApiKey, getGatewayProviderConfig } from "../settings.js";
+import {
+  getApiKey,
+  getConfiguredProviders,
+  getGatewayProviderModels,
+} from "../settings.js";
 import {
   PROVIDER_LABELS,
   capabilityModelIdFor,
@@ -11,7 +15,6 @@ import {
   isBedrockAnthropicModelId,
   isDirectProviderId,
   modelFamilyFor,
-  modelsForGatewayConfig,
   type GatewayModelConfig,
   type ModelFamily,
   type ProviderId,
@@ -172,7 +175,9 @@ const FALLBACK: Record<ProviderKey, ModelDescriptor[]> = {
 
 export async function fetchAvailableModels(): Promise<ModelInfo[]> {
   const providers: ProviderKey[] = ["anthropic", "openai", "gemini"];
-  const configured = providers.filter((p) => !!getApiKey(p));
+  // Presence check only — listing models must not decrypt credentials.
+  const stored = getConfiguredProviders();
+  const configured = providers.filter((provider) => stored[provider]);
 
   const results = await Promise.all(
     configured.map(async (provider) => {
@@ -193,9 +198,8 @@ export async function fetchAvailableModels(): Promise<ModelInfo[]> {
 
   const gatewayModels = (["bedrock", "vertex", "azure"] as const).flatMap(
     (providerId) => {
-      const config = getGatewayProviderConfig(providerId);
-      if (!config) return [];
-      const models = modelsForGatewayConfig(config);
+      const models = getGatewayProviderModels(providerId);
+      if (!models) return [];
 
       // Names come from the base model when one is recorded, so several
       // deployments or profiles of the same model would otherwise be
