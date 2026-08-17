@@ -1,3 +1,5 @@
+import type { ModelInfo } from "@/types/api";
+
 export type ModelReferenceInfo = {
   providerId:
     | "anthropic"
@@ -78,6 +80,39 @@ export function parseModelReference(modelRef: string): ModelReferenceInfo {
     providerId: "openai",
     providerSlug: "openai",
     modelId: modelRef,
+  };
+}
+
+const PROVIDER_LABELS: Record<
+  ModelReferenceInfo["providerId"],
+  ModelInfo["provider"]
+> = {
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+  gemini: "Gemini",
+  bedrock: "Amazon Bedrock",
+  vertex: "Google Vertex AI",
+  azure: "Azure OpenAI",
+};
+
+/**
+ * Stand-in entry for a model reference the fetched list doesn't contain, so a
+ * conversation pinned to it stays usable. Capabilities are reported as absent
+ * because nothing here can establish them; the server is the authority on
+ * whether the reference still routes.
+ */
+export function placeholderModelInfo(modelRef: string): ModelInfo {
+  const parsed = parseModelReference(modelRef);
+  return {
+    id: modelRef,
+    providerId: parsed.providerId,
+    modelId: parsed.modelId,
+    ...(parsed.baseModelId ? { baseModelId: parsed.baseModelId } : {}),
+    provider: PROVIDER_LABELS[parsed.providerId],
+    providerSlug: parsed.providerSlug,
+    name: modelReferenceDisplayName(modelRef),
+    supportsReasoning: false,
+    supportsImages: false,
   };
 }
 

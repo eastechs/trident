@@ -93,6 +93,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { placeholderModelInfo } from "@/lib/model-reference";
 import type {
   DocumentData,
   EffortLevel,
@@ -336,7 +337,18 @@ export function SidebarChat({
     Map<string, Array<{ question: string; answer: string }>>
   >(new Map());
 
-  const selectedModelData = availableModels.find((m) => m.id === model);
+  // A pinned conversation whose model is missing from the fetched list is
+  // still very likely servable: the list falls back to a curated snapshot
+  // while a provider's model-list endpoint is down, and that snapshot omits
+  // the dated IDs providers actually return. Stand in for the pinned model so
+  // the conversation stays usable, with capabilities off since we cannot read
+  // them here. The server validates routing on send and returns an actionable
+  // error if the model really is gone.
+  const selectedModelData = useMemo(() => {
+    const match = availableModels.find((m) => m.id === model);
+    if (match || lockedModel == null || model.length === 0) return match;
+    return placeholderModelInfo(model);
+  }, [availableModels, model, lockedModel]);
   const selectedModelSupportsImages =
     selectedModelData?.supportsImages ?? false;
   const maxTokens =
@@ -444,13 +456,17 @@ export function SidebarChat({
   const isModelLocked = lockedModel != null || messages.length > 0;
   const hasNoProviders =
     modelsLoaded && !modelsLoadError && availableModels.length === 0;
+  // Only an unpinned conversation can end up with nothing to send to: a pinned
+  // one always resolves, to a placeholder if need be.
   const selectedModelUnavailable =
     modelsLoaded &&
     !modelsLoadError &&
     availableModels.length > 0 &&
     model.length > 0 &&
     selectedModelData == null;
-  const canChat = modelsLoaded && !modelsLoadError && selectedModelData != null;
+  // A failed model-list fetch must not block a pinned conversation — sending
+  // does not depend on that list, and selectedModelData already stands in.
+  const canChat = modelsLoaded && selectedModelData != null;
   const chatErrorMessage = visibleChatError || formatChatError(chatError);
   const lastSendBodyRef = useRef<{
     document_ids: string[];
