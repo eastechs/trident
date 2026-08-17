@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
 import { createAnthropic } from "@ai-sdk/anthropic";
@@ -20,6 +21,8 @@ import {
   resolvedGatewayModelReference,
   supportsAdaptiveThinking,
   vertexSurfaceFor,
+  type GatewayProviderConfig,
+  type GatewayProviderId,
   type ProviderId,
   type ResolvedModelReference,
   type VertexProviderConfig,
@@ -124,6 +127,49 @@ function vertexGoogleAuthOptions(config: VertexProviderConfig) {
   };
 }
 
+type GatewayClient = (modelId: string) => LanguageModel;
+
+/**
+ * Gateway SDK clients are cached per connection because they own the
+ * credential state that makes repeat requests cheap: the AWS provider chain
+ * memoizes resolved credentials on the instance, and the Vertex SDK keys its
+ * GoogleAuth — and therefore its OAuth token cache — on the identity of the
+ * auth options object it was given. Rebuilding a client per request throws all
+ * of that away, so every message re-read the AWS credential chain, or minted a
+ * fresh access token before it could call the model.
+ *
+ * Keyed by a digest of the resolved configuration, so editing a connection
+ * builds a new client and the old one is dropped.
+ */
+const gatewayClients = new Map<
+  GatewayProviderId,
+  { configDigest: string; clients: Map<string, GatewayClient> }
+>();
+
+function gatewayClient(
+  providerId: GatewayProviderId,
+  config: GatewayProviderConfig,
+  surface: string,
+  build: () => GatewayClient,
+): GatewayClient {
+  const configDigest = createHash("sha256")
+    .update(JSON.stringify(config))
+    .digest("hex");
+
+  let entry = gatewayClients.get(providerId);
+  if (!entry || entry.configDigest !== configDigest) {
+    entry = { configDigest, clients: new Map() };
+    gatewayClients.set(providerId, entry);
+  }
+
+  let client = entry.clients.get(surface);
+  if (!client) {
+    client = build();
+    entry.clients.set(surface, client);
+  }
+  return client;
+}
+
 export function resolveModel(modelReference: string): LanguageModel {
   const resolved = resolveModelReference(modelReference);
 
@@ -153,64 +199,67 @@ export function resolveModel(modelReference: string): LanguageModel {
   }
 
   if (config.provider === "bedrock") {
-    const common = {
-      region: config.region,
-      baseURL: bedrockRuntimeEndpoint(config.region),
-    };
-    if (config.authType === "apiKey") {
-      return createAmazonBedrock({ ...common, apiKey: config.apiKey })(
-        resolved.modelId,
-      );
-    }
-    if (config.authType === "profile") {
+    return gatewayClient(config.provider, config, "bedrock", () => {
+      const common = {
+        region: config.region,
+        baseURL: bedrockRuntimeEndpoint(config.region),
+      };
+      if (config.authType === "apiKey") {
+        return createAmazonBedrock({ ...common, apiKey: config.apiKey });
+      }
+      if (config.authType === "profile") {
+        return createAmazonBedrock({
+          ...common,
+          credentialProvider: fromNodeProviderChain(),
+        });
+      }
       return createAmazonBedrock({
         ...common,
-        credentialProvider: fromNodeProviderChain(),
-      })(resolved.modelId);
-    }
-    return createAmazonBedrock({
-      ...common,
-      accessKeyId: config.accessKeyId,
-      secretAccessKey: config.secretAccessKey,
-      ...(config.sessionToken ? { sessionToken: config.sessionToken } : {}),
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+        ...(config.sessionToken ? { sessionToken: config.sessionToken } : {}),
+      });
     })(resolved.modelId);
   }
 
   if (config.provider === "vertex") {
-    const common = {
-      ...(config.authType !== "apiKey" ? { project: config.project! } : {}),
-      location: config.location,
-      ...(vertexGoogleAuthOptions(config)
-        ? { googleAuthOptions: vertexGoogleAuthOptions(config) }
-        : {}),
-    };
     const surface = vertexSurfaceFor(resolved.modelId, resolved.baseModelId);
-    if (surface !== "gemini") {
-      // Neither Anthropic nor the partner endpoint is reachable with an
-      // Express-mode API key.
-      if (config.authType === "apiKey") {
-        throw new ModelReferenceError(
-          surface === "anthropic"
-            ? "Vertex Claude models require service-account or application-default credentials."
-            : "Vertex partner models require service-account or application-default credentials.",
-        );
-      }
-      return surface === "anthropic"
-        ? createVertexAnthropic(common)(resolved.modelId)
-        : createVertexMaas(common)(resolved.modelId);
+    // Neither Anthropic nor the partner endpoint is reachable with an
+    // Express-mode API key.
+    if (surface !== "gemini" && config.authType === "apiKey") {
+      throw new ModelReferenceError(
+        surface === "anthropic"
+          ? "Vertex Claude models require service-account or application-default credentials."
+          : "Vertex partner models require service-account or application-default credentials.",
+      );
     }
-    return createVertex({
-      ...common,
-      ...(config.authType === "apiKey" ? { apiKey: config.apiKey } : {}),
+
+    return gatewayClient(config.provider, config, surface, () => {
+      // Built once per connection so the SDK keeps reusing one GoogleAuth,
+      // and with it one cached access token.
+      const authOptions = vertexGoogleAuthOptions(config);
+      const common = {
+        ...(config.authType !== "apiKey" ? { project: config.project! } : {}),
+        location: config.location,
+        ...(authOptions ? { googleAuthOptions: authOptions } : {}),
+      };
+      if (surface === "anthropic") return createVertexAnthropic(common);
+      if (surface === "partner") return createVertexMaas(common);
+      return createVertex({
+        ...common,
+        ...(config.authType === "apiKey" ? { apiKey: config.apiKey } : {}),
+      });
     })(resolved.modelId);
   }
 
-  return createAzure({
-    apiKey: config.apiKey,
-    baseURL: config.endpoint,
-    ...(config.apiVersion ? { apiVersion: config.apiVersion } : {}),
-    useDeploymentBasedUrls: false,
-  })(resolved.modelId);
+  return gatewayClient(config.provider, config, "azure", () =>
+    createAzure({
+      apiKey: config.apiKey,
+      baseURL: config.endpoint,
+      ...(config.apiVersion ? { apiVersion: config.apiVersion } : {}),
+      useDeploymentBasedUrls: false,
+    }),
+  )(resolved.modelId);
 }
 
 /** Map the unified effort level to each provider's accepted range. */
