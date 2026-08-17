@@ -144,7 +144,7 @@ router.post("/", async (req: ProjectRequest, res) => {
   let model;
   try {
     resolvedModelReference = resolveModelReference(effectiveModelId);
-    model = resolveModel(effectiveModelId);
+    model = resolveModel(resolvedModelReference);
   } catch (error) {
     if (error instanceof ModelReferenceError) {
       res.status(422).json({ error: error.message });
@@ -526,7 +526,7 @@ router.post("/", async (req: ProjectRequest, res) => {
       messages: modelMessages,
       tools,
       stopWhen: stepCountIs(25),
-      providerOptions: getProviderOptions(effectiveModelId, {
+      providerOptions: getProviderOptions(resolvedModelReference, {
         projectId,
         effort,
       }),

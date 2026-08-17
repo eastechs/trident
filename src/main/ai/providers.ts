@@ -171,9 +171,13 @@ function gatewayClient(
   return client;
 }
 
-export function resolveModel(modelReference: string): LanguageModel {
-  const resolved = resolveModelReference(modelReference);
-
+/**
+ * Builds the SDK client for an already-resolved reference. Callers resolve
+ * once and pass the result here and to getProviderOptions, so a connection
+ * edited mid-request cannot make the two disagree — and so the request pays
+ * for one settings read rather than three.
+ */
+export function resolveModel(resolved: ResolvedModelReference): LanguageModel {
   if (resolved.providerId === "anthropic") {
     const key = getApiKey("anthropic");
     if (!key) throw new ModelReferenceError("Anthropic API key not configured");
@@ -346,10 +350,9 @@ function reasoningSupported(resolved: ResolvedModelReference): boolean {
  * sent, and direct-provider cache/context behavior remains unchanged.
  */
 export function getProviderOptions(
-  modelReference: string,
+  resolved: ResolvedModelReference,
   context?: { projectId?: string; effort?: EffortLevel },
 ): ProviderOptions {
-  const resolved = resolveModelReference(modelReference);
   const provider = resolved.providerId;
   const effort = context?.effort ?? DEFAULT_EFFORT;
   const reasoningOk = reasoningSupported(resolved);
