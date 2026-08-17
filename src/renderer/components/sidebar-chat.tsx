@@ -93,7 +93,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { placeholderModelInfo } from "@/lib/model-reference";
+import {
+  documentDirectoryLabel,
+  placeholderModelInfo,
+} from "@/lib/model-reference";
 import type {
   DocumentData,
   EffortLevel,
@@ -1322,7 +1325,7 @@ export function SidebarChat({
                                 return sortedDirs.map((dir) => (
                                   <div key={dir}>
                                     <div className="px-2 py-1 text-[10px] font-semibold tracking-wider text-neutral-400 uppercase dark:text-neutral-500">
-                                      {dir === "user" ? "Your Documents" : dir}
+                                      {documentDirectoryLabel(dir)}
                                     </div>
                                     {groups[dir].map((doc) => (
                                       <Tooltip key={doc.id}>

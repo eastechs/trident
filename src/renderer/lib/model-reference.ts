@@ -116,6 +116,25 @@ export function placeholderModelInfo(modelRef: string): ModelInfo {
   };
 }
 
+// Gateway document buckets are built as <provider>-<readable>-<digest>.
+const GATEWAY_BUCKET = /^(bedrock|vertex|azure)-(.+)-[0-9a-f]{12}$/;
+
+/**
+ * Human-readable heading for a group of documents. Documents are filed under
+ * whoever created them: the person, a direct model ID, or a generated bucket
+ * for a gateway model. That bucket is a storage key rather than a name, so
+ * unpack it instead of showing the raw slug.
+ */
+export function documentDirectoryLabel(directory: string): string {
+  if (directory === "user") return "Your Documents";
+
+  const bucket = GATEWAY_BUCKET.exec(directory);
+  if (!bucket) return modelReferenceDisplayName(directory);
+
+  const providerId = bucket[1] as "bedrock" | "vertex" | "azure";
+  return `${PROVIDER_LABELS[providerId]} · ${modelReferenceDisplayName(bucket[2])}`;
+}
+
 function capitalize(value: string): string {
   return value.length > 0 ? value[0].toUpperCase() + value.slice(1) : value;
 }

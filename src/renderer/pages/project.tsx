@@ -16,6 +16,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/use-document-title";
+import { documentDirectoryLabel } from "@/lib/model-reference";
 import { api_get, api_post, api_put, api_patch, api_delete } from "@/lib/api";
 import {
   ArrowLeftIcon,
@@ -1377,7 +1378,7 @@ function ProjectView({
                               return sortedDirs.map((dir) => (
                                 <div key={dir}>
                                   <div className="px-2 py-1 text-[10px] font-semibold tracking-wider text-neutral-400 uppercase dark:text-neutral-500">
-                                    {dir === "user" ? "Your Documents" : dir}
+                                    {documentDirectoryLabel(dir)}
                                   </div>
                                   {groups[dir].map((doc) => (
                                     <ContextMenu key={doc.id}>
