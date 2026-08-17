@@ -23,6 +23,7 @@ import {
   resolveModel,
   resolveModelReference,
   getProviderOptions,
+  supportsAnthropicCacheControl,
   modelLabel,
   isEffortLevel,
   DEFAULT_EFFORT,
@@ -415,10 +416,14 @@ router.post("/", async (req: ProjectRequest, res) => {
 
   // Anthropic caches up to four breakpoints; mark the system prompt and the
   // last tool definition so the entire stable prefix (system + tools) becomes
-  // a cache hit on every subsequent turn within the 1h TTL window. Cache
-  // markers on non-Anthropic providers are silently ignored.
+  // a cache hit on every subsequent turn within the 1h TTL window. This
+  // follows the model family rather than the connection, so Claude reached
+  // through Vertex caches the same way it does on the direct route.
+  const cacheBreakpointsSupported = supportsAnthropicCacheControl(
+    resolvedModelReference,
+  );
   const tools: ToolSet = (() => {
-    if (provider !== "anthropic") return allTools;
+    if (!cacheBreakpointsSupported) return allTools;
     const entries = Object.entries(allTools);
     if (entries.length === 0) return allTools;
     const [lastKey, lastTool] = entries[entries.length - 1];
@@ -504,7 +509,7 @@ router.post("/", async (req: ProjectRequest, res) => {
       {
         role: "system" as const,
         content: systemPrompt,
-        ...(provider === "anthropic" && {
+        ...(cacheBreakpointsSupported && {
           providerOptions: {
             anthropic: {
               cacheControl: { type: "ephemeral" as const, ttl: "1h" as const },

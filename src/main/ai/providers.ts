@@ -255,6 +255,26 @@ function anthropicThinkingOptions(
   };
 }
 
+/**
+ * Whether the route reaches Anthropic's own request builder, which is what
+ * turns `providerOptions.anthropic.cacheControl` into a prompt-cache
+ * breakpoint. Direct Anthropic and Vertex Claude share that builder, so both
+ * honor the markers.
+ *
+ * Bedrock is deliberately excluded: its adapter builds a Converse request and
+ * takes cache points through `providerOptions.bedrock.cachePoint` instead,
+ * with its own per-model token minimums. Anthropic-shaped markers are dropped
+ * there rather than misapplied.
+ */
+export function supportsAnthropicCacheControl(
+  resolved: ResolvedModelReference,
+): boolean {
+  if (resolved.providerId === "anthropic") return true;
+  return (
+    resolved.providerId === "vertex" && resolved.modelFamily === "anthropic"
+  );
+}
+
 function reasoningSupported(resolved: ResolvedModelReference): boolean {
   if (resolved.modelFamily === "anthropic") {
     return supportsReasoning(resolved.capabilityModelId, "anthropic");
