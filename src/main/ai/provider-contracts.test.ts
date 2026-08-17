@@ -4,6 +4,7 @@ import {
   bedrockRuntimeEndpoint,
   decodeGatewayModelRef,
   gatewayConfigHasModelReference,
+  gatewayConfiguredModel,
   gatewayModelRef,
   isGatewayModelConfigArray,
   normalizeAzureEndpoint,
@@ -64,6 +65,43 @@ test("configured membership rejects forged and unlisted gateway references", () 
     gatewayConfigHasModelReference(config, "trident-bedrock-not-base64"),
     false,
   );
+});
+
+test("editing a capability hint keeps pinned references routable", () => {
+  const modelId = "arn:aws:bedrock:us-east-1:123456789012:inference-profile/x";
+  // A conversation pinned before any base model ID was recorded.
+  const pinned = gatewayModelRef("bedrock", { id: modelId });
+
+  const edited: BedrockProviderConfig = {
+    provider: "bedrock",
+    authType: "profile",
+    region: "us-east-1",
+    models: [{ id: modelId, baseModelId: "claude-opus-4-6" }],
+  };
+  assert.equal(gatewayConfigHasModelReference(edited, pinned), true);
+  assert.deepEqual(gatewayConfiguredModel(edited, pinned), {
+    id: modelId,
+    baseModelId: "claude-opus-4-6",
+  });
+
+  // Removing the model itself must still revoke the reference.
+  const removed: BedrockProviderConfig = {
+    ...edited,
+    models: [{ id: "anthropic.claude-sonnet-4-6-v1:0" }],
+  };
+  assert.equal(gatewayConfigHasModelReference(removed, pinned), false);
+
+  // The document bucket must not move when only the hint changes.
+  const before = resolvedGatewayModelReference({
+    providerId: "bedrock",
+    id: modelId,
+  });
+  const after = resolvedGatewayModelReference({
+    providerId: "bedrock",
+    id: modelId,
+    baseModelId: "claude-opus-4-6",
+  });
+  assert.equal(before.agentBucket, after.agentBucket);
 });
 
 test("adaptive thinking is limited to Claude 4.5 and newer", () => {

@@ -260,15 +260,31 @@ export function modelsForGatewayConfig(
   return config.provider === "azure" ? config.deployments : config.models;
 }
 
+/**
+ * Whether a persisted reference still points at a configured model.
+ *
+ * Identity is the provider-facing model ID alone. baseModelId is carried in
+ * the reference only to resolve capabilities and pricing, so editing or
+ * clearing it must not orphan conversations already pinned to the model:
+ * matching the whole encoded reference would make any such edit permanently
+ * unroutable for existing conversations.
+ */
+export function gatewayConfiguredModel(
+  config: GatewayProviderConfig,
+  modelReference: string,
+): GatewayModelConfig | undefined {
+  const decoded = decodeGatewayModelRef(modelReference);
+  if (!decoded || decoded.providerId !== config.provider) return undefined;
+  return modelsForGatewayConfig(config)
+    .map(normalizedModelConfig)
+    .find((model) => model.id === decoded.id);
+}
+
 export function gatewayConfigHasModelReference(
   config: GatewayProviderConfig,
   modelReference: string,
 ): boolean {
-  const decoded = decodeGatewayModelRef(modelReference);
-  if (!decoded || decoded.providerId !== config.provider) return false;
-  return modelsForGatewayConfig(config).some(
-    (model) => gatewayModelRef(config.provider, model) === modelReference,
-  );
+  return gatewayConfiguredModel(config, modelReference) !== undefined;
 }
 
 export function directProviderForModelId(modelId: string): DirectProviderId {
@@ -354,18 +370,25 @@ function readableModelName(modelId: string, baseModelId?: string): string {
     .trim();
 }
 
+/**
+ * Document bucket for a gateway model. Derived from the connection and the
+ * provider-facing model ID only — never baseModelId — so that editing the
+ * capability hint on an existing connection leaves the agent's own documents
+ * where it can still find them.
+ */
 function gatewayAgentBucket(
   providerId: GatewayProviderId,
-  ref: string,
   modelId: string,
-  baseModelId?: string,
 ): string {
-  const readable = readableModelName(modelId, baseModelId)
+  const readable = readableModelName(modelId)
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
-  const digest = createHash("sha256").update(ref).digest("hex").slice(0, 12);
+  const digest = createHash("sha256")
+    .update(`${providerId}:${modelId}`)
+    .digest("hex")
+    .slice(0, 12);
   return `${providerId}-${readable || "model"}-${digest}`;
 }
 
@@ -398,12 +421,7 @@ export function resolvedGatewayModelReference(
     ...(decoded.baseModelId ? { baseModelId: decoded.baseModelId } : {}),
     modelFamily: modelFamilyFor(decoded.id, decoded.baseModelId),
     capabilityModelId: capabilityModelIdFor(decoded.id, decoded.baseModelId),
-    agentBucket: gatewayAgentBucket(
-      decoded.providerId,
-      id,
-      decoded.id,
-      decoded.baseModelId,
-    ),
+    agentBucket: gatewayAgentBucket(decoded.providerId, decoded.id),
     author: `${PROVIDER_LABELS[decoded.providerId]} / ${readable || decoded.id}`,
   };
 }

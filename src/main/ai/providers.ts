@@ -13,7 +13,7 @@ import {
   bedrockRuntimeEndpoint,
   containsControlCharacters,
   decodeGatewayModelRef,
-  gatewayConfigHasModelReference,
+  gatewayConfiguredModel,
   isAnthropicModel,
   isBedrockAnthropicModelId,
   resolvedDirectModelReference,
@@ -69,13 +69,19 @@ export function resolveModelReference(
         `The ${decoded.providerId} provider is not configured.`,
       );
     }
-    const configured = gatewayConfigHasModelReference(config, modelReference);
+    const configured = gatewayConfiguredModel(config, modelReference);
     if (!configured) {
       throw new ModelReferenceError(
         "The selected gateway model is not configured.",
       );
     }
-    return resolvedGatewayModelReference(decoded);
+    // Resolve from the current configuration rather than the persisted
+    // reference so an edited capability hint takes effect on conversations
+    // that were pinned before the edit.
+    return resolvedGatewayModelReference({
+      providerId: decoded.providerId,
+      ...configured,
+    });
   }
 
   // A route-looking value that does not decode canonically must never fall
