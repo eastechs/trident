@@ -428,6 +428,22 @@ export function bedrockRuntimeEndpoint(region: string): string {
   return `https://bedrock-runtime.${region}.${suffix}`;
 }
 
+// Adaptive thinking (`type: "adaptive"`) and the companion effort knob arrived
+// with the Claude 4.5 generation. Earlier thinking-capable models — Claude 3.7
+// and the 4.0/4.1 family — only accept budget-based extended thinking and
+// reject the adaptive shape. Budget-based thinking is accepted by every
+// thinking-capable Claude, so returning false here is always the safe answer.
+// Expects a capability model ID (see capabilityModelIdFor).
+export function supportsAdaptiveThinking(capabilityModelId: string): boolean {
+  const match = capabilityModelId.match(
+    /^claude-(?:opus|sonnet|haiku)-(\d+)(?:-(\d{1,2}))?(?:-|$)/,
+  );
+  if (!match) return false;
+  const major = Number(match[1]);
+  const minor = match[2] ? Number(match[2]) : 0;
+  return major > 4 || (major === 4 && minor >= 5);
+}
+
 // The installed Bedrock adapter selects Anthropic's request shape from the
 // provider-facing model ID. An opaque inference-profile alias cannot safely
 // receive Claude-specific reasoning options even when baseModelId identifies

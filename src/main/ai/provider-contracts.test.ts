@@ -8,6 +8,7 @@ import {
   isGatewayModelConfigArray,
   normalizeAzureEndpoint,
   resolvedGatewayModelReference,
+  supportsAdaptiveThinking,
   type BedrockProviderConfig,
 } from "./provider-config.js";
 import {
@@ -63,6 +64,33 @@ test("configured membership rejects forged and unlisted gateway references", () 
     gatewayConfigHasModelReference(config, "trident-bedrock-not-base64"),
     false,
   );
+});
+
+test("adaptive thinking is limited to Claude 4.5 and newer", () => {
+  // 4.5-generation and later accept adaptive thinking plus the effort knob.
+  for (const id of [
+    "claude-sonnet-4-5-20250929",
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-opus-5",
+  ]) {
+    assert.equal(supportsAdaptiveThinking(id), true, id);
+  }
+
+  // Older thinking-capable models take budget-based thinking only. Dated
+  // Claude 4 IDs must not read their date suffix as a minor version.
+  for (const id of [
+    "claude-3-7-sonnet-20250219-v1:0",
+    "claude-3-7-sonnet",
+    "claude-opus-4-1",
+    "claude-sonnet-4-20250514",
+    "claude-3-5-sonnet-20241022",
+    "prod-deployment",
+  ]) {
+    assert.equal(supportsAdaptiveThinking(id), false, id);
+  }
 });
 
 test("gateway payload parsing enforces complete auth replacement", () => {

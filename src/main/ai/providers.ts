@@ -18,6 +18,7 @@ import {
   isBedrockAnthropicModelId,
   resolvedDirectModelReference,
   resolvedGatewayModelReference,
+  supportsAdaptiveThinking,
   type ProviderId,
   type ResolvedModelReference,
   type VertexProviderConfig,
@@ -210,6 +211,44 @@ function effortToGemini(level: EffortLevel): "low" | "medium" | "high" {
   return level;
 }
 
+/**
+ * Token budgets for models that predate adaptive thinking. Both the Anthropic
+ * and Bedrock adapters add the budget on top of the request's max output
+ * tokens, so these stay well inside the smallest thinking-capable model's
+ * output ceiling.
+ */
+const THINKING_BUDGET_BY_EFFORT: Record<EffortLevel, number> = {
+  low: 4_096,
+  medium: 8_192,
+  high: 16_384,
+  xhigh: 24_576,
+  max: 32_768,
+};
+
+/**
+ * Anthropic-shaped thinking options for a Claude model, whatever route it is
+ * reached through. Claude 4.5 and newer take adaptive thinking plus the effort
+ * knob; older thinking-capable models reject that shape and take an explicit
+ * budget instead.
+ */
+function anthropicThinkingOptions(
+  capabilityModelId: string,
+  effort: EffortLevel,
+): Record<string, unknown> {
+  if (supportsAdaptiveThinking(capabilityModelId)) {
+    return {
+      thinking: { type: "adaptive", display: "summarized" },
+      effort,
+    };
+  }
+  return {
+    thinking: {
+      type: "enabled",
+      budgetTokens: THINKING_BUDGET_BY_EFFORT[effort],
+    },
+  };
+}
+
 function reasoningSupported(resolved: ResolvedModelReference): boolean {
   if (resolved.modelFamily === "anthropic") {
     return supportsReasoning(resolved.capabilityModelId, "anthropic");
@@ -241,10 +280,7 @@ export function getProviderOptions(
     return {
       anthropic: {
         ...(reasoningOk
-          ? {
-              thinking: { type: "adaptive", display: "summarized" },
-              effort,
-            }
+          ? anthropicThinkingOptions(resolved.capabilityModelId, effort)
           : {}),
         sendReasoning: true,
         contextManagement: {
@@ -296,16 +332,30 @@ export function getProviderOptions(
     ) {
       return {};
     }
-    return {
-      bedrock: {
-        reasoningConfig: {
-          ...(resolved.modelFamily === "anthropic"
-            ? { type: "adaptive" as const, display: "summarized" as const }
-            : {}),
-          maxReasoningEffort: effort,
-        },
-      },
-    };
+    if (resolved.modelFamily !== "anthropic") {
+      return { bedrock: { reasoningConfig: { maxReasoningEffort: effort } } };
+    }
+    // maxReasoningEffort becomes `output_config.effort` for Claude on Bedrock,
+    // which models older than 4.5 reject alongside adaptive thinking, so the
+    // budget path omits it.
+    return supportsAdaptiveThinking(resolved.capabilityModelId)
+      ? {
+          bedrock: {
+            reasoningConfig: {
+              type: "adaptive" as const,
+              display: "summarized" as const,
+              maxReasoningEffort: effort,
+            },
+          },
+        }
+      : {
+          bedrock: {
+            reasoningConfig: {
+              type: "enabled" as const,
+              budgetTokens: THINKING_BUDGET_BY_EFFORT[effort],
+            },
+          },
+        };
   }
 
   if (provider === "vertex") {
@@ -313,8 +363,7 @@ export function getProviderOptions(
     if (resolved.modelFamily === "anthropic") {
       return {
         anthropic: {
-          thinking: { type: "adaptive", display: "summarized" },
-          effort,
+          ...anthropicThinkingOptions(resolved.capabilityModelId, effort),
           sendReasoning: true,
         },
       };
