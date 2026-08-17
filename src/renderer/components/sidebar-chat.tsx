@@ -1186,6 +1186,18 @@ export function SidebarChat({
                                         key={m.id}
                                         onSelect={() => handleModelSelect(m.id)}
                                         value={m.id}
+                                        // Search scores the value, which for a
+                                        // gateway model is an opaque encoded
+                                        // reference. Offer what the user can
+                                        // actually see and type.
+                                        keywords={[
+                                          m.name,
+                                          m.modelId,
+                                          m.provider,
+                                          ...(m.baseModelId
+                                            ? [m.baseModelId]
+                                            : []),
+                                        ]}
                                       >
                                         <ModelSelectorLogo
                                           provider={m.providerSlug}
