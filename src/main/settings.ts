@@ -393,15 +393,15 @@ export function getGatewayProviderConfig(
   ) {
     return undefined;
   }
+  // Normalize on read rather than requiring the stored value to already be
+  // canonical: pinning it to the current normalizer would silently invalidate
+  // every saved connection the next time that function learns a new endpoint
+  // form, with the credentials still sitting in the store.
+  let endpoint: string;
   try {
-    const endpoint = normalizeAzureEndpoint(plain.endpoint);
+    endpoint = normalizeAzureEndpoint(plain.endpoint);
     const url = new URL(endpoint);
-    if (
-      endpoint !== plain.endpoint ||
-      url.protocol !== "https:" ||
-      url.username ||
-      url.password
-    ) {
+    if (url.protocol !== "https:" || url.username || url.password) {
       return undefined;
     }
   } catch {
@@ -410,7 +410,7 @@ export function getGatewayProviderConfig(
   return {
     provider,
     apiKey: secrets.apiKey,
-    endpoint: plain.endpoint,
+    endpoint,
     ...(typeof plain.apiVersion === "string"
       ? { apiVersion: plain.apiVersion }
       : {}),

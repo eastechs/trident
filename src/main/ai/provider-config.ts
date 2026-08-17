@@ -452,13 +452,28 @@ export function resolvedGatewayModelReference(
   };
 }
 
+// Azure serves the OpenAI surface under `/openai` on every resource domain it
+// exposes, but the portal displays the bare origin. Users paste what the portal
+// shows, so supply the path for each domain rather than making them know it.
+// AI Foundry and AI Services resources use the latter two.
+const AZURE_OPENAI_HOST_SUFFIXES = [
+  ".openai.azure.com",
+  ".cognitiveservices.azure.com",
+  ".services.ai.azure.com",
+];
+
 export function normalizeAzureEndpoint(endpoint: string): string {
   const parsed = new URL(endpoint.trim());
   parsed.hash = "";
   parsed.search = "";
   let pathname = parsed.pathname.replace(/\/+$/, "");
   if (pathname.endsWith("/v1")) pathname = pathname.slice(0, -3);
-  if (!pathname && parsed.hostname.endsWith(".openai.azure.com")) {
+  if (
+    !pathname &&
+    AZURE_OPENAI_HOST_SUFFIXES.some((suffix) =>
+      parsed.hostname.endsWith(suffix),
+    )
+  ) {
     pathname = "/openai";
   }
   parsed.pathname = pathname;

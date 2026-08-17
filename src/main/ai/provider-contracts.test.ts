@@ -245,6 +245,26 @@ test("Vertex and Azure payloads enforce family-aware auth and normalization", ()
     azure.config?.provider === "azure" ? azure.config.endpoint : undefined,
     "https://trident.openai.azure.com/openai",
   );
+
+  // AI Foundry and AI Services resources serve the same surface under the same
+  // path, and the portal shows their origins without it.
+  for (const host of [
+    "trident.cognitiveservices.azure.com",
+    "trident.services.ai.azure.com",
+  ]) {
+    assert.equal(
+      normalizeAzureEndpoint(`https://${host}/`),
+      `https://${host}/openai`,
+    );
+  }
+
+  // An explicit path is always preserved as given.
+  assert.equal(
+    normalizeAzureEndpoint(
+      "https://trident.cognitiveservices.azure.com/custom",
+    ),
+    "https://trident.cognitiveservices.azure.com/custom",
+  );
 });
 
 test("Vertex OAuth validation probes the configured project, location, and family", () => {
