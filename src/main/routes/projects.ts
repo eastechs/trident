@@ -12,7 +12,7 @@ import {
   conversations,
   messages,
 } from "../db/schema.js";
-import { getConfiguredProviders, getSetting } from "../settings.js";
+import { getSetting } from "../settings.js";
 import {
   decodeGatewayModelRef,
   directProviderForModelId,
@@ -107,7 +107,6 @@ router.get("/", async (_req, res) => {
 
   res.json({
     projects: projectsPayload,
-    configuredProviders: getConfiguredProviders(),
   });
 });
 
@@ -202,7 +201,6 @@ router.get("/:id", async (req, res) => {
       created_at: i.createdAt,
     })),
     conversations: convoPayload,
-    configuredProviders: getConfiguredProviders(),
     shouldShowTour: !getSetting("projectTourCompleted"),
   });
 });

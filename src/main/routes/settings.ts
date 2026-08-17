@@ -5,7 +5,6 @@ import {
   setSetting,
   setApiKey,
   deleteApiKey,
-  getConfiguredProviders,
   getProviderStatusResponse,
   isApiKeyEncryptionAvailable,
   setGatewayProviderConfig,
@@ -177,90 +176,6 @@ router.delete("/providers/:provider", async (req, res) => {
   }
   invalidateModelCache(provider);
   res.json(getProviderStatusResponse());
-});
-
-// ─── API keys ──────────────────────────────────────────────
-
-router.get("/api-keys", (_req, res) => {
-  res.json(getConfiguredProviders());
-});
-
-router.put("/api-keys", async (req, res) => {
-  const { validateApiKey } = await import("../ai/validate-key.js");
-  const { invalidateModelCache } = await import("../ai/model-registry.js");
-  const { anthropic_key, openai_key, gemini_key } = req.body;
-
-  const keys: Record<"anthropic" | "openai" | "gemini", string> = {} as Record<
-    "anthropic" | "openai" | "gemini",
-    string
-  >;
-  const anthropic = (anthropic_key ?? "").trim();
-  const openai = (openai_key ?? "").trim();
-  const gemini = (gemini_key ?? "").trim();
-  if (anthropic) keys.anthropic = anthropic;
-  if (openai) keys.openai = openai;
-  if (gemini) keys.gemini = gemini;
-
-  if (Object.keys(keys).length === 0) {
-    res.status(422).json({
-      errors: { anthropic_key: ["At least one API key is required."] },
-    });
-    return;
-  }
-
-  if (!isApiKeyEncryptionAvailable()) {
-    const message =
-      "Cannot securely store API keys: the OS keychain is not available. " +
-      "On Linux, install and unlock gnome-keyring or kwallet, then restart Trident.";
-    const errors: Record<string, string[]> = {};
-    for (const provider of Object.keys(keys)) {
-      errors[`${provider}_key`] = [message];
-    }
-    res.status(422).json({ errors });
-    return;
-  }
-
-  const saved: Array<"anthropic" | "openai" | "gemini"> = [];
-  const invalid: Array<"anthropic" | "openai" | "gemini"> = [];
-  const errors: Record<string, string[]> = {};
-
-  for (const [provider, key] of Object.entries(keys) as Array<
-    ["anthropic" | "openai" | "gemini", string]
-  >) {
-    if (await validateApiKey(provider, key)) {
-      setApiKey(provider, key);
-      invalidateModelCache(provider);
-      saved.push(provider);
-    } else {
-      invalid.push(provider);
-      errors[`${provider}_key`] = [
-        `The ${provider} API key is invalid. Please check the key and try again.`,
-      ];
-    }
-  }
-
-  if (saved.length === 0) {
-    res.status(422).json({ errors });
-    return;
-  }
-
-  setSetting("onboardingCompleted", true);
-
-  res.json({ success: true, saved, invalid });
-});
-
-router.delete("/api-keys", async (req, res) => {
-  const { invalidateModelCache } = await import("../ai/model-registry.js");
-  const { provider } = req.body as {
-    provider: "anthropic" | "openai" | "gemini";
-  };
-  if (!isDirectProviderId(provider)) {
-    res.status(422).json({ error: "A valid direct provider is required" });
-    return;
-  }
-  deleteApiKey(provider);
-  invalidateModelCache(provider);
-  res.json(getConfiguredProviders());
 });
 
 // ─── Models ────────────────────────────────────────────────
