@@ -5,6 +5,12 @@
   "private": true,
   "description": "Multi-Model AI Collaborative Workspace",
   "author": "Dave Sebek",
+  "license": "AGPL-3.0-only",
+  "homepage": "https://tridenthq.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eastechs/trident.git"
+  },
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:main\" \"npm run dev:electron\"",
