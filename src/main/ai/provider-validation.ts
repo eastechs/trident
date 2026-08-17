@@ -14,7 +14,9 @@ import {
   GATEWAY_MODEL_COUNT_MAX,
   GATEWAY_MODEL_ID_MAX_LENGTH,
   containsControlCharacters,
+  awsDnsSuffix,
   gatewayModelRef,
+  parseServiceAccountJson,
   normalizeAzureEndpoint,
   vertexSurfaceFor,
 } from "./provider-config.js";
@@ -138,39 +140,6 @@ function duplicateModelErrors(
     refs.add(ref);
   }
   return {};
-}
-
-function parseServiceAccountJson(
-  value: string,
-): { client_email: string; private_key: string; project_id?: string } | null {
-  try {
-    const parsed = JSON.parse(value) as Record<string, unknown>;
-    if (
-      typeof parsed.client_email !== "string" ||
-      !parsed.client_email.trim() ||
-      typeof parsed.private_key !== "string" ||
-      !parsed.private_key.trim()
-    ) {
-      return null;
-    }
-    const projectId =
-      typeof parsed.project_id === "string" && parsed.project_id.trim()
-        ? parsed.project_id.trim()
-        : undefined;
-    if (
-      projectId &&
-      (projectId.length > 256 || containsControlCharacters(projectId))
-    ) {
-      return null;
-    }
-    return {
-      client_email: parsed.client_email,
-      private_key: parsed.private_key,
-      ...(projectId ? { project_id: projectId } : {}),
-    };
-  } catch {
-    return null;
-  }
 }
 
 export function parseGatewayProviderPayload(
@@ -322,6 +291,28 @@ async function responseText(response: Response): Promise<string> {
   }
 }
 
+/**
+ * Every validation probe is a one-shot request with the same deadline, so the
+ * timer wiring lives here rather than being repeated at each call site.
+ * Accepts an AwsClient-style fetcher for the signed Bedrock probes.
+ */
+async function fetchWithTimeout(
+  url: string | URL,
+  init: RequestInit = {},
+  fetcher: (
+    input: string | URL,
+    init?: RequestInit,
+  ) => Promise<Response> = fetch,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), VALIDATION_TIMEOUT_MS);
+  try {
+    return await fetcher(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function vertexOAuthValidationRequest({
   project,
   location,
@@ -365,10 +356,6 @@ export function vertexOAuthValidationRequest({
   };
 }
 
-function awsDnsSuffix(region: string): string {
-  return region.startsWith("cn-") ? "amazonaws.com.cn" : "amazonaws.com";
-}
-
 function bedrockEndpoint(region: string): string {
   const suffix = awsDnsSuffix(region);
   return `https://bedrock.${region}.${suffix}/foundation-models?byOutputModality=TEXT`;
@@ -385,19 +372,9 @@ async function validateBedrock(
     let response: Response;
     if (config.authType === "apiKey") {
       const url = bedrockEndpoint(config.region);
-      const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        VALIDATION_TIMEOUT_MS,
-      );
-      try {
-        response = await fetch(url, {
-          headers: { Authorization: `Bearer ${config.apiKey}` },
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeout);
-      }
+      response = await fetchWithTimeout(url, {
+        headers: { Authorization: `Bearer ${config.apiKey}` },
+      });
     } else {
       const credentials =
         config.authType === "accessKey"
@@ -418,18 +395,11 @@ async function validateBedrock(
         service: "sts",
         retries: 0,
       });
-      const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        VALIDATION_TIMEOUT_MS,
+      response = await fetchWithTimeout(
+        stsEndpoint(config.region),
+        {},
+        (input, requestInit) => client.fetch(input, requestInit),
       );
-      try {
-        response = await client.fetch(stsEndpoint(config.region), {
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeout);
-      }
     }
 
     if (response.ok) return {};
@@ -493,26 +463,15 @@ async function validateVertex(
         `https://aiplatform.googleapis.com/v1/publishers/google/models/${modelId}:countTokens`,
       );
       url.searchParams.set("key", config.apiKey!);
-      const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        VALIDATION_TIMEOUT_MS,
-      );
-      let response: Response;
-      try {
-        response = await fetch(url, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              { role: "user", parts: [{ text: "Trident connection test" }] },
-            ],
-          }),
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeout);
-      }
+      const response = await fetchWithTimeout(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            { role: "user", parts: [{ text: "Trident connection test" }] },
+          ],
+        }),
+      });
       if (response.ok) return {};
       const body = await responseText(response);
       if (
@@ -552,54 +511,61 @@ async function validateVertex(
     const token = await withTimeout(auth.getAccessToken());
     if (!token) throw new Error("Google did not return an access token.");
 
-    const request = vertexOAuthValidationRequest({
-      project: config.project!,
-      location: config.location,
-      model: config.models[0],
-    });
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), VALIDATION_TIMEOUT_MS);
-    let response: Response;
-    try {
-      response = await fetch(request.url, {
+    // Probe one model per serving surface rather than only the first
+    // configured model. Each surface has its own endpoint and credential
+    // requirements, so a connection whose only partner or Claude model sits
+    // further down the list would otherwise save with that surface unchecked
+    // and fail on first use.
+    const bySurface = new Map<string, GatewayModelConfig>();
+    for (const model of config.models) {
+      const surface = vertexSurfaceFor(model.id, model.baseModelId);
+      if (!bySurface.has(surface)) bySurface.set(surface, model);
+    }
+
+    const credentialField =
+      config.authType === "serviceAccount" ? "serviceAccountJson" : "authType";
+
+    for (const model of bySurface.values()) {
+      const request = vertexOAuthValidationRequest({
+        project: config.project!,
+        location: config.location,
+        model,
+      });
+      const response = await fetchWithTimeout(request.url, {
         method: request.method,
         headers: {
           authorization: `Bearer ${token}`,
           "content-type": "application/json",
         },
         ...(request.body ? { body: JSON.stringify(request.body) } : {}),
-        signal: controller.signal,
       });
-    } finally {
-      clearTimeout(timeout);
-    }
 
-    if (response.ok) return {};
-    const credentialField =
-      config.authType === "serviceAccount" ? "serviceAccountJson" : "authType";
-    if (response.status === 401 || response.status === 403) {
+      if (response.ok) continue;
+      if (response.status === 401 || response.status === 403) {
+        return {
+          [credentialField]: [
+            "Google rejected these Vertex credentials or their permissions.",
+          ],
+        };
+      }
+      if (
+        response.status === 400 ||
+        response.status === 404 ||
+        response.status === 405
+      ) {
+        return {
+          models: [
+            `Vertex could not validate ${model.id} in project ${config.project} and location ${config.location} (HTTP ${response.status}).`,
+          ],
+        };
+      }
       return {
         [credentialField]: [
-          "Google rejected these Vertex credentials or their permissions.",
+          `Vertex validation failed with HTTP ${response.status}.`,
         ],
       };
     }
-    if (
-      response.status === 400 ||
-      response.status === 404 ||
-      response.status === 405
-    ) {
-      return {
-        models: [
-          `Vertex could not validate the configured model in project ${config.project} and location ${config.location} (HTTP ${response.status}).`,
-        ],
-      };
-    }
-    return {
-      [credentialField]: [
-        `Vertex validation failed with HTTP ${response.status}.`,
-      ],
-    };
+    return {};
   } catch (error) {
     return {
       [config.authType === "serviceAccount"
@@ -618,12 +584,9 @@ async function validateAzure(
 ): Promise<FieldErrors> {
   const url = new URL(`${config.endpoint}/v1/models`);
   if (config.apiVersion) url.searchParams.set("api-version", config.apiVersion);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), VALIDATION_TIMEOUT_MS);
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: { "api-key": config.apiKey },
-      signal: controller.signal,
     });
     if (response.ok) return {};
     if (response.status === 401 || response.status === 403) {
@@ -640,8 +603,6 @@ async function validateAzure(
           : "Could not validate the Azure endpoint.",
       ],
     };
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

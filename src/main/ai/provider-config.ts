@@ -496,11 +496,61 @@ export function normalizeAzureEndpoint(endpoint: string): string {
   return parsed.toString().replace(/\/$/, "");
 }
 
+// AWS China lives in its own partition with a distinct DNS suffix. Every
+// endpoint built for a region has to agree on this, or validation probes a
+// different host than chat actually calls.
+export function awsDnsSuffix(region: string): string {
+  return region.startsWith("cn-") ? "amazonaws.com.cn" : "amazonaws.com";
+}
+
 export function bedrockRuntimeEndpoint(region: string): string {
-  const suffix = region.startsWith("cn-")
-    ? "amazonaws.com.cn"
-    : "amazonaws.com";
-  return `https://bedrock-runtime.${region}.${suffix}`;
+  return `https://bedrock-runtime.${region}.${awsDnsSuffix(region)}`;
+}
+
+export interface ServiceAccountCredentials {
+  client_email: string;
+  private_key: string;
+  project_id?: string;
+}
+
+/**
+ * Validates the service-account JSON shape accepted for Vertex credentials.
+ * Shared so the save path, the stored-config reader, and the runtime all
+ * accept exactly the same documents — a mismatch there lets a connection save
+ * and then silently vanish on the next read.
+ */
+export function parseServiceAccountJson(
+  value: string | undefined,
+): ServiceAccountCredentials | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    if (
+      typeof parsed.client_email !== "string" ||
+      !parsed.client_email.trim() ||
+      typeof parsed.private_key !== "string" ||
+      !parsed.private_key.trim()
+    ) {
+      return null;
+    }
+    const projectId =
+      typeof parsed.project_id === "string" && parsed.project_id.trim()
+        ? parsed.project_id.trim()
+        : undefined;
+    if (
+      projectId &&
+      (projectId.length > 256 || containsControlCharacters(projectId))
+    ) {
+      return null;
+    }
+    return {
+      client_email: parsed.client_email,
+      private_key: parsed.private_key,
+      ...(projectId ? { project_id: projectId } : {}),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export type CapabilityProviderSlug = "anthropic" | "openai" | "google";

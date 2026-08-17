@@ -10,6 +10,7 @@ import {
   containsControlCharacters,
   isGatewayModelConfigArray,
   normalizeAzureEndpoint,
+  parseServiceAccountJson,
 } from "./ai/provider-config.js";
 
 interface StoredGatewayProvider {
@@ -192,23 +193,6 @@ function decryptSecretBundle(
   }
 }
 
-function isStoredServiceAccountJson(value: string | undefined): boolean {
-  if (!value) return false;
-  try {
-    const parsed = JSON.parse(value) as Record<string, unknown>;
-    return (
-      !!parsed &&
-      !Array.isArray(parsed) &&
-      typeof parsed.client_email === "string" &&
-      !!parsed.client_email.trim() &&
-      typeof parsed.private_key === "string" &&
-      !!parsed.private_key.trim()
-    );
-  } catch {
-    return false;
-  }
-}
-
 function gatewayStorageParts(config: GatewayProviderConfig): {
   plain: Record<string, unknown>;
   secrets: Record<string, string>;
@@ -363,7 +347,7 @@ export function getGatewayProviderConfig(
     if (
       (plain.authType === "apiKey" && !secrets.apiKey) ||
       (plain.authType === "serviceAccount" &&
-        !isStoredServiceAccountJson(secrets.serviceAccountJson))
+        !parseServiceAccountJson(secrets.serviceAccountJson))
     ) {
       return undefined;
     }
