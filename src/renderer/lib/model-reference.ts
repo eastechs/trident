@@ -139,21 +139,47 @@ function capitalize(value: string): string {
   return value.length > 0 ? value[0].toUpperCase() + value.slice(1) : value;
 }
 
+/**
+ * Reduce a provider-facing ID to the underlying model, mirroring the server's
+ * capabilityModelIdFor: drop the cloud region scope and vendor marker, and
+ * fold Vertex's `@YYYYMMDD` version suffix into the dashed form the naming
+ * rules below expect. These must agree with src/main/ai — the same model has
+ * to read the same in the picker, in history, and on a document heading.
+ */
+function capabilityModelId(modelId: string): string {
+  let id = modelId.trim().replace(/^(?:global|us|eu|apac)\./, "");
+  for (const marker of [
+    "anthropic.",
+    "amazon.",
+    "meta.",
+    "mistral.",
+    "cohere.",
+  ]) {
+    const index = id.indexOf(marker);
+    if (index >= 0) {
+      id = id.slice(index + marker.length);
+      break;
+    }
+  }
+  return id.replace(/@(?=\d{8}$)/, "-").replace(/-v\d+(?::\d+)?$/, "");
+}
+
 export function modelReferenceDisplayName(modelRef: string): string {
   const parsed = parseModelReference(modelRef);
-  let modelId = parsed.baseModelId ?? parsed.modelId;
-
-  // Strip cloud routing prefixes before deriving a human-readable family.
-  modelId = modelId.replace(/^(?:global|us|eu|apac)\./, "");
-  modelId = modelId.replace(/^(?:anthropic|amazon|meta|mistral|cohere)\./, "");
+  const modelId = capabilityModelId(parsed.baseModelId ?? parsed.modelId);
 
   if (modelId.startsWith("claude-")) {
-    return modelId
-      .slice("claude-".length)
-      .replace(/-v\d+(?::\d+)?$/, "")
-      .split("-")
-      .map(capitalize)
-      .join(" ");
+    const family = modelId.includes("opus")
+      ? "Opus"
+      : modelId.includes("sonnet")
+        ? "Sonnet"
+        : modelId.includes("haiku")
+          ? "Haiku"
+          : "Claude";
+    // The first number group is the model version; a trailing release date is
+    // not part of the name.
+    const version = /(\d+[-.]?\d*)/.exec(modelId)?.[1].replace(/-/g, ".");
+    return version ? `${family} ${version}` : family;
   }
   if (modelId.startsWith("gpt-")) {
     const [version, ...rest] = modelId.slice("gpt-".length).split("-");
