@@ -145,7 +145,7 @@ async function main() {
   // 3. Build renderer + main.
   run("npm run build");
 
-  // 4. Package, notarize (afterAllArtifactBuild hook), and upload assets to a
+  // 4. Package, notarize (artifactBuildCompleted hook), and upload assets to a
   //    DRAFT release in eastechs/trident-releases (releaseType: draft). Supply
   //    release metadata explicitly: the public binary repository has no source
   //    history, so GitHub's generated notes otherwise show only its Initial

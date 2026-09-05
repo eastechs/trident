@@ -6,8 +6,7 @@ directories:
   output: release
   buildResources: resources
 
-afterAllArtifactBuild: scripts/notarize-dmg.js
-afterPack: scripts/update-metadata.js
+artifactBuildCompleted: scripts/notarize-dmg.js
 
 publish:
   provider: github

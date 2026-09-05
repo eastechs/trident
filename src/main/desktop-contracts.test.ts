@@ -334,3 +334,54 @@ test("updater stages downloads and only installs a completed update", async () =
   ipc.get("install-update")!();
   assert.equal(installs, 1);
 });
+
+test("DMG notarization refreshes shared update metadata before either artifact is uploaded", async () => {
+  const calls: string[] = [];
+  const notarize: any = load(
+    "../../scripts/notarize-dmg.js",
+    {
+      "./update-metadata.js": () => {},
+      "node:child_process": {
+        execFileSync: (_command: string, args: string[]) =>
+          calls.push(args.slice(0, 2).join(" ")),
+      },
+      "app-builder-lib/out/targets/blockmap/blockmap": {
+        buildBlockMap: async () => {
+          calls.push("rebuild blockmap");
+          return { sha512: "stapled-digest", size: 123 };
+        },
+      },
+    },
+    {
+      process: {
+        platform: "darwin",
+        env: {
+          APPLE_ID: "fixture",
+          APPLE_TEAM_ID: "fixture",
+          APPLE_APP_SPECIFIC_PASSWORD: "fixture",
+        },
+      },
+    },
+  );
+  const sharedInfo = { sha512: "unstapled-digest", size: 100 };
+  const packager = { platform: { nodeName: "darwin" } };
+  await notarize({
+    file: "/tmp/Trident.dmg.blockmap",
+    updateInfo: sharedInfo,
+    packager,
+  });
+  assert.deepEqual(calls, [
+    "notarytool submit",
+    "stapler staple",
+    "stapler validate",
+    "rebuild blockmap",
+  ]);
+  assert.deepEqual(sharedInfo, { sha512: "stapled-digest", size: 123 });
+  await notarize({
+    file: "/tmp/Trident.dmg",
+    updateInfo: sharedInfo,
+    packager,
+  });
+  await notarize({ file: "/tmp/Trident.zip", packager });
+  assert.equal(calls.length, 4);
+});
