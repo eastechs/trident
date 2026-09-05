@@ -609,9 +609,25 @@ export function parseServiceAccountJson(
 
 export type CapabilityProviderSlug = "anthropic" | "openai" | "google";
 
+// Parse the complete version so new majors (including 10+) and named or dated
+// variants inherit the family contract without another prefix allowlist.
+// Expects a capability model ID, with gateway prefixes already removed.
+export function isOpenAIGptVersionAtLeast(
+  modelId: string,
+  major: number,
+  minor = 0,
+): boolean {
+  const match = modelId.match(/^gpt-(\d+)(?:\.(\d+))?(?:-|$)/);
+  if (!match) return false;
+  const modelMajor = Number(match[1]);
+  const modelMinor = Number(match[2] ?? 0);
+  return modelMajor > major || (modelMajor === major && modelMinor >= minor);
+}
+
 // Family-based capability check. Patterns:
-//   - OpenAI: o-series (o1/o3/o4...) and the GPT-5 line all support
-//     reasoning_effort. GPT-4 and earlier do not.
+//   - OpenAI: o-series, gpt-oss, and general-purpose GPT-5+ models support
+//     reasoning effort. GPT-4 and earlier, ChatGPT aliases, and specialized
+//     audio/image/search variants do not expose that knob.
 //   - Anthropic: extended thinking is on Claude 3.7 (legacy `claude-3-7-...`
 //     ids) and the Claude 4+ family-first ids (`claude-(opus|sonnet|haiku)-N-x`).
 //     Older claude-3-5-* / claude-2 / claude-instant don't support thinking.
@@ -622,8 +638,14 @@ export function supportsReasoning(
 ): boolean {
   if (providerSlug === "openai") {
     // gpt-oss is offered through Bedrock and takes reasoning_effort there.
+    if (/^o\d+(?:-|$)/.test(modelId) || /^gpt-oss(?:-|$)/.test(modelId)) {
+      return true;
+    }
     return (
-      /^o\d/.test(modelId) || /^gpt-5/.test(modelId) || /^gpt-oss/.test(modelId)
+      isOpenAIGptVersionAtLeast(modelId, 5) &&
+      !/-(?:chat|instruct|audio|realtime|transcribe|tts|whisper|search|embedding|moderation|image)(?:-|$)/.test(
+        modelId,
+      )
     );
   }
   if (providerSlug === "anthropic") {
@@ -655,7 +677,7 @@ export function supportsImageInput(
     if (/^o(?:1|3)-mini(?:-|$)/.test(modelId)) return false;
     return (
       /^gpt-4(?:o|\.\d|-turbo|-vision)/.test(modelId) ||
-      /^gpt-[5-9]/.test(modelId) ||
+      isOpenAIGptVersionAtLeast(modelId, 5) ||
       /^o[1345](?:-|$)/.test(modelId)
     );
   }

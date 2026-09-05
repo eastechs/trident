@@ -16,6 +16,7 @@ import {
   classifyModelReference,
   gatewayConfiguredModel,
   isBedrockAnthropicModelId,
+  isOpenAIGptVersionAtLeast,
   resolvedDirectModelReference,
   resolvedGatewayModelReference,
   capabilitySlugForFamily,
@@ -248,8 +249,13 @@ export function resolveModel(resolved: ResolvedModelReference): LanguageModel {
 /** Map the unified effort level to each provider's accepted range. */
 function effortToOpenAI(
   level: EffortLevel,
-): "low" | "medium" | "high" | "xhigh" {
-  return level === "max" ? "xhigh" : level;
+  capabilityModelId: string,
+): EffortLevel {
+  // GPT-5.6 (including Sol) and GPT-6 Astra accept a distinct max level.
+  // Preserve the existing xhigh mapping for earlier models.
+  return level === "max" && !isOpenAIGptVersionAtLeast(capabilityModelId, 5, 6)
+    ? "xhigh"
+    : level;
 }
 
 function effortToGemini(level: EffortLevel): "low" | "medium" | "high" {
@@ -360,12 +366,22 @@ export function getProviderOptions(
       openai: {
         ...(reasoningOk
           ? {
-              reasoningEffort: effortToOpenAI(effort),
+              // The SDK's model list can lag new releases. Use the same
+              // capability decision as the selector so it cannot drop effort.
+              forceReasoning: true,
+              reasoningEffort: effortToOpenAI(
+                effort,
+                resolved.capabilityModelId,
+              ),
               reasoningSummary: "auto",
             }
           : {}),
         truncation: "auto",
-        promptCacheRetention: "24h",
+        // GPT-5.6+ uses prompt_cache_options.ttl and defaults to 30m. Let
+        // that default apply instead of sending the legacy retention field.
+        ...(!isOpenAIGptVersionAtLeast(resolved.capabilityModelId, 5, 6)
+          ? { promptCacheRetention: "24h" }
+          : {}),
         ...(context?.projectId ? { promptCacheKey: context.projectId } : {}),
       },
     };
@@ -444,7 +460,7 @@ export function getProviderOptions(
     return {
       openai: {
         forceReasoning: true,
-        reasoningEffort: effortToOpenAI(effort),
+        reasoningEffort: effortToOpenAI(effort, resolved.capabilityModelId),
         reasoningSummary: "auto",
       },
     };

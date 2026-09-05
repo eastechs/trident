@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import vm from "node:vm";
+import { createAzure } from "@ai-sdk/azure";
+import { createOpenAI } from "@ai-sdk/openai";
+import ts from "typescript";
+import * as providerConfig from "./provider-config.js";
 import {
   bedrockRuntimeEndpoint,
   capabilityModelIdFor,
@@ -10,12 +16,15 @@ import {
   gatewayModelRef,
   isGatewayModelConfigArray,
   normalizeAzureEndpoint,
+  resolvedDirectModelReference,
   resolvedGatewayModelReference,
   supportsAdaptiveThinking,
   supportsReasoning,
   supportsImageInput,
   type BedrockProviderConfig,
+  type ResolvedModelReference,
 } from "./provider-config.js";
+import { getProviderOptions, type EffortLevel } from "./providers.js";
 import {
   parseGatewayProviderPayload,
   vertexOAuthValidationRequest,
@@ -167,6 +176,208 @@ test("vendor-prefixed gateway IDs resolve to the underlying model", () => {
   // gpt-oss on Bedrock supports reasoning_effort; text-only, so no images.
   assert.equal(supportsReasoning("gpt-oss-120b-1:0", "openai"), true);
   assert.equal(supportsImageInput("gpt-oss-120b-1:0", "openai"), false);
+});
+
+test("OpenAI reasoning capabilities cover Astra, Sol, and later GPT versions", () => {
+  for (const id of [
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-5.5",
+    "gpt-5.6-sol",
+    "gpt-6-astra",
+    "gpt-6-astra-2026-09-03",
+    // Synthetic versions guard against another major-version cutoff.
+    "gpt-7",
+    "gpt-10.2-example",
+    "o3",
+    "o4-mini",
+  ]) {
+    assert.equal(supportsReasoning(id, "openai"), true, id);
+    assert.equal(supportsImageInput(id, "openai"), true, id);
+  }
+
+  for (const id of [
+    "gpt-3.5-turbo",
+    "gpt-4o",
+    "gpt-4.1",
+    "gpt-5-chat-latest",
+    "gpt-5.2-chat-latest",
+    "gpt-5-search-api",
+    "gpt-6-audio-preview",
+    "gpt-image-2",
+    "gpt-6unknown",
+    "production",
+  ]) {
+    assert.equal(supportsReasoning(id, "openai"), false, id);
+  }
+});
+
+test("the model catalog exposes reasoning for Astra and configured Azure deployments", async () => {
+  // Execute the real registry with only settings and HTTP replaced. This
+  // exercises the flag consumed by the selector without starting Electron.
+  const exports = {} as typeof import("./model-registry.js");
+  const source = readFileSync(
+    new URL("./model-registry.ts", import.meta.url),
+    "utf8",
+  );
+  vm.runInNewContext(
+    ts.transpileModule(source, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+    }).outputText,
+    {
+      exports,
+      require: (id: string) => {
+        if (id === "./provider-config.js") return providerConfig;
+        assert.equal(id, "../settings.js");
+        return {
+          getConfiguredProviders: () => ({ openai: true }),
+          getApiKey: () => "test-key",
+          getGatewayProviderModels: (provider: string) =>
+            provider === "azure"
+              ? [{ id: "production", baseModelId: "gpt-6-astra" }]
+              : [],
+        };
+      },
+      AbortController,
+      setTimeout,
+      clearTimeout,
+      console,
+      fetch: async (url: string) => {
+        assert.equal(url, "https://api.openai.com/v1/models");
+        return Response.json({
+          data: [
+            "gpt-6-astra",
+            "gpt-5.6-sol",
+            "gpt-10.2-example",
+            "gpt-4o",
+            "gpt-5-chat-latest",
+          ].map((id) => ({ id, object: "model" })),
+        });
+      },
+    },
+  );
+  const models = await exports.fetchAvailableModels();
+  assert.equal(models.length, 6);
+  for (const id of [
+    "gpt-6-astra",
+    "gpt-5.6-sol",
+    "gpt-10.2-example",
+    "production",
+  ]) {
+    const model = models.find((row) => row.modelId === id);
+    assert.equal(model?.supportsReasoning, true, id);
+    assert.equal(model?.supportsImages, true, id);
+  }
+  for (const id of ["gpt-4o", "gpt-5-chat-latest"]) {
+    assert.equal(
+      models.find((row) => row.id === id)?.supportsReasoning,
+      false,
+      id,
+    );
+  }
+});
+
+async function openAIStreamRequest(
+  resolved: ResolvedModelReference,
+  effort: EffortLevel,
+) {
+  let body: Record<string, any> | undefined;
+  const settings = {
+    apiKey: "test-key",
+    fetch: async (url: RequestInfo | URL, init?: RequestInit) => {
+      assert.ok(String(url).includes("/responses"));
+      assert.ok(typeof init?.body === "string");
+      body = JSON.parse(init.body);
+      return new Response("data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      });
+    },
+  };
+  const model =
+    resolved.providerId === "azure"
+      ? createAzure({ ...settings, resourceName: "test-resource" })(
+          resolved.modelId,
+        )
+      : createOpenAI(settings)(resolved.modelId);
+  const result = await model.doStream({
+    prompt: [
+      { role: "system", content: "Contract test" },
+      { role: "user", content: [{ type: "text", text: "Hello" }] },
+    ],
+    providerOptions: getProviderOptions(resolved, {
+      effort,
+      projectId: "project-test",
+    }),
+  });
+  await result.stream.pipeTo(new WritableStream());
+  assert.ok(body);
+  assert.equal(body.stream, true);
+  assert.equal(body.model, resolved.modelId);
+  return body;
+}
+
+test("the SDK sends every selected effort, including Max, for Astra and Sol", async () => {
+  for (const id of [
+    "gpt-6-astra",
+    "gpt-5.6-sol",
+    "gpt-5.6",
+    "gpt-10.2-example",
+  ]) {
+    for (const effort of ["low", "medium", "high", "xhigh", "max"] as const) {
+      const body = await openAIStreamRequest(
+        resolvedDirectModelReference(id),
+        effort,
+      );
+      assert.deepEqual(
+        body.reasoning,
+        { effort, summary: "auto" },
+        `${id}: ${effort}`,
+      );
+      assert.equal(body.input[0].role, "developer", id);
+      assert.equal(body.prompt_cache_key, "project-test");
+      // GPT-5.6+ defaults to the new 30-minute cache lifetime.
+      assert.equal(body.prompt_cache_retention, undefined, id);
+    }
+  }
+});
+
+test("Azure uses the base model's reasoning capabilities for opaque deployments", async () => {
+  const resolved = resolvedGatewayModelReference({
+    providerId: "azure",
+    id: "production",
+    baseModelId: "gpt-6-astra",
+  });
+  const body = await openAIStreamRequest(resolved, "max");
+  assert.deepEqual(body.reasoning, { effort: "max", summary: "auto" });
+  assert.equal(body.input[0].role, "developer");
+});
+
+test("legacy models retain their effort mapping and chat-only models omit reasoning", async () => {
+  const legacy = await openAIStreamRequest(
+    resolvedDirectModelReference("gpt-5.5"),
+    "max",
+  );
+  assert.deepEqual(legacy.reasoning, { effort: "xhigh", summary: "auto" });
+  assert.equal(legacy.prompt_cache_retention, "24h");
+
+  for (const id of ["gpt-4o", "gpt-5-chat-latest", "gpt-5.2-chat-latest"]) {
+    const body = await openAIStreamRequest(
+      resolvedDirectModelReference(id),
+      "max",
+    );
+    assert.equal(body.reasoning, undefined, id);
+  }
+  const unknown = await openAIStreamRequest(
+    resolvedGatewayModelReference({
+      providerId: "azure",
+      id: "production",
+    }),
+    "max",
+  );
+  assert.equal(unknown.reasoning, undefined);
 });
 
 test("adaptive thinking is limited to Claude 4.5 and newer", () => {
