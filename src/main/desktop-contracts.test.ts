@@ -385,3 +385,46 @@ test("DMG notarization refreshes shared update metadata before either artifact i
   await notarize({ file: "/tmp/Trident.zip", packager });
   assert.equal(calls.length, 4);
 });
+
+test("release uploads share a precreated draft and refuse published versions", async () => {
+  const { ensureDraftRelease } = createRequire(import.meta.url)(
+    "../../scripts/release.js",
+  );
+  const calls: Array<{ endpoint: string; options?: any }> = [];
+  const draft = { id: 42, tag_name: "v0.5.0", draft: true };
+  let releases: Array<typeof draft> = [];
+  const request = async (endpoint: string, options?: any) => {
+    calls.push({ endpoint, options });
+    if (!options) return releases;
+    assert.equal(endpoint, "/releases");
+    assert.equal(options.method, "POST");
+    assert.deepEqual(JSON.parse(options.body), {
+      tag_name: "v0.5.0",
+      name: "Trident v0.5.0",
+      draft: true,
+    });
+    releases = [draft];
+    return draft;
+  };
+  assert.equal(await ensureDraftRelease("0.5.0", request), draft);
+  assert.equal(await ensureDraftRelease("0.5.0", request), draft);
+  assert.equal(
+    calls.filter((call) => call.options?.method === "POST").length,
+    1,
+  );
+  releases = [{ ...draft, draft: false }];
+  await assert.rejects(
+    ensureDraftRelease("0.5.0", request),
+    /already published/,
+  );
+  assert.equal(
+    calls.filter((call) => call.options?.method === "POST").length,
+    1,
+  );
+  await assert.rejects(
+    ensureDraftRelease("0.5.0", async () => {
+      throw new Error("GitHub unavailable");
+    }),
+    /GitHub unavailable/,
+  );
+});

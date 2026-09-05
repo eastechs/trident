@@ -91,6 +91,30 @@ async function githubRequest(path, options = {}) {
   return response.status === 204 ? null : response.json();
 }
 
+// Parallel artifact uploads can create separate GitHub drafts when the release
+// does not exist yet. Create it once before starting electron-builder.
+async function ensureDraftRelease(version, request = githubRequest) {
+  const tag = `v${version}`;
+  const releases = await request("/releases?per_page=100");
+  const existing = releases.find(
+    (release) => release.tag_name === tag || release.tag_name === version,
+  );
+  if (existing) {
+    if (!existing.draft) {
+      throw new Error(`${tag} is already published; use a new version.`);
+    }
+    return existing;
+  }
+  return request("/releases", {
+    method: "POST",
+    body: JSON.stringify({
+      tag_name: tag,
+      name: `Trident v${version}`,
+      draft: true,
+    }),
+  });
+}
+
 async function updatePublicRelease(version) {
   const releases = await githubRequest("/releases?per_page=100");
   const tag = `v${version}`;
@@ -152,6 +176,7 @@ async function main() {
   //    commit. Generate notes from source history with matching source links.
   const { version } = require("../package.json");
   writeReleaseNotes(version);
+  await ensureDraftRelease(version);
   run(
     `npx --no-install electron-builder --mac --publish always --config.releaseInfo.releaseName="Trident v${version}" --config.releaseInfo.releaseNotesFile="release/release-notes.md"`,
   );
@@ -173,6 +198,10 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  fail(error instanceof Error ? error.message : String(error));
-});
+module.exports = { ensureDraftRelease };
+
+if (require.main === module) {
+  main().catch((error) => {
+    fail(error instanceof Error ? error.message : String(error));
+  });
+}
