@@ -6,6 +6,8 @@ directories:
   output: release
   buildResources: resources
 
+afterPack: scripts/check-runtime-dependencies.js
+
 artifactBuildCompleted: scripts/notarize-dmg.js
 
 publish:

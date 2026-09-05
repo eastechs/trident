@@ -117,7 +117,7 @@ That starts Vite, tsup, and Electron together with hot reload.
 
 | Script | Purpose |
 | --- | --- |
-| `npm run build` | Build main (tsup) + renderer (vite) into `dist/` |
+| `npm run build` | Build main (tsup) + renderer (vite) and validate runtime imports |
 | `npm run dist:mac` | Build, then package a macOS dmg/zip via electron-builder |
 | `npm run lint:check` / `npm run lint` | ESLint (check / autofix) |
 | `npm run format:check` / `npm run format` | Prettier (check / write) |
@@ -130,6 +130,8 @@ That starts Vite, tsup, and Electron together with hot reload.
 
 `npm run build` and `npm run dev` do not need signing credentials. The macOS
 distribution scripts require the signing and notarization setup described below.
+The build rejects undeclared runtime imports, and packaging verifies those imports
+resolve from the actual shipped app before signing or uploading it.
 
 Architecture in one paragraph: the Electron main process boots an Express server
 on `127.0.0.1:19274`, guarded by a per-launch shared secret, and serves the
