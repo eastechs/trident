@@ -1233,7 +1233,7 @@ export function SidebarChat({
                             // Override the size variant with a matching variant so
                             // tailwind-merge actually strips the base's
                             // data-[size=sm]:h-8 instead of letting both apply.
-                            className="text-muted-foreground hover:bg-muted dark:hover:bg-muted/50 w-auto gap-1 rounded-4xl border-transparent bg-transparent bg-clip-padding px-2 py-0 text-xs font-medium shadow-none focus:ring-0 data-[size=sm]:h-7 [&>svg]:hidden"
+                            className="text-muted-foreground hover:bg-muted dark:hover:bg-muted/50 -ml-1 w-auto gap-1 rounded-4xl border-transparent bg-transparent bg-clip-padding px-2 py-0 text-xs font-medium shadow-none focus:ring-0 data-[size=sm]:h-7 [&>svg]:hidden"
                           >
                             <SelectValue />
                           </SelectTrigger>
