@@ -624,12 +624,27 @@ export function isOpenAIGptVersionAtLeast(
   return modelMajor > major || (modelMajor === major && modelMinor >= minor);
 }
 
+// Modern Claude IDs put the family before the version. Match the version
+// independently of family names so new families such as Fable inherit the
+// generation's capabilities. A dated snapshot suffix is not a minor version.
+function isClaudeVersionAtLeast(
+  modelId: string,
+  major: number,
+  minor = 0,
+): boolean {
+  const match = modelId.match(/^claude-[a-z]+-(\d+)(?:[-.](\d{1,2}))?(?:-|$)/);
+  if (!match) return false;
+  const modelMajor = Number(match[1]);
+  const modelMinor = Number(match[2] ?? 0);
+  return modelMajor > major || (modelMajor === major && modelMinor >= minor);
+}
+
 // Family-based capability check. Patterns:
 //   - OpenAI: o-series, gpt-oss, and general-purpose GPT-5+ models support
 //     reasoning effort. GPT-4 and earlier, ChatGPT aliases, and specialized
 //     audio/image/search variants do not expose that knob.
 //   - Anthropic: extended thinking is on Claude 3.7 (legacy `claude-3-7-...`
-//     ids) and the Claude 4+ family-first ids (`claude-(opus|sonnet|haiku)-N-x`).
+//     ids) and the Claude 4+ family-first ids (`claude-<family>-N-x`).
 //     Older claude-3-5-* / claude-2 / claude-instant don't support thinking.
 //   - Gemini: thinking is on 2.5+ (and any 3+ family). Earlier 1.x / 2.0 don't.
 export function supportsReasoning(
@@ -650,8 +665,7 @@ export function supportsReasoning(
   }
   if (providerSlug === "anthropic") {
     return (
-      /^claude-(opus|sonnet|haiku)-/.test(modelId) ||
-      /^claude-3-7/.test(modelId)
+      isClaudeVersionAtLeast(modelId, 4) || /^claude-3-7(?:-|$)/.test(modelId)
     );
   }
   if (providerSlug === "google") {
@@ -666,8 +680,7 @@ export function supportsImageInput(
 ): boolean {
   if (providerSlug === "anthropic") {
     return (
-      /^claude-3(?:[-.]|$)/.test(modelId) ||
-      /^claude-(opus|sonnet|haiku)-/.test(modelId)
+      /^claude-3(?:[-.]|$)/.test(modelId) || isClaudeVersionAtLeast(modelId, 4)
     );
   }
   if (providerSlug === "openai") {
@@ -716,20 +729,12 @@ export function logoSlugForFamily(
   return PROVIDER_LOGO_SLUGS[providerId];
 }
 
-// Adaptive thinking (`type: "adaptive"`) and the companion effort knob arrived
-// with the Claude 4.5 generation. Earlier thinking-capable models — Claude 3.7
-// and the 4.0/4.1 family — only accept budget-based extended thinking and
-// reject the adaptive shape. Budget-based thinking is accepted by every
-// thinking-capable Claude, so returning false here is always the safe answer.
+// Modern Claude families use adaptive thinking with the companion effort knob.
+// Fable requires this shape; legacy Claude 3.7 and 4.0/4.1 models instead take
+// budget-based extended thinking.
 // Expects a capability model ID (see capabilityModelIdFor).
 export function supportsAdaptiveThinking(capabilityModelId: string): boolean {
-  const match = capabilityModelId.match(
-    /^claude-(?:opus|sonnet|haiku)-(\d+)(?:-(\d{1,2}))?(?:-|$)/,
-  );
-  if (!match) return false;
-  const major = Number(match[1]);
-  const minor = match[2] ? Number(match[2]) : 0;
-  return major > 4 || (major === 4 && minor >= 5);
+  return isClaudeVersionAtLeast(capabilityModelId, 4, 5);
 }
 
 // The installed Bedrock adapter selects Anthropic's request shape from the

@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { createAzure } from "@ai-sdk/azure";
+import { createVertexAnthropic } from "@ai-sdk/google-vertex/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
+import { OAuth2Client } from "google-auth-library";
 import ts from "typescript";
 import * as providerConfig from "./provider-config.js";
 import {
@@ -212,7 +215,38 @@ test("OpenAI reasoning capabilities cover Astra, Sol, and later GPT versions", (
   }
 });
 
-test("the model catalog exposes reasoning for Astra and configured Azure deployments", async () => {
+test("Claude capabilities cover Fable and future versioned families", () => {
+  for (const id of [
+    "claude-fable-5",
+    "claude-fable-5-1",
+    "claude-fable-5-1-20260901",
+    "claude-mythos-5-1",
+    // A new family must not require adding another name to an allowlist.
+    "claude-example-6",
+    "claude-example-10-2",
+  ]) {
+    assert.equal(supportsReasoning(id, "anthropic"), true, id);
+    assert.equal(supportsAdaptiveThinking(id), true, id);
+    assert.equal(supportsImageInput(id, "anthropic"), true, id);
+  }
+
+  for (const id of [
+    "claude-2",
+    "claude-instant-1-2",
+    "claude-fable",
+    "claude-fable-5unknown",
+    "production",
+  ]) {
+    assert.equal(supportsReasoning(id, "anthropic"), false, id);
+    assert.equal(supportsAdaptiveThinking(id), false, id);
+    assert.equal(supportsImageInput(id, "anthropic"), false, id);
+  }
+  assert.equal(supportsReasoning("claude-3-5-sonnet", "anthropic"), false);
+  assert.equal(supportsReasoning("claude-3-7-sonnet", "anthropic"), true);
+  assert.equal(supportsImageInput("claude-3-5-sonnet", "anthropic"), true);
+});
+
+test("the model catalog exposes reasoning for new model families and gateway deployments", async () => {
   // Execute the real registry with only settings and HTTP replaced. This
   // exercises the flag consumed by the selector without starting Electron.
   const exports = {} as typeof import("./model-registry.js");
@@ -233,12 +267,23 @@ test("the model catalog exposes reasoning for Astra and configured Azure deploym
         if (id === "./provider-config.js") return providerConfig;
         assert.equal(id, "../settings.js");
         return {
-          getConfiguredProviders: () => ({ openai: true }),
+          getConfiguredProviders: () => ({ openai: true, anthropic: true }),
           getApiKey: () => "test-key",
-          getGatewayProviderModels: (provider: string) =>
-            provider === "azure"
-              ? [{ id: "production", baseModelId: "gpt-6-astra" }]
-              : [],
+          getGatewayProviderModels: (provider: string) => {
+            if (provider === "azure") {
+              return [{ id: "production", baseModelId: "gpt-6-astra" }];
+            }
+            if (provider === "vertex") {
+              return [{ id: "claude-fable-5-1@20260901" }];
+            }
+            if (provider === "bedrock") {
+              return [
+                { id: "us.anthropic.claude-fable-5-v1:0" },
+                { id: "opaque-profile", baseModelId: "claude-fable-5-1" },
+              ];
+            }
+            return [];
+          },
         };
       },
       AbortController,
@@ -246,6 +291,15 @@ test("the model catalog exposes reasoning for Astra and configured Azure deploym
       clearTimeout,
       console,
       fetch: async (url: string) => {
+        if (url === "https://api.anthropic.com/v1/models?limit=1000") {
+          return Response.json({
+            data: [
+              "claude-fable-5",
+              "claude-fable-5-1",
+              "claude-example-6",
+            ].map((id) => ({ id, type: "model", display_name: id })),
+          });
+        }
         assert.equal(url, "https://api.openai.com/v1/models");
         return Response.json({
           data: [
@@ -260,12 +314,17 @@ test("the model catalog exposes reasoning for Astra and configured Azure deploym
     },
   );
   const models = await exports.fetchAvailableModels();
-  assert.equal(models.length, 6);
+  assert.equal(models.length, 12);
   for (const id of [
     "gpt-6-astra",
     "gpt-5.6-sol",
     "gpt-10.2-example",
     "production",
+    "claude-fable-5",
+    "claude-fable-5-1",
+    "claude-example-6",
+    "claude-fable-5-1@20260901",
+    "us.anthropic.claude-fable-5-v1:0",
   ]) {
     const model = models.find((row) => row.modelId === id);
     assert.equal(model?.supportsReasoning, true, id);
@@ -278,6 +337,10 @@ test("the model catalog exposes reasoning for Astra and configured Azure deploym
       id,
     );
   }
+  assert.equal(
+    models.find((row) => row.modelId === "opaque-profile")?.supportsReasoning,
+    false,
+  );
 });
 
 async function openAIStreamRequest(
@@ -378,6 +441,102 @@ test("legacy models retain their effort mapping and chat-only models omit reason
     "max",
   );
   assert.equal(unknown.reasoning, undefined);
+});
+
+test("Anthropic and Vertex SDKs send every selected Fable effort with adaptive thinking", async () => {
+  const authClient = new OAuth2Client();
+  authClient.setCredentials({
+    access_token: "test-token",
+    expiry_date: Date.now() + 3_600_000,
+  });
+  for (const resolved of [
+    resolvedDirectModelReference("claude-fable-5"),
+    resolvedDirectModelReference("claude-fable-5-1"),
+    resolvedDirectModelReference("claude-example-6"),
+    resolvedGatewayModelReference({
+      providerId: "vertex",
+      id: "claude-fable-5-1@20260901",
+    }),
+  ]) {
+    for (const effort of ["low", "medium", "high", "xhigh", "max"] as const) {
+      let body: Record<string, any> | undefined;
+      const fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+        assert.ok(
+          String(url).includes(
+            resolved.providerId === "vertex"
+              ? ":streamRawPredict"
+              : "/messages",
+          ),
+        );
+        assert.ok(typeof init?.body === "string");
+        body = JSON.parse(init.body);
+        return new Response(
+          'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+          {
+            headers: { "content-type": "text/event-stream" },
+          },
+        );
+      };
+      const model =
+        resolved.providerId === "vertex"
+          ? createVertexAnthropic({
+              project: "test",
+              location: "global",
+              googleAuthOptions: { authClient },
+              fetch,
+            })(resolved.modelId)
+          : createAnthropic({ apiKey: "test-key", fetch })(resolved.modelId);
+      const result = await model.doStream({
+        prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
+        providerOptions: getProviderOptions(resolved, { effort }),
+      });
+      await result.stream.pipeTo(new WritableStream());
+      assert.ok(body);
+      assert.equal(body.stream, true);
+      assert.deepEqual(
+        body.thinking,
+        { type: "adaptive", display: "summarized" },
+        resolved.modelId,
+      );
+      assert.deepEqual(
+        body.output_config,
+        { effort },
+        `${resolved.modelId}: ${effort}`,
+      );
+    }
+  }
+});
+
+test("Bedrock Fable options use adaptive effort and preserve the opaque-profile guard", () => {
+  for (const id of [
+    "us.anthropic.claude-fable-5-v1:0",
+    "anthropic.claude-fable-5-1",
+  ]) {
+    const resolved = resolvedGatewayModelReference({
+      providerId: "bedrock",
+      id,
+    });
+    assert.deepEqual(getProviderOptions(resolved, { effort: "max" }), {
+      bedrock: {
+        reasoningConfig: {
+          type: "adaptive",
+          display: "summarized",
+          maxReasoningEffort: "max",
+        },
+      },
+    });
+  }
+  assert.deepEqual(
+    getProviderOptions(
+      resolvedGatewayModelReference({
+        providerId: "bedrock",
+        id: "opaque-profile",
+        baseModelId: "claude-fable-5-1",
+      }),
+      { effort: "max" },
+    ),
+    {},
+  );
 });
 
 test("adaptive thinking is limited to Claude 4.5 and newer", () => {
