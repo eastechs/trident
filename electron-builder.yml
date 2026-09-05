@@ -7,6 +7,7 @@ directories:
   buildResources: resources
 
 afterAllArtifactBuild: scripts/notarize-dmg.js
+afterPack: scripts/update-metadata.js
 
 publish:
   provider: github
@@ -25,9 +26,6 @@ extraResources:
 
 mac:
   minimumSystemVersion: "13.0.0"
-  releaseInfo:
-    # electron-updater compares os.release(): Darwin 22 corresponds to macOS 13.
-    minimumSystemVersion: "22.0.0"
   category: public.app-category.productivity
   icon: resources/images/app-icon.png
   hardenedRuntime: true

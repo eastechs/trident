@@ -254,6 +254,30 @@ test("native icons resolve in development and in the packaged resources", () => 
   );
 });
 
+test("macOS update metadata preserves source notes and excludes unsupported systems", () => {
+  const configure = createRequire(import.meta.url)(
+    "../../scripts/update-metadata.js",
+  );
+  const context = {
+    electronPlatformName: "darwin",
+    packager: {
+      platformSpecificBuildOptions: {
+        minimumSystemVersion: "13.0.0",
+      } as Record<string, any>,
+      config: { releaseInfo: { releaseNotesFile: "release/release-notes.md" } },
+    },
+  };
+  configure(context);
+  assert.deepEqual(context.packager.platformSpecificBuildOptions.releaseInfo, {
+    releaseNotesFile: "release/release-notes.md",
+    minimumSystemVersion: "22.0.0",
+  });
+  context.packager.platformSpecificBuildOptions.minimumSystemVersion = "14.0.0";
+  assert.throws(() => configure(context), /Review the updater/);
+  context.electronPlatformName = "win32";
+  assert.doesNotThrow(() => configure(context));
+});
+
 test("updater stages downloads and only installs a completed update", async () => {
   const ipc = new Map<string, (...args: any[]) => any>();
   let installs = 0;

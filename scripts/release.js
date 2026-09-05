@@ -153,7 +153,7 @@ async function main() {
   const { version } = require("../package.json");
   writeReleaseNotes(version);
   run(
-    `npx --no-install electron-builder --mac --publish always --config.mac.releaseInfo.releaseName="Trident v${version}" --config.mac.releaseInfo.releaseNotesFile="release/release-notes.md"`,
+    `npx --no-install electron-builder --mac --publish always --config.releaseInfo.releaseName="Trident v${version}" --config.releaseInfo.releaseNotesFile="release/release-notes.md"`,
   );
 
   // electron-builder uses releaseInfo for updater metadata, but its GitHub
