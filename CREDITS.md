@@ -4,17 +4,25 @@ Trident itself is licensed under the GNU Affero General Public License v3.0
 (see [LICENSE](LICENSE)). It also bundles or adapts the work below, under the
 terms noted for each.
 
-Trident's dependencies are declared in [package.json](package.json) and their
-license texts ship inside each package under `node_modules/`. This file covers
-the pieces that are **copied into this repository** or **compiled into the
-distributed application**, where the upstream license text would not otherwise
-reach someone holding a built copy of Trident.
+Trident's dependencies and exact versions are declared in [package.json](package.json)
+and [package-lock.json](package-lock.json). `npm run notices` generates a
+dependency inventory and full license notices for installed production packages,
+copied components, fonts, and Electron. These are bundled in the app and accessible
+offline from About and Documentation → Open Source, alongside Chromium's notices.
+
+Some npm packages omit their license files. Available upstream texts are preserved in
+[`resources/licenses/`](resources/licenses/) with package versions, source URLs,
+and Git blob hashes in `audit.json`. The `lazy-val` notice instead reproduces MIT
+terms based on its published license declaration and author metadata, as recorded
+in the audit. The build fails for missing license texts or
+unreviewed license metadata. Development tools are not represented as runtime
+dependencies; their original licenses remain in the installed development tree.
 
 ---
 
 ## shadcn/ui — MIT
 
-The 31 UI primitives in `src/renderer/components/ui/` were generated with
+The UI primitives in `src/renderer/components/ui/` were generated with
 [shadcn/ui](https://ui.shadcn.com), which is designed to be copied into a
 project rather than installed as a dependency. They have since been modified
 for Trident.
@@ -23,15 +31,17 @@ for Trident.
 
 Licensed under the MIT License (reproduced below).
 
-## AI Elements — MIT
+## AI Elements — Apache License 2.0
 
-The 11 chat and streaming components in `src/renderer/components/ai-elements/`
+The chat and streaming components in `src/renderer/components/ai-elements/`
 are adapted from [AI Elements](https://ai-sdk.dev/elements) by Vercel, likewise
 distributed as copy-in source, and modified for Trident.
 
-> Copyright (c) Vercel, Inc.
+> Copyright 2023 Vercel, Inc.
 
-Licensed under the MIT License (reproduced below).
+These components have been modified for Trident and remain subject to their
+[Apache-2.0 license](https://github.com/vercel/ai-elements/blob/main/LICENSE).
+The upstream notice and full Apache license are included in the bundled notices.
 
 ## Figtree — SIL Open Font License 1.1
 
@@ -44,7 +54,18 @@ compiled into the shipped renderer bundle.
 
 Licensed under the SIL Open Font License, Version 1.1. The full text is
 available at <https://openfontlicense.org> and ships with the package at
-`node_modules/@fontsource-variable/figtree/LICENSE`.
+`node_modules/@fontsource-variable/figtree/LICENSE` and in the bundled notices.
+
+## Other assets and runtime
+
+The Trident application icon and brand artwork are original Eastechs assets;
+see [TRADEMARK.md](TRADEMARK.md) for their separate terms. The application
+screenshot depicts Trident itself.
+
+Electron's MIT license and the licenses of its Chromium dependencies are bundled
+with the runtime and copied into the app's offline legal documents. Other runtime
+dependencies retain their upstream licenses; the generated inventory records each
+installed package and version, including dependencies compiled into the renderer.
 
 ---
 

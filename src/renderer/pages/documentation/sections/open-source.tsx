@@ -10,11 +10,7 @@ export default function OpenSource() {
       <h2>License</h2>
       <p>
         Trident is licensed under the{" "}
-        <a
-          href="https://www.gnu.org/licenses/agpl-3.0.html"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href="/legal/LICENSE.txt" target="_blank" rel="noreferrer">
           GNU Affero General Public License, version 3
         </a>
         . You are free to use, study, modify, and redistribute it. If you
@@ -42,14 +38,31 @@ export default function OpenSource() {
         <a href="mailto:licensing@eastechs.com">licensing@eastechs.com</a>.
       </p>
 
-      <h2>Your data stays on your machine</h2>
+      <h2>Local storage and provider requests</h2>
       <p>
         Trident has no accounts, no telemetry, and no analytics. Your projects,
-        documents, images, and conversations are stored locally. API keys are
-        encrypted with your operating system&rsquo;s keychain and are only ever
-        sent to the AI provider they belong to.
+        documents, images, and conversations are stored locally. Chat and image
+        requests send prompts, conversation context, and any included documents
+        or images directly to the configured provider. Its account settings and
+        terms govern provider-side processing and retention.
       </p>
-      <p>Apart from the AI providers you configure, Trident connects to:</p>
+      <p>
+        Credentials are encrypted locally using the operating system&rsquo;s
+        secure storage and kept out of the renderer. The main process uses keys
+        or derived tokens to authenticate with providers and their identity
+        services.
+      </p>
+      <p>
+        <strong>Semantic indexing uses OpenAI.</strong> When enabled for a
+        project with an OpenAI key configured, document saves and edits send
+        text chunks to OpenAI for embeddings. Image indexing sends names and
+        generation prompts. This happens independently of the chat provider
+        selected in either panel. Disabling semantic indexing stops new
+        automatic indexing; requests already in progress may finish. Semantic
+        searches separately send the query to OpenAI, including searches over an
+        existing index.
+      </p>
+      <p>Background requests include:</p>
       <table>
         <thead>
           <tr>
@@ -59,8 +72,11 @@ export default function OpenSource() {
         </thead>
         <tbody>
           <tr>
-            <td>GitHub Releases</td>
-            <td>Checking for app updates on launch and every four hours</td>
+            <td>GitHub Releases and its download hosts</td>
+            <td>
+              Checking for updates on launch and every four hours, and
+              downloading new versions
+            </td>
           </tr>
           <tr>
             <td>raw.githubusercontent.com</td>
@@ -75,30 +91,45 @@ export default function OpenSource() {
         </tbody>
       </table>
       <p>
-        None of these requests carry your content, your keys, or an identifier
-        for you.
+        These background requests do not include workspace content or provider
+        credentials. Their hosts receive ordinary network metadata, including
+        your IP address and request headers. The updater also sends a locally
+        generated, persistent installation ID with release metadata requests to
+        support staged rollouts. Remote images in documents or model responses
+        may contact their hosts, and external links open in your default
+        browser.
       </p>
 
       <h2>Third-party software</h2>
       <p>
-        Trident builds on open source work by others. Full attribution for the
-        components and fonts bundled into the app is in{" "}
+        Trident builds on open source work by others. Read the bundled{" "}
+        <a href="/legal/CREDITS.txt" target="_blank" rel="noreferrer">
+          credits
+        </a>{" "}
+        and{" "}
         <a
-          href="https://github.com/eastechs/trident/blob/main/CREDITS.md"
+          href="/legal/THIRD-PARTY-NOTICES.txt"
           target="_blank"
           rel="noreferrer"
         >
-          CREDITS.md
+          dependency license notices
         </a>
-        , and every dependency&rsquo;s license ships inside its own package.
+        . These documents are included with the app and are available offline.{" "}
+        Additional{" "}
+        <a
+          href="/legal/LICENSES.chromium.html"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Chromium notices
+        </a>{" "}
+        cover the browser engine bundled with Electron.
       </p>
 
       <h2>Contributing</h2>
       <p>
-        Bug reports, feature requests, and pull requests are welcome on GitHub.
-        Contributors are asked to sign a Contributor License Agreement so that
-        Eastechs, LLC can offer commercial licenses alongside the AGPL release;
-        every contribution also remains available under the AGPL, permanently.
+        External code contributions are currently closed, but we plan to welcome
+        them in the near future. Bug reports and feature requests are welcome.
       </p>
       <p>
         Found a security issue? Please report it privately rather than opening a

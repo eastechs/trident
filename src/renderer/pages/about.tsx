@@ -62,7 +62,7 @@ export default function About() {
           <p className="text-muted-foreground/75 text-[10.5px]">
             Free software under{" "}
             <a
-              href="https://www.gnu.org/licenses/agpl-3.0.html"
+              href="/legal/LICENSE.txt"
               target="_blank"
               rel="noreferrer"
               className="hover:text-foreground/80 underline underline-offset-2"
@@ -71,14 +71,25 @@ export default function About() {
             </a>
             . Comes with no warranty.
           </p>
-          <a
-            href="https://github.com/eastechs/trident"
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground/75 hover:text-foreground/80 text-[10.5px] underline underline-offset-2"
-          >
-            Source code
-          </a>
+          <p className="text-muted-foreground/75 text-[10.5px]">
+            <a
+              href={`https://github.com/eastechs/trident/tree/v${version}`}
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-foreground/80 underline underline-offset-2"
+            >
+              Source code
+            </a>
+            {" · "}
+            <a
+              href="/legal/THIRD-PARTY-NOTICES.txt"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-foreground/80 underline underline-offset-2"
+            >
+              Licenses
+            </a>
+          </p>
         </div>
       </div>
     </div>

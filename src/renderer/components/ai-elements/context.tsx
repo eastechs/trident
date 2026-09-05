@@ -1,3 +1,5 @@
+// Copyright 2023 Vercel, Inc. SPDX-License-Identifier: Apache-2.0
+// Adapted from AI Elements and modified for Trident. See CREDITS.md.
 import { Button } from "@/components/ui/button";
 import {
   HoverCard,

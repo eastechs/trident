@@ -50,7 +50,14 @@ function writeReleaseNotes(version) {
     (subject) => subject !== version && subject !== currentTag,
   );
 
-  const notes = ["## What's changed", ""];
+  const notes = [
+    `Source: [${currentTag}](https://github.com/eastechs/trident/tree/${currentTag}) · [Source archive](https://github.com/eastechs/trident/archive/refs/tags/${currentTag}.tar.gz)`,
+    "",
+    "Requires macOS 13 Ventura or later on Apple Silicon.",
+    "",
+    "## What's changed",
+    "",
+  ];
   if (changes.length > 0) {
     notes.push(...changes.map((subject) => `- ${subject}`));
   } else {
@@ -142,12 +149,11 @@ async function main() {
   //    DRAFT release in eastechs/trident-releases (releaseType: draft). Supply
   //    release metadata explicitly: the public binary repository has no source
   //    history, so GitHub's generated notes otherwise show only its Initial
-  //    commit. The generated body is self-contained and does not link to the
-  //    private source repository.
+  //    commit. Generate notes from source history with matching source links.
   const { version } = require("../package.json");
   writeReleaseNotes(version);
   run(
-    `npx --no-install electron-builder --mac --publish always --config.releaseInfo.releaseName="Trident v${version}" --config.releaseInfo.releaseNotesFile="release/release-notes.md"`,
+    `npx --no-install electron-builder --mac --publish always --config.mac.releaseInfo.releaseName="Trident v${version}" --config.mac.releaseInfo.releaseNotesFile="release/release-notes.md"`,
   );
 
   // electron-builder uses releaseInfo for updater metadata, but its GitHub

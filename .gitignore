@@ -13,3 +13,7 @@ release/
 .idea/
 .vscode/
 *.local
+
+# Local launch planning and generated legal assets
+open-sourcing-trident.md
+src/renderer/public/legal/

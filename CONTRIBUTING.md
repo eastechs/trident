@@ -1,36 +1,40 @@
 # Contributing to Trident
 
-Thanks for your interest. Trident is maintained by one person, so a little
-coordination up front saves everyone time.
+External code contributions are currently closed, but we plan to welcome them
+in the near future. Bug reports and feature requests are welcome.
 
-## Before you build something
+Pull requests are disabled while Eastechs prepares the contribution process.
+Please use GitHub Issues for bug reports and feature requests, and Discussions
+for questions. Describe the problem or desired behavior rather than submitting
+patches through issues or email; external patches are not being accepted yet.
 
-For bug fixes, typo corrections, and small self-contained improvements, just
-open a pull request.
-
-For anything larger — a new feature, a new AI provider, a refactor that touches
-several modules — **please open an issue first** so we can agree on the approach.
-It is genuinely disappointing to turn down good work that went in a direction
-the project wasn't taking, and that is avoidable with one conversation.
+You can still build and modify your own copy under the AGPL. Contribution terms
+and instructions will be published before external code contributions open.
 
 ## Development setup
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
 That runs Vite (renderer), tsup (main process), and Electron together with hot
-reload. You need Node 22+ and, for provider work, an API key for whichever
+reload. You need Node 24+ and, for provider work, an API key for whichever
 provider you're touching.
 
-Before opening a pull request:
+To validate a local build:
 
 ```bash
-npm run lint:check && npm run format:check && npm run types:check && npm run test:provider-contracts
+npm run lint:check
+npm run format:check
+npm run types:check
+npm run test:provider-contracts
+npm run test:image-providers
+npm run test:desktop-contracts
+npm run build
 ```
 
-CI runs exactly these, so a clean local run means a green PR.
+CI installs the lockfile with `npm ci` and runs these checks on pushes to `main`.
 
 ## How the code is laid out
 
@@ -65,29 +69,6 @@ The provider layer has a few rules that are not obvious from reading one file:
 - Reads that only need model IDs or connection status must not decrypt
   credentials. Use the plain-config accessors in `settings.ts` rather than
   `getGatewayProviderConfig`.
-
-## Contributor License Agreement
-
-Trident is released under the AGPL-3.0 and is also offered under a commercial
-license to organizations that cannot use AGPL software. To keep both of those
-true, contributors sign a [Contributor License Agreement](CLA.md) before their
-first pull request is merged. A bot handles this — you'll get a comment with a
-link on your first PR.
-
-**What it means:** you keep the copyright to your work. You grant Eastechs, LLC
-the right to distribute it under other license terms, including commercial ones.
-In exchange, Eastechs commits that every accepted contribution stays published
-under the AGPL in this repository, permanently — the open version never loses
-anything you give it.
-
-**Obvious fixes are exempt.** Typos, whitespace, comment corrections, and other
-changes with no creative content — roughly under ten lines — don't need a
-signature.
-
-This is the standard arrangement for dual-licensed projects, and it's a real
-trade: you're granting something in order for the project to be able to fund
-itself. If you'd rather not, that's completely reasonable — open an issue
-describing the fix instead, and it can be implemented independently.
 
 ## Security issues
 

@@ -97,7 +97,7 @@ export function openSecondaryWindow(
     trafficLightPosition: { x: 12, y: 8 },
     center: true,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "../preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -137,7 +137,7 @@ export function openAboutWindow(): void {
     maximizable: false,
     fullscreenable: false,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "../preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },

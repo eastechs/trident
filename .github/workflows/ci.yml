@@ -3,7 +3,6 @@ name: CI
 on:
   push:
     branches: [main]
-  pull_request:
 
 permissions:
   contents: read
@@ -20,7 +19,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -36,3 +35,7 @@ jobs:
       - run: npm run test:provider-contracts
 
       - run: npm run test:image-providers
+
+      - run: npm run test:desktop-contracts
+
+      - run: npm run build

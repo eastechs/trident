@@ -11,9 +11,10 @@ draft, the other to critique, and let either one edit the document directly. It
 is built for long-running work: dissertations, research projects, books,
 specifications, course material.
 
-Everything lives on your machine. Trident has no accounts and no servers of its
-own; you bring your own API keys, and they are encrypted with your operating
-system's keychain.
+Your workspace is stored on your machine. Trident has no accounts and no servers
+of its own. Requests send the content needed for each task directly to your
+configured AI provider; credentials are encrypted locally using the operating
+system's secure storage.
 
 ![Trident: a document open in the centre editor, with two AI chat panels either side running different models](docs/screenshot.webp)
 
@@ -54,9 +55,10 @@ Trident chats through two kinds of connection, both configured in
   using the models and deployments already available in your organization's own
   account.
 
-Credentials are encrypted with the OS keychain (`safeStorage`) and never leave
-the machine; non-secret details like regions, endpoints, and model IDs are
-stored as plain settings.
+Credentials are encrypted locally using Electron's `safeStorage` and kept out
+of the renderer. The main process uses API keys or derived authentication tokens
+to authenticate with the configured provider and its identity services.
+Non-secret details like regions, endpoints, and model IDs are plain settings.
 
 ## Privacy and network behavior
 
@@ -65,17 +67,35 @@ reason this source is public.
 
 **There is no telemetry, no analytics, and no account system.** Projects,
 documents, images, and conversations are stored in an embedded Postgres database
-in your user data directory, plus plain files under `~/Trident/`. API keys are
-encrypted through the OS keychain and never leave the main process.
+in your user data directory, plus plain files under `~/Trident/`.
 
-Besides the AI providers you configure, the app makes exactly three kinds of
-outbound request:
+Chat and image requests send prompts, conversation context, and any documents
+or images included in the request to the selected provider. Provider-side
+processing and retention are governed by your provider account and its terms.
 
-| Destination | Purpose | Carries |
+**Semantic indexing uses OpenAI.** With an OpenAI key configured and semantic
+indexing enabled for a project, saving or editing documents sends their text
+chunks to OpenAI for embeddings. Image indexing sends image names and generation
+prompts. This is independent of the chat provider selected in either panel.
+Disabling semantic indexing stops new automatic document and image indexing;
+requests already in progress may finish. Semantic searches separately send the
+search query to OpenAI, including searches over an existing index.
+
+Background requests include:
+
+| Destination | Purpose | Application data |
 | --- | --- | --- |
-| GitHub Releases | Update check on launch and every 4 hours | Nothing but the version |
-| `raw.githubusercontent.com` | Refreshing the model pricing table | Nothing |
-| `models.dev` | Provider logos in the model picker | Nothing |
+| GitHub Releases and its download hosts | Update checks on launch and every 4 hours; downloading updates | Release metadata and installer requests; no workspace content or provider credentials |
+| `raw.githubusercontent.com` | Refreshing the model pricing table | No workspace content or provider credentials |
+| `models.dev` | Provider logos in the model picker | The requested provider logo; no workspace content or provider credentials |
+
+These services receive ordinary network metadata such as your IP address and
+request headers. The updater also sends a locally generated, persistent
+installation ID (`x-user-staging-id`) with release metadata requests to support
+staged rollouts. Remote images
+embedded in documents or model responses may also contact their hosts; opening
+external links uses your default browser. Provider connections may contact
+authentication and model-discovery endpoints in addition to inference endpoints.
 
 Requests to AI providers go directly from your machine to that provider using
 your key. Trident operates no proxy and no gateway, so there is no point at
@@ -83,10 +103,13 @@ which your prompts pass through infrastructure controlled by Eastechs.
 
 ## Build from source
 
-Requires Node 22+.
+Requires Node 24+ (see `.nvmrc`).
+
+The v0.5.0 macOS app requires macOS 13 Ventura or later. Official builds target
+Apple Silicon (arm64).
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -101,10 +124,12 @@ That starts Vite, tsup, and Electron together with hot reload.
 | `npm run types:check` | `tsc --noEmit` |
 | `npm run test:provider-contracts` | Model reference, capability, and pricing contracts |
 | `npm run test:image-providers` | Image generation request contracts |
+| `npm run test:desktop-contracts` | Preload, authentication, window, credential, and updater contracts |
+| `npm run notices` | Generate bundled licenses and dependency notices from the installed lockfile |
 | `npm run release` | Cut a release (maintainer only, see below) |
 
-Packaging a build for yourself works without an Apple Developer account; you
-just won't get a signed, notarized, or self-updating app.
+`npm run build` and `npm run dev` do not need signing credentials. The macOS
+distribution scripts require the signing and notarization setup described below.
 
 Architecture in one paragraph: the Electron main process boots an Express server
 on `127.0.0.1:19274`, guarded by a per-launch shared secret, and serves the
@@ -140,7 +165,7 @@ Requires signing and upload credentials in the environment:
 | `GH_TOKEN` | Uploads the GitHub release. `export GH_TOKEN=$(gh auth token)` |
 | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Notarization |
 
-Then, from a clean `main`:
+Run the checks in [CONTRIBUTING.md](CONTRIBUTING.md), then, from a clean `main`:
 
 ```bash
 npm version <patch|minor|major>
@@ -148,8 +173,9 @@ npm run release
 ```
 
 This builds, notarizes, and uploads the dmg, zip, `latest-mac.yml`, and blockmap
-to a **draft** release, then pushes the version tag. Drafts are invisible to the
-updater until published by hand.
+to a **draft** release, then pushes the version tag. Release notes link to the
+matching source tag and source archive. Drafts are invisible to the updater until
+published by hand.
 
 ## License
 
@@ -169,9 +195,11 @@ attribution is in [CREDITS.md](CREDITS.md).
 
 ## Contributing
 
-Pull requests are welcome; please open an issue first for anything substantial.
-Contributors sign a [CLA](CLA.md) so the project can be dual-licensed — see
-[CONTRIBUTING.md](CONTRIBUTING.md) for what that means and why.
+External code contributions are currently closed, but we plan to welcome them
+in the near future. Bug reports and feature requests are welcome.
+
+Pull requests are disabled for now. See [CONTRIBUTING.md](CONTRIBUTING.md) for
+feedback channels and instructions for building your own copy.
 
 Security issues should be reported privately: [SECURITY.md](SECURITY.md).
 
