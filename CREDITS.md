@@ -62,6 +62,10 @@ The Trident application icon and brand artwork are original Eastechs assets;
 see [TRADEMARK.md](TRADEMARK.md) for their separate terms. The application
 screenshot depicts Trident itself.
 
+The notification sounds `src/audio/agent-chime-1.mp3` and
+`src/audio/agent-chime-2.mp3` are original compositions by Dave Sebek and are
+distributed under Trident's AGPL-3.0-only license.
+
 Electron's MIT license and the licenses of its Chromium dependencies are bundled
 with the runtime and copied into the app's offline legal documents. Other runtime
 dependencies retain their upstream licenses; the generated inventory records each
