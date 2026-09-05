@@ -108,12 +108,6 @@
       "source": "https://github.com/rive-app/rive-wasm/blob/f6a20c7a5cbdd00257cd147ab5be73f87c2388ac/LICENSE",
       "blob": "92a1c4bf6fe93178fba99689f4002fd37909c940"
     },
-    "ansi-to-react@6.2.6": {
-      "license": "BSD-3-Clause",
-      "file": "LICENSE-nteract-nteract-4222f566e30e.txt",
-      "source": "https://github.com/nteract/nteract/blob/main/LICENSE",
-      "blob": "4222f566e30e8a6bde5409c81a56e10dbc660000"
-    },
     "data-uri-to-buffer@4.0.1": {
       "license": "MIT",
       "file": "LICENSE-TooTallNate-proxy-agents-a577778a07bc.txt",
@@ -171,6 +165,20 @@
       "file": "LICENSE-lazy-val-1.0.5.txt",
       "source": "https://www.npmjs.com/package/lazy-val/v/1.0.5",
       "basis": "Published package.json MIT declaration and author; standard terms reproduced, no upstream copyright notice supplied."
+    },
+    "fastdom@1.0.12": {
+      "license": "MIT",
+      "file": "LICENSE-fastdom-1.0.12.txt",
+      "source": "https://www.npmjs.com/package/fastdom/v/1.0.12",
+      "basis": "License section from published README.md",
+      "sha256": "df2ae14f12f31864acef768195afe4584b08a257f25925f49884619279f02f37"
+    },
+    "strictdom@1.0.1": {
+      "license": "MIT",
+      "file": "LICENSE-strictdom-1.0.1.txt",
+      "source": "https://www.npmjs.com/package/strictdom/v/1.0.1",
+      "basis": "License section from published README.md",
+      "sha256": "903783a5a2e04d048a49a88e12377ed8a6073d9066138c9a7e5c88a6068b2759"
     }
   },
   "copied": [

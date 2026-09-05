@@ -30,8 +30,7 @@ jobs:
 
       - run: npm run types:check
 
-      # Both suites stub fetch and use placeholder keys — no credentials or
-      # network access required.
+      # Provider requests are stubbed and use placeholder credentials.
       - run: npm run test:provider-contracts
 
       - run: npm run test:image-providers

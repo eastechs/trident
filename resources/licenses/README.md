@@ -11,7 +11,9 @@ Git blob ID. Where a published commit no longer resolves, the license was checke
 against the package's declared SPDX license and retrieved from upstream's current
 repository. `lazy-val` supplies only an MIT declaration and author metadata;
 its clearly identified downstream notice reproduces those terms without inventing
-an upstream copyright notice.
+an upstream copyright notice. Fastdom and Strictdom publish their full license
+inside README.md; those sections are preserved with a SHA-256 digest instead of
+an upstream Git blob ID.
 
 The reviewed production license families are listed in `reviewedLicenses`.
 Dependencies with alternative licenses may use the Apache-2.0 option for
