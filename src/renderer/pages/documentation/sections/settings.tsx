@@ -9,6 +9,14 @@ export default function Settings() {
 
       <h2>Preferences</h2>
 
+      <h3>Appearance</h3>
+      <p>
+        Choose <strong>System</strong>, <strong>Light</strong>, or{" "}
+        <strong>Dark</strong> under Theme. System follows your device&apos;s
+        appearance. Changes apply immediately across Trident and are saved for
+        the next launch.
+      </p>
+
       <h3>Notifications</h3>
       <p>
         Choose whether Trident sends desktop notifications when AI responses

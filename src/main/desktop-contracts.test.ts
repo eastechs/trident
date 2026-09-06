@@ -160,6 +160,87 @@ test("credential persistence uses safeStorage and refuses unavailable encryption
   assert.equal(settings.getApiKey("openai"), "fixture-credential");
 });
 
+test("theme settings persist valid choices and apply only after a successful save", async () => {
+  const values = new Map<string, unknown>();
+  const nativeTheme = { themeSource: "system" };
+  let failSave = false;
+  const mocks = {
+    electron: { nativeTheme },
+    "electron-store": {
+      __esModule: true,
+      default: class {
+        constructor({ defaults }: { defaults: Record<string, unknown> }) {
+          for (const [key, value] of Object.entries(defaults)) {
+            if (!values.has(key)) values.set(key, structuredClone(value));
+          }
+        }
+        get(key: string) {
+          return values.get(key);
+        }
+        set(key: string, value: unknown) {
+          if (failSave) throw new Error("Settings are read-only");
+          values.set(key, value);
+        }
+      },
+    },
+  };
+  const settings = load("settings.ts", mocks);
+  await settings.initSettings();
+  assert.equal(settings.getSetting("theme"), "system");
+
+  const router = load("routes/settings.ts", {
+    ...mocks,
+    "../settings.js": settings,
+    "../ai/provider-validation.js": {},
+    "../ai/instructions.js": {},
+  }).default;
+  const request = (method: string, body?: unknown) =>
+    new Promise<{ status: number; body: any }>((resolve, reject) => {
+      const response = {
+        statusCode: 200,
+        status(code: number) {
+          this.statusCode = code;
+          return this;
+        },
+        json(body: unknown) {
+          resolve({ status: this.statusCode, body });
+        },
+      };
+      router.handle(
+        { method, url: "/theme", body },
+        response,
+        (error?: Error) => {
+          reject(error ?? new Error("Theme route did not handle the request"));
+        },
+      );
+    });
+
+  for (const theme of ["dark", "light", "system"]) {
+    assert.equal((await request("PUT", { theme })).status, 200);
+    assert.equal(nativeTheme.themeSource, theme);
+    assert.equal((await request("GET")).body.theme, theme);
+    // A fresh settings instance must preserve the choice on the next launch.
+    const restored = load("settings.ts", mocks);
+    await restored.initSettings();
+    assert.equal(restored.getSetting("theme"), theme);
+  }
+  for (const body of [
+    undefined,
+    {},
+    { theme: "sepia" },
+    { theme: null },
+    { theme: 1 },
+  ]) {
+    assert.equal((await request("PUT", body)).status, 422);
+    assert.equal(nativeTheme.themeSource, "system");
+    assert.equal(settings.getSetting("theme"), "system");
+  }
+  failSave = true;
+  await assert.rejects(request("PUT", { theme: "dark" }), /read-only/);
+  assert.equal(nativeTheme.themeSource, "system");
+  assert.equal(settings.getSetting("theme"), "system");
+});
+
 test("secondary windows use the built preload and keep external navigation out of the app", () => {
   const created: any[] = [];
   const external: string[] = [];

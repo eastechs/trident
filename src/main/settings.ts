@@ -21,7 +21,10 @@ interface StoredGatewayProvider {
   encryptedSecrets?: string;
 }
 
+export type AppTheme = "system" | "light" | "dark";
+
 interface SettingsSchema {
+  theme: AppTheme;
   autosave: boolean;
   notifications: boolean;
   agentChime: boolean;
@@ -37,6 +40,7 @@ interface SettingsSchema {
 }
 
 const DEFAULTS: SettingsSchema = {
+  theme: "system",
   autosave: true,
   notifications: true,
   agentChime: true,

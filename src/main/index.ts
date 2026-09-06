@@ -1,4 +1,11 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  Menu,
+  nativeImage,
+  nativeTheme,
+} from "electron";
 import contextMenu from "electron-context-menu";
 import fs from "fs";
 import os from "os";
@@ -118,6 +125,8 @@ app.whenReady().then(async () => {
 
   // Initialize settings (electron-store is ESM-only, requires dynamic import)
   await initSettings();
+  // Apply before any window loads so its first paint uses the saved appearance.
+  nativeTheme.themeSource = getSetting("theme");
 
   // Initialize PGLite database
   await initDatabase();

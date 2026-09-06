@@ -11,6 +11,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { AppTheme } from "@main/settings";
 
 import { ModelSelectorLogo } from "@/components/ai-elements/model-selector";
 import type { EditorHandle } from "@/components/editor";
@@ -29,6 +30,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Card,
   CardAction,
@@ -85,6 +93,10 @@ export default function Settings() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [chimeEnabled, setChimeEnabled] = useState(true);
   const [trashEnabled, setTrashEnabled] = useState(true);
+  const [theme, setTheme] = useState<AppTheme>();
+  const [themeLoading, setThemeLoading] = useState(true);
+  const [themeSaving, setThemeSaving] = useState(false);
+  const [themeError, setThemeError] = useState<string | null>(null);
 
   // Side menu state — section is derived from the ?section= query param
   // (e.g. /settings?section=providers from the missing-keys alert) so that
@@ -113,6 +125,41 @@ export default function Settings() {
   const [editorKey, setEditorKey] = useState(0);
   const editorRef = useRef<EditorHandle>(null);
   const lastSavedInstructions = useRef("");
+
+  useEffect(() => {
+    let active = true;
+    api_get<{ theme: AppTheme }>("/api/settings/theme")
+      .then((data) => {
+        if (active) setTheme(data.theme);
+      })
+      .catch(() => {
+        if (active)
+          setThemeError(
+            "Could not load the saved theme. Choose a theme to try again.",
+          );
+      })
+      .finally(() => {
+        if (active) setThemeLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleThemeChange = async (value: AppTheme) => {
+    setThemeSaving(true);
+    setThemeError(null);
+    try {
+      const data = await api_put<{ theme: AppTheme }>("/api/settings/theme", {
+        theme: value,
+      });
+      setTheme(data.theme);
+    } catch {
+      setThemeError("Could not save the theme. Please try again.");
+    } finally {
+      setThemeSaving(false);
+    }
+  };
 
   useEffect(() => {
     api_get<{ enabled: boolean }>("/api/settings/notifications")
@@ -354,9 +401,62 @@ export default function Settings() {
           <main
             className={`min-h-0 flex-1 p-4 sm:p-6 lg:p-8 ${activeSection === "agents" ? "flex flex-col overflow-hidden" : "overflow-auto"}`}
           >
-            {/* Preferences: Notifications + File Deletion */}
+            {/* Preferences */}
             {activeSection === "preferences" && (
               <div className="space-y-12">
+                <div className="border-border grid grid-cols-1 gap-x-8 gap-y-10 border-b pb-12 md:grid-cols-3">
+                  <div>
+                    <h2 className="text-foreground text-base/7 font-semibold">
+                      Appearance
+                    </h2>
+                    <p className="text-muted-foreground mt-1 text-sm/6">
+                      Choose how Trident looks.
+                    </p>
+                  </div>
+                  <div className="max-w-2xl md:col-span-2">
+                    <label
+                      htmlFor="app-theme"
+                      className="text-foreground text-sm/6 font-semibold"
+                    >
+                      Theme
+                    </label>
+                    <Select
+                      value={theme ?? ""}
+                      onValueChange={(value) => {
+                        void handleThemeChange(value as AppTheme);
+                      }}
+                      disabled={themeLoading || themeSaving}
+                    >
+                      <SelectTrigger
+                        id="app-theme"
+                        className="mt-3 w-48"
+                        aria-describedby="app-theme-description"
+                      >
+                        <SelectValue
+                          placeholder={
+                            themeLoading ? "Loading..." : "Select theme"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="system">System</SelectItem>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p
+                      id="app-theme-description"
+                      className="text-muted-foreground mt-2 text-sm/6"
+                    >
+                      System follows your device’s appearance.
+                    </p>
+                    {themeError && (
+                      <p role="alert" className="text-destructive mt-2 text-sm">
+                        {themeError}
+                      </p>
+                    )}
+                  </div>
+                </div>
                 <div className="border-border grid grid-cols-1 gap-x-8 gap-y-10 border-b pb-12 md:grid-cols-3">
                   <div>
                     <h2 className="text-foreground text-base/7 font-semibold">

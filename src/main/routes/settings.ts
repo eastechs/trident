@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { nativeTheme } from "electron";
 import {
   deleteGatewayProviderConfig,
   getSetting,
@@ -22,6 +23,26 @@ import {
 } from "../ai/provider-validation.js";
 
 const router = Router();
+
+// ─── Theme ─────────────────────────────────────────────────
+
+router.get("/theme", (_req, res) => {
+  res.json({ theme: getSetting("theme") });
+});
+
+router.put("/theme", (req, res) => {
+  const theme: unknown = req.body?.theme;
+  if (theme !== "system" && theme !== "light" && theme !== "dark") {
+    res
+      .status(422)
+      .json({ errors: { theme: ["Choose System, Light, or Dark."] } });
+    return;
+  }
+  setSetting("theme", theme);
+  // Electron updates prefers-color-scheme and native chrome in every window.
+  nativeTheme.themeSource = theme;
+  res.json({ theme });
+});
 
 // ─── Autosave ──────────────────────────────────────────────
 
