@@ -79,14 +79,11 @@ export default function OpenSource() {
             </td>
           </tr>
           <tr>
-            <td>raw.githubusercontent.com</td>
-            <td>
-              Refreshing model pricing data so cost estimates stay accurate
-            </td>
-          </tr>
-          <tr>
             <td>models.dev</td>
-            <td>Provider logos shown in the model picker</td>
+            <td>
+              Refreshing model names, capabilities, limits, and estimated
+              pricing on launch; provider logos in the model picker
+            </td>
           </tr>
         </tbody>
       </table>

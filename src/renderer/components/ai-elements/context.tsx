@@ -33,7 +33,7 @@ interface ContextSchema {
   usedTokens: number;
   maxTokens: number;
   usage?: LanguageModelUsage;
-  // Pricing is sourced from LiteLLM via /api/settings/models and passed in
+  // Pricing is sourced from models.dev via /api/settings/models and passed in
   // by the caller. When undefined, cost lines render as token counts only.
   pricing?: ModelPricing;
 }
@@ -218,6 +218,10 @@ export const ContextContentFooter = ({
     0,
     totalInput - cacheReadTokens - cacheWriteTokens,
   );
+  const costKnown =
+    pricing !== undefined &&
+    (cacheReadTokens === 0 || pricing.cacheReadPerMTokens != null) &&
+    (cacheWriteTokens === 0 || pricing.cacheWritePerMTokens != null);
 
   let totalCostUSD = 0;
   if (pricing) {
@@ -226,10 +230,10 @@ export const ContextContentFooter = ({
       usage?.outputTokens ?? 0,
       pricing.outputPerMTokens,
     );
-    if (pricing.cacheReadPerMTokens) {
+    if (pricing.cacheReadPerMTokens != null) {
       totalCostUSD += calcCost(cacheReadTokens, pricing.cacheReadPerMTokens);
     }
-    if (pricing.cacheWritePerMTokens) {
+    if (pricing.cacheWritePerMTokens != null) {
       totalCostUSD += calcCost(cacheWriteTokens, pricing.cacheWritePerMTokens);
     }
   }
@@ -245,7 +249,7 @@ export const ContextContentFooter = ({
       {children ?? (
         <>
           <span className="text-muted-foreground">Total cost</span>
-          <span>{formatUSD(totalCostUSD)}</span>
+          <span>{costKnown ? formatUSD(totalCostUSD) : "Unavailable"}</span>
         </>
       )}
     </div>
@@ -408,9 +412,10 @@ export const ContextCacheUsage = ({
     return null;
   }
 
-  const costText = pricing?.cacheReadPerMTokens
-    ? formatUSD(calcCost(cacheTokens, pricing.cacheReadPerMTokens))
-    : undefined;
+  const costText =
+    pricing?.cacheReadPerMTokens != null
+      ? formatUSD(calcCost(cacheTokens, pricing.cacheReadPerMTokens))
+      : undefined;
 
   return (
     <div
@@ -442,9 +447,10 @@ export const ContextCacheWriteUsage = ({
     return null;
   }
 
-  const costText = pricing?.cacheWritePerMTokens
-    ? formatUSD(calcCost(cacheWriteTokens, pricing.cacheWritePerMTokens))
-    : undefined;
+  const costText =
+    pricing?.cacheWritePerMTokens != null
+      ? formatUSD(calcCost(cacheWriteTokens, pricing.cacheWritePerMTokens))
+      : undefined;
 
   return (
     <div

@@ -28,7 +28,7 @@
     "build:all": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "test:image-providers": "node scripts/verify-image-provider-contracts.mjs",
-    "test:provider-contracts": "node --import tsx --test src/main/ai/provider-contracts.test.ts",
+    "test:provider-contracts": "node --import tsx --test src/main/ai/provider-contracts.test.ts src/main/ai/model-catalog.test.ts",
     "test:desktop-contracts": "node --import tsx --test src/main/desktop-contracts.test.ts scripts/runtime-dependencies.test.js",
     "format": "prettier --write src/ scripts/ vite.config.ts tsup.config.ts",
     "format:check": "prettier --check src/ scripts/ vite.config.ts tsup.config.ts",

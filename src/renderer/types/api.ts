@@ -52,8 +52,6 @@ export interface ModelPricing {
   outputPerMTokens: number;
   cacheReadPerMTokens?: number;
   cacheWritePerMTokens?: number;
-  contextWindow?: number;
-  maxOutputTokens?: number;
 }
 
 export interface ModelInfo {
@@ -89,5 +87,7 @@ export interface ModelInfo {
   supportsReasoning: boolean;
   // True when image file parts can be sent as conversational input.
   supportsImages: boolean;
+  contextWindow?: number;
+  maxOutputTokens?: number;
   pricing?: ModelPricing;
 }

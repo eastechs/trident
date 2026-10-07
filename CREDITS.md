@@ -56,6 +56,13 @@ Licensed under the SIL Open Font License, Version 1.1. The full text is
 available at <https://openfontlicense.org> and ships with the package at
 `node_modules/@fontsource-variable/figtree/LICENSE` and in the bundled notices.
 
+## models.dev — MIT
+
+Model names, capabilities, token limits, and base-rate cost estimates use the
+[models.dev](https://models.dev) catalog. Trident bundles a filtered snapshot
+and refreshes it on launch. Its MIT license is included in the bundled notices.
+Refresh the bundled data with `node --import tsx scripts/sync-model-catalog.mjs`.
+
 ## Other assets and runtime
 
 The Trident application icon and brand artwork are original Eastechs assets;

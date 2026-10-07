@@ -202,6 +202,16 @@
       ],
       "source": "https://github.com/vercel/ai-elements/blob/main/LICENSE",
       "blob": "6c16c29f41168411dbf6e3ba3a063ce789c27334"
+    },
+    {
+      "name": "models.dev catalog",
+      "version": "bundled snapshot; fetched_at recorded in bundled-catalog.ts",
+      "license": "MIT",
+      "files": [
+        "LICENSE-models-dev.txt"
+      ],
+      "source": "https://github.com/anomalyco/models.dev",
+      "blob": "9ef000844a07a1a97ff56b74e4cd9af12776a7a6"
     }
   ],
   "reviewedLicenses": [

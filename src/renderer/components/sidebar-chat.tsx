@@ -151,9 +151,9 @@ function formatChatError(error: Error | undefined): string {
   return rawMessage;
 }
 
-// Generic safe default when the LiteLLM snapshot doesn't list the model.
-// The real per-model values come from `selectedModelData.pricing.contextWindow`
-// (sourced from LiteLLM at app launch — see src/main/ai/pricing.ts).
+// Generic safe default when the models.dev snapshot doesn't list the model.
+// The real per-model values come from `selectedModelData.contextWindow`
+// (sourced from models.dev at app launch — see src/main/ai/model-catalog.ts).
 const FALLBACK_CONTEXT_WINDOW = 200_000;
 
 const draftKeyFor = (conversationId: string) =>
@@ -354,8 +354,7 @@ export function SidebarChat({
   }, [availableModels, model, lockedModel]);
   const selectedModelSupportsImages =
     selectedModelData?.supportsImages ?? false;
-  const maxTokens =
-    selectedModelData?.pricing?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
+  const maxTokens = selectedModelData?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
 
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [visibleChatError, setVisibleChatError] = useState("");

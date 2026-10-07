@@ -1,3 +1,4 @@
+import { resolveModelMetadata } from "../ai/model-catalog.js";
 import fs from "fs";
 import { Router, type Request } from "express";
 import {
@@ -34,11 +35,7 @@ import { createTools } from "../ai/tools/index.js";
 import { showNotification } from "../native/notifications.js";
 import { getApiKey } from "../settings.js";
 import { safePathInside } from "../safe-paths.js";
-import {
-  capabilitySlugForFamily,
-  supportsImageInput,
-  type ResolvedModelReference,
-} from "../ai/provider-config.js";
+import { type ResolvedModelReference } from "../ai/provider-config.js";
 
 const router = Router({ mergeParams: true });
 
@@ -153,9 +150,6 @@ router.post("/", async (req: ProjectRequest, res) => {
     }
     throw error;
   }
-  const capabilityProviderSlug = capabilitySlugForFamily(
-    resolvedModelReference.modelFamily,
-  );
 
   // The client (useChat) sends the full UIMessage[] including the new user message.
   // Use that directly; the DB history would miss the new message.
@@ -285,15 +279,14 @@ router.post("/", async (req: ProjectRequest, res) => {
 
   const filePartByImageId = new Map<string, FileUIPart>();
   if (allReferencedImageIds.size > 0) {
-    // Reject only when the family is one whose image support we can evaluate;
-    // an unclassifiable gateway deployment may be vision-capable, and the
-    // provider is a better authority than a guess made from its name.
+    // Use the same catalog decision as the picker; unknown gateway models
+    // keep the permissive image fallback rather than guessing from an alias.
     if (
-      capabilityProviderSlug &&
-      !supportsImageInput(
-        resolvedModelReference.capabilityModelId,
-        capabilityProviderSlug,
-      )
+      !resolveModelMetadata(
+        resolvedModelReference.providerId,
+        resolvedModelReference.modelId,
+        resolvedModelReference.baseModelId,
+      ).supportsImages
     ) {
       res.status(422).json({
         error: `The selected model (${modelLabel(effectiveModelId)}) does not support image input.`,

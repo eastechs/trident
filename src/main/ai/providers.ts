@@ -1,3 +1,4 @@
+import { resolveModelMetadata } from "./model-catalog.js";
 import { createHash } from "crypto";
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
@@ -19,9 +20,7 @@ import {
   isOpenAIGptVersionAtLeast,
   resolvedDirectModelReference,
   resolvedGatewayModelReference,
-  capabilitySlugForFamily,
   supportsAdaptiveThinking,
-  supportsReasoning,
   vertexSurfaceFor,
   type GatewayProviderConfig,
   type GatewayProviderId,
@@ -322,10 +321,11 @@ export function supportsAnthropicCacheControl(
 }
 
 function reasoningSupported(resolved: ResolvedModelReference): boolean {
-  const capabilitySlug = capabilitySlugForFamily(resolved.modelFamily);
-  return capabilitySlug
-    ? supportsReasoning(resolved.capabilityModelId, capabilitySlug)
-    : false;
+  return resolveModelMetadata(
+    resolved.providerId,
+    resolved.modelId,
+    resolved.baseModelId,
+  ).supportsReasoning;
 }
 
 /**

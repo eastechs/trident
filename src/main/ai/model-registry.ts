@@ -6,19 +6,21 @@ import {
 import {
   PROVIDER_LABELS,
   capabilityModelIdFor,
-  capabilitySlugForFamily,
   logoSlugForFamily,
-  supportsImageInput,
-  supportsReasoning,
   decodeGatewayModelRef,
   gatewayModelRef,
-  isBedrockAnthropicModelId,
   isDirectProviderId,
   modelFamilyFor,
   type GatewayModelConfig,
   type ModelFamily,
   type ProviderId,
 } from "./provider-config.js";
+
+import {
+  fallbackCatalogModels,
+  resolveModelMetadata,
+  type ModelPricing,
+} from "./model-catalog.js";
 
 export interface ModelInfo {
   // Persisted reference. Direct models retain their native IDs; gateway
@@ -41,6 +43,9 @@ export interface ModelInfo {
   // This is separate from image generation: it controls whether saved project
   // images may be attached to a user message for visual analysis.
   supportsImages: boolean;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  pricing?: ModelPricing;
 }
 
 type ProviderKey = "anthropic" | "openai" | "gemini";
@@ -48,11 +53,9 @@ type ProviderKey = "anthropic" | "openai" | "gemini";
 const FETCH_TIMEOUT_MS = 8_000;
 const CACHE_TTL_MS = 5 * 60_000;
 
-const cache = new Map<ProviderKey, { at: number; models: ModelInfo[] }>();
+const cache = new Map<ProviderKey, { at: number; models: ModelDescriptor[] }>();
 
-// Intermediate row used by FALLBACK and the per-provider fetchers; the
-// reasoning capability is stamped in one place after fetch so we don't
-// have to repeat the predicate at every construction site.
+// Cache discovery results only; resolve current catalog metadata on every read.
 type ModelDescriptor = Pick<ModelInfo, "id" | "provider" | "name"> &
   Partial<
     Pick<
@@ -72,106 +75,26 @@ function stampCapabilities(models: ModelDescriptor[]): ModelInfo[] {
     const providerId =
       model.providerId ?? directProviderIdForSlug(model.providerSlug ?? "");
     const modelId = model.modelId ?? model.id;
-    const capabilityModelId = capabilityModelIdFor(modelId, model.baseModelId);
     const modelFamily =
       model.modelFamily ?? modelFamilyFor(modelId, model.baseModelId);
-    const capabilitySlug = capabilitySlugForFamily(modelFamily);
-    const supportsModelReasoning = capabilitySlug
-      ? supportsReasoning(capabilityModelId, capabilitySlug)
-      : false;
+    const metadata = resolveModelMetadata(
+      providerId,
+      modelId,
+      model.baseModelId,
+    );
     return {
       ...model,
+      ...metadata,
+      name: isDirectProviderId(providerId)
+        ? (metadata.name ?? model.name)
+        : model.name,
       providerId,
       modelId,
       modelFamily,
       providerSlug: logoSlugForFamily(modelFamily, providerId),
-      supportsReasoning:
-        supportsModelReasoning &&
-        !(
-          providerId === "bedrock" &&
-          modelFamily === "anthropic" &&
-          !isBedrockAnthropicModelId(modelId)
-        ),
-      // Only claim a model can't accept images when the family is one whose
-      // image support we can actually evaluate. A gateway deployment with an
-      // opaque name — which is what an unclassifiable family means — may well
-      // be vision-capable, and refusing on a guess makes that capability
-      // unreachable. Reasoning stays conservative in the other direction:
-      // omitting an optional parameter costs nothing, while sending one to a
-      // chat-only model is an error.
-      supportsImages: capabilitySlug
-        ? supportsImageInput(capabilityModelId, capabilitySlug)
-        : true,
     };
   });
 }
-
-/**
- * Hardcoded fallback — used when a provider's model-list API is unreachable or
- * the response can't be parsed. Kept as a last-known-good snapshot.
- */
-const FALLBACK: Record<ProviderKey, ModelDescriptor[]> = {
-  anthropic: [
-    {
-      id: "claude-opus-4-8",
-      provider: "Anthropic",
-      providerSlug: "anthropic",
-      name: "Opus 4.8",
-    },
-    {
-      id: "claude-opus-4-7",
-      provider: "Anthropic",
-      providerSlug: "anthropic",
-      name: "Opus 4.7",
-    },
-    {
-      id: "claude-sonnet-4-6",
-      provider: "Anthropic",
-      providerSlug: "anthropic",
-      name: "Sonnet 4.6",
-    },
-    {
-      id: "claude-haiku-4-5",
-      provider: "Anthropic",
-      providerSlug: "anthropic",
-      name: "Haiku 4.5",
-    },
-  ],
-  openai: [
-    {
-      id: "gpt-5.5",
-      provider: "OpenAI",
-      providerSlug: "openai",
-      name: "GPT-5.5",
-    },
-    {
-      id: "gpt-5-mini",
-      provider: "OpenAI",
-      providerSlug: "openai",
-      name: "GPT-5 Mini",
-    },
-    {
-      id: "gpt-5-nano",
-      provider: "OpenAI",
-      providerSlug: "openai",
-      name: "GPT-5 Nano",
-    },
-  ],
-  gemini: [
-    {
-      id: "gemini-3.1-pro-preview",
-      provider: "Gemini",
-      providerSlug: "google",
-      name: "Gemini 3.1 Pro Preview",
-    },
-    {
-      id: "gemini-3-flash-preview",
-      provider: "Gemini",
-      providerSlug: "google",
-      name: "Gemini 3 Flash Preview",
-    },
-  ],
-};
 
 export async function fetchAvailableModels(): Promise<ModelInfo[]> {
   const providers: ProviderKey[] = ["anthropic", "openai", "gemini"];
@@ -183,7 +106,7 @@ export async function fetchAvailableModels(): Promise<ModelInfo[]> {
     configured.map(async (provider) => {
       const cached = cache.get(provider);
       if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
-        return cached.models;
+        return stampCapabilities(cached.models);
       }
 
       const { models, isFallback } = await fetchForProvider(provider);
@@ -192,7 +115,7 @@ export async function fetchAvailableModels(): Promise<ModelInfo[]> {
       if (!isFallback) {
         cache.set(provider, { at: Date.now(), models });
       }
-      return models;
+      return stampCapabilities(models);
     }),
   );
 
@@ -207,13 +130,13 @@ export async function fetchAvailableModels(): Promise<ModelInfo[]> {
       // them apart.
       const nameCounts = new Map<string, number>();
       for (const model of models) {
-        const name = gatewayModelName(model);
+        const name = gatewayModelName(providerId, model);
         nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
       }
 
       return stampCapabilities(
         models.map((model) => {
-          const name = gatewayModelName(model);
+          const name = gatewayModelName(providerId, model);
           return {
             id: gatewayModelRef(providerId, model),
             providerId,
@@ -248,26 +171,38 @@ export function invalidateModelCache(provider?: ProviderId): void {
 export function displayNameFor(modelId: string): string {
   for (const cached of cache.values()) {
     const m = cached.models.find((x) => x.id === modelId);
-    if (m) return m.name;
+    if (m) return stampCapabilities([m])[0].name;
   }
   const gateway = decodeGatewayModelRef(modelId);
   if (gateway) {
-    const family = modelFamilyFor(gateway.id, gateway.baseModelId);
-    return deriveGatewayName(
-      capabilityModelIdFor(gateway.id, gateway.baseModelId),
-      family,
-    );
+    return gatewayModelName(gateway.providerId, gateway);
   }
-  if (modelId.startsWith("claude-")) return deriveAnthropicName(modelId);
-  if (modelId.startsWith("gemini-")) return deriveGeminiName(modelId);
-  if (/^(gpt-|o\d)/.test(modelId)) return deriveOpenAIName(modelId);
+  if (modelId.startsWith("claude-"))
+    return (
+      resolveModelMetadata("anthropic", modelId).name ??
+      deriveAnthropicName(modelId)
+    );
+  if (modelId.startsWith("gemini-"))
+    return (
+      resolveModelMetadata("gemini", modelId).name ?? deriveGeminiName(modelId)
+    );
+  if (/^(gpt-|o\d)/.test(modelId))
+    return (
+      resolveModelMetadata("openai", modelId).name ?? deriveOpenAIName(modelId)
+    );
   return modelId;
 }
 
-function gatewayModelName(model: GatewayModelConfig): string {
-  return deriveGatewayName(
-    capabilityModelIdFor(model.id, model.baseModelId),
-    modelFamilyFor(model.id, model.baseModelId),
+function gatewayModelName(
+  providerId: ProviderId,
+  model: GatewayModelConfig,
+): string {
+  return (
+    resolveModelMetadata(providerId, model.id, model.baseModelId).name ??
+    deriveGatewayName(
+      capabilityModelIdFor(model.id, model.baseModelId),
+      modelFamilyFor(model.id, model.baseModelId),
+    )
   );
 }
 
@@ -285,7 +220,7 @@ function deriveGatewayName(id: string, family: ModelFamily): string {
 
 async function fetchForProvider(
   provider: ProviderKey,
-): Promise<{ models: ModelInfo[]; isFallback: boolean }> {
+): Promise<{ models: ModelDescriptor[]; isFallback: boolean }> {
   const key = getApiKey(provider);
   if (!key) return { models: [], isFallback: false };
 
@@ -293,17 +228,17 @@ async function fetchForProvider(
     switch (provider) {
       case "anthropic":
         return {
-          models: stampCapabilities(await fetchAnthropic(key)),
+          models: await fetchAnthropic(key),
           isFallback: false,
         };
       case "openai":
         return {
-          models: stampCapabilities(await fetchOpenAI(key)),
+          models: await fetchOpenAI(key),
           isFallback: false,
         };
       case "gemini":
         return {
-          models: stampCapabilities(await fetchGemini(key)),
+          models: await fetchGemini(key),
           isFallback: false,
         };
     }
@@ -312,7 +247,24 @@ async function fetchForProvider(
       `[model-registry] ${provider} fetch failed, using fallback:`,
       err,
     );
-    return { models: stampCapabilities(FALLBACK[provider]), isFallback: true };
+    const previous = cache.get(provider);
+    const models =
+      previous?.models ??
+      fallbackCatalogModels(provider)
+        .filter((model) =>
+          provider === "anthropic"
+            ? model.id.startsWith("claude-")
+            : provider === "openai"
+              ? isOpenAIChatModel(model.id)
+              : model.id.startsWith("gemini-") && isGeminiChatModel(model.id),
+        )
+        .map((model) => ({
+          id: model.id,
+          name: model.name,
+          providerId: provider,
+          provider: PROVIDER_LABELS[provider],
+        }));
+    return { models, isFallback: true };
   }
 }
 

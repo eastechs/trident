@@ -8,13 +8,13 @@ import conversationRoutes from "./routes/conversations.js";
 import settingsRoutes from "./routes/settings.js";
 import chatRoutes from "./routes/chat.js";
 import searchRoutes from "./routes/search.js";
-import { initPricing } from "./ai/pricing.js";
+import { initModelCatalog } from "./ai/model-catalog.js";
 import { requireServerAuth } from "./auth.js";
 
 export async function createServer(port: number): Promise<void> {
-  // Load any cached pricing snapshot and kick off a background refresh from
-  // LiteLLM. Non-blocking — pricing always falls back to the bundled file.
-  initPricing();
+  // Load cached metadata and refresh models.dev in the background.
+  // The bundled catalog is available immediately, including offline.
+  void initModelCatalog();
 
   const isDev = !electronApp.isPackaged;
   const app = express();

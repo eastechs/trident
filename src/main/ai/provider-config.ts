@@ -647,6 +647,12 @@ function isClaudeVersionAtLeast(
 //     ids) and the Claude 4+ family-first ids (`claude-<family>-N-x`).
 //     Older claude-3-5-* / claude-2 / claude-instant don't support thinking.
 //   - Gemini: thinking is on 2.5+ (and any 3+ family). Earlier 1.x / 2.0 don't.
+export function excludesOpenAIReasoning(modelId: string): boolean {
+  return /-(?:chat|instruct|audio|realtime|transcribe|tts|whisper|search|embedding|moderation|image)(?:-|$)/.test(
+    modelId,
+  );
+}
+
 export function supportsReasoning(
   modelId: string,
   providerSlug: CapabilityProviderSlug,
@@ -657,10 +663,7 @@ export function supportsReasoning(
       return true;
     }
     return (
-      isOpenAIGptVersionAtLeast(modelId, 5) &&
-      !/-(?:chat|instruct|audio|realtime|transcribe|tts|whisper|search|embedding|moderation|image)(?:-|$)/.test(
-        modelId,
-      )
+      isOpenAIGptVersionAtLeast(modelId, 5) && !excludesOpenAIReasoning(modelId)
     );
   }
   if (providerSlug === "anthropic") {

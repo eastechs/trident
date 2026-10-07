@@ -32,7 +32,7 @@ import {
   parseGatewayProviderPayload,
   vertexOAuthValidationRequest,
 } from "./provider-validation.js";
-import { lookupPricing } from "./pricing.js";
+import * as modelCatalog from "./model-catalog.js";
 
 test("gateway references use the canonical browser-decodable payload", () => {
   const model = {
@@ -265,6 +265,7 @@ test("the model catalog exposes reasoning for new model families and gateway dep
       exports,
       require: (id: string) => {
         if (id === "./provider-config.js") return providerConfig;
+        if (id === "./model-catalog.js") return modelCatalog;
         assert.equal(id, "../settings.js");
         return {
           getConfiguredProviders: () => ({ openai: true, anthropic: true }),
@@ -824,49 +825,4 @@ test("Bedrock runtime endpoints use the AWS partition DNS suffix", () => {
     bedrockRuntimeEndpoint("cn-north-1"),
     "https://bedrock-runtime.cn-north-1.amazonaws.com.cn",
   );
-});
-
-test("Bedrock revision-qualified model IDs resolve canonical pricing", () => {
-  const reference = gatewayModelRef("bedrock", {
-    id: "anthropic.claude-sonnet-4-6-v1:0",
-  });
-  const pricing = lookupPricing(reference);
-
-  assert.equal(pricing?.inputPerMTokens, 3);
-  assert.equal(pricing?.outputPerMTokens, 15);
-  assert.equal(pricing?.contextWindow, 1_000_000);
-});
-
-test("a model listed under two catalogs is priced by the one in use", () => {
-  // The unprefixed Gemini keys carry Vertex rates; AI Studio rates live under
-  // the gemini/ prefix. A direct connection must not be billed at Vertex's.
-  const direct = lookupPricing("gemini-2.0-flash-001");
-  const viaVertex = lookupPricing(
-    gatewayModelRef("vertex", { id: "gemini-2.0-flash-001" }),
-  );
-
-  assert.ok(direct);
-  assert.ok(viaVertex);
-  // Per-million conversion is a float multiply, so compare with tolerance.
-  assert.ok(Math.abs(direct.inputPerMTokens - 0.1) < 1e-9);
-  assert.ok(Math.abs(viaVertex.inputPerMTokens - 0.15) < 1e-9);
-});
-
-test("region-scoped Bedrock profiles price as the model they route to", () => {
-  // The snapshot carries keys for some region scopes but not every one; an
-  // APAC profile must not lose its pricing just because its scoped key is
-  // missing.
-  const scoped = lookupPricing(
-    gatewayModelRef("bedrock", {
-      id: "apac.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    }),
-  );
-  const unscoped = lookupPricing(
-    gatewayModelRef("bedrock", {
-      id: "anthropic.claude-sonnet-4-5-20250929-v1:0",
-    }),
-  );
-
-  assert.ok(scoped, "region-scoped profile should resolve pricing");
-  assert.deepEqual(scoped, unscoped);
 });
